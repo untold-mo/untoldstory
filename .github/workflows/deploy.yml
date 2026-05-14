@@ -37,12 +37,44 @@ jobs:
           FTP_USER: ${{ secrets.FTP_USERNAME }}
           FTP_PASS: ${{ secrets.FTP_PASSWORD }}
         run: |
-          sudo apt-get install -y lftp
-          lftp -c "
-            set ftp:ssl-allow no;
-            set net:timeout 30;
-            set net:max-retries 3;
-            open -u $FTP_USER,$FTP_PASS ftp://$FTP_SERVER;
-            mirror --reverse --delete --verbose dist/ /public_html/;
-            bye
-          "
+          python3 - << 'PYEOF'
+          import ftplib, os, pathlib, sys
+
+          server   = os.environ["FTP_SERVER"]
+          username = os.environ["FTP_USER"]
+          password = os.environ["FTP_PASS"]
+          local_dir = pathlib.Path("dist")
+          remote_dir = "/public_html"
+
+          print(f"Connecting to {server} as {username}...")
+          try:
+              ftp = ftplib.FTP_TLS()
+              ftp.connect(server, 21, timeout=60)
+              ftp.auth()
+              ftp.prot_p()
+          except Exception:
+              print("FTPS failed, trying plain FTP...")
+              ftp = ftplib.FTP()
+              ftp.connect(server, 21, timeout=60)
+
+          ftp.login(username, password)
+          print("Login successful!")
+
+          def upload_dir(ftp, local_path, remote_path):
+              try:
+                  ftp.mkd(remote_path)
+              except Exception:
+                  pass
+              for item in local_path.iterdir():
+                  r = f"{remote_path}/{item.name}"
+                  if item.is_dir():
+                      upload_dir(ftp, item, r)
+                  else:
+                      print(f"Uploading {r}")
+                      with open(item, "rb") as f:
+                          ftp.storbinary(f"STOR {r}", f)
+
+          upload_dir(ftp, local_dir, remote_dir)
+          ftp.quit()
+          print("Done!")
+          PYEOF
