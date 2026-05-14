@@ -307,12 +307,24 @@ export function mapPriceQuoteFromRow(r: Record<string, unknown>): PriceQuote {
     createdAt: iso(r.created_at),
     status: (() => {
       const st = String(r.status ?? 'قيد اعتماد المالك');
-      const allowed: PriceQuote['status'][] = ['قيد اعتماد المالك', 'معتمد', 'مرفوض'];
+      const allowed: PriceQuote['status'][] = ['بانتظار التسعير', 'قيد اعتماد المالك', 'معتمد', 'مرفوض', 'مكتمل', 'مغلق - رفض العميل'];
       return (allowed as string[]).includes(st) ? (st as PriceQuote['status']) : 'قيد اعتماد المالك';
     })(),
+    productionAssignedId: r.production_assigned_id ? String(r.production_assigned_id) : undefined,
+    productionAssignedName: r.production_assigned_name ? String(r.production_assigned_name) : undefined,
+    pricedById: r.priced_by_id ? String(r.priced_by_id) : undefined,
+    pricedByName: r.priced_by_name ? String(r.priced_by_name) : undefined,
+    pricedAt: r.priced_at ? iso(r.priced_at) : undefined,
+    pricingNote: r.pricing_note ? String(r.pricing_note) : undefined,
     approvedBy: r.approved_by ? String(r.approved_by) : undefined,
     approvedAt: r.approved_at ? iso(r.approved_at) : undefined,
     invoiceId: r.invoice_id ? String(r.invoice_id) : undefined,
+    paymentSchedule: parseJson(r.payment_schedule_json, undefined) as import('@/app/context/DataContext').PaymentInstallment[] | undefined,
+    initialPayment: r.initial_payment ? Number(r.initial_payment) : undefined,
+    clientPayments: parseJson(r.client_payments_json, undefined) as import('@/app/context/DataContext').ClientPayment[] | undefined,
+    clientAcceptedAt: r.client_accepted_at ? iso(r.client_accepted_at) : undefined,
+    clientRejectedAt: r.client_rejected_at ? iso(r.client_rejected_at) : undefined,
+    clientRejectionNote: r.client_rejection_note ? String(r.client_rejection_note) : undefined,
   };
 }
 

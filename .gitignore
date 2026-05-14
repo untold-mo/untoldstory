@@ -9,3 +9,5 @@ build/
 !.env*.example
 backend/.integration-tokens.json
 api/integration-tokens.json
+
+.vercel

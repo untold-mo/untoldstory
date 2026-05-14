@@ -28,7 +28,7 @@ import {
   createManualCustomerApi,
 } from '@/lib/api/manualCustomersApi';
 import { fetchInvoicesApi, createInvoiceApi, patchInvoiceApi } from '@/lib/api/invoicesApi';
-import { fetchExpensesApi, createExpenseApi, patchExpenseApi } from '@/lib/api/expensesApi';
+import { fetchExpensesApi, createExpenseApi, patchExpenseApi, deleteExpenseApi } from '@/lib/api/expensesApi';
 import { fetchPriceQuotesApi, createPriceQuoteApi, patchPriceQuoteApi } from '@/lib/api/priceQuotesApi';
 import { fetchAccountingPolicyApi, patchAccountingPolicyApi } from '@/lib/api/accountingPolicyApi';
 import { fetchManualJournalsApi, createManualJournalApi, deleteManualJournalApi } from '@/lib/api/manualJournalsApi';
@@ -36,21 +36,24 @@ import { fetchClosedMonthsApi, postCloseMonthApi, postReopenMonthApi } from '@/l
 import { fetchMonthlyTargetsApi, patchMonthlyTargetApi } from '@/lib/api/monthlyTargetsApi';
 import { fetchCustodySettingsApi, patchCustodySettingsApi } from '@/lib/api/custodySettingsApi';
 import { fetchAuditEventsApi, postAuditEventApi } from '@/lib/api/auditEventsApi';
-import { fetchCustodyFundsApi, createCustodyFundApi, putCustodyFundApi } from '@/lib/api/custodyFundsApi';
+import { fetchCustodyFundsApi, createCustodyFundApi, putCustodyFundApi, deleteCustodyFundApi } from '@/lib/api/custodyFundsApi';
 import {
   fetchShootBookingsApi,
   createShootBookingApi,
   patchShootBookingApi,
+  deleteShootBookingApi,
 } from '@/lib/api/shootBookingsApi';
 import {
   fetchEquipmentBookingsApi,
   createEquipmentBookingApi,
   patchEquipmentBookingApi,
+  deleteEquipmentBookingApi,
 } from '@/lib/api/equipmentBookingsApi';
 import {
   fetchMeetingBookingsApi,
   createMeetingBookingApi,
   patchMeetingBookingApi,
+  deleteMeetingBookingApi,
 } from '@/lib/api/meetingBookingsApi';
 import { fetchWorkspaceStateApi, patchWorkspaceStateApi } from '@/lib/api/workspaceStateApi';
 import { fetchAttendanceRecordsApi, postAttendanceRecordApi } from '@/lib/api/attendanceRecordsApi';
@@ -198,10 +201,39 @@ export interface PriceQuote {
   createdById: string;
   createdByName: string;
   createdAt: string;
-  status: 'قيد اعتماد المالك' | 'معتمد' | 'مرفوض';
+  status: 'بانتظار التسعير' | 'قيد اعتماد المالك' | 'معتمد' | 'مرفوض' | 'مكتمل' | 'مغلق - رفض العميل';
+  productionAssignedId?: string;
+  productionAssignedName?: string;
+  pricedById?: string;
+  pricedByName?: string;
+  pricedAt?: string;
+  pricingNote?: string;
   approvedBy?: string;
   approvedAt?: string;
   invoiceId?: string;
+  paymentSchedule?: PaymentInstallment[];
+  initialPayment?: number;
+  clientPayments?: ClientPayment[];
+  clientAcceptedAt?: string;
+  clientRejectedAt?: string;
+  clientRejectionNote?: string;
+}
+
+export interface ClientPayment {
+  id: string;
+  amount: number;
+  dueDate: string;
+  method: 'كاش' | 'تحويل';
+  note?: string;
+}
+
+export interface PaymentInstallment {
+  id: string;
+  dueDate: string;
+  amount: number;
+  note?: string;
+  paid?: boolean;
+  paidAt?: string;
 }
 
 /** قيود وسياسة يحددها المحاسب لعروض الأسعار */
@@ -1040,9 +1072,13 @@ interface DataContextType {
   addInvoice: (invoice: Omit<Invoice, 'id' | 'date'>) => Promise<boolean>;
   updateInvoiceStatus: (invoiceId: string, status: Invoice['status']) => Promise<boolean>;
   recordInvoiceCollection: (invoiceId: string, payload: { amount: number; method: 'كاش' | 'تحويل'; nextDueDate?: string; note?: string }) => Promise<boolean>;
-  addPriceQuote: (data: Omit<PriceQuote, 'id' | 'createdAt' | 'status' | 'createdById' | 'createdByName' | 'approvedBy' | 'approvedAt' | 'invoiceId'>) => Promise<boolean>;
-  approvePriceQuote: (quoteId: string) => Promise<boolean>;
+  addPriceQuote: (data: Omit<PriceQuote, 'id' | 'createdAt' | 'status' | 'createdById' | 'createdByName' | 'approvedBy' | 'approvedAt' | 'invoiceId' | 'pricedById' | 'pricedByName' | 'pricedAt'>) => Promise<boolean>;
+  productionPriceQuote: (quoteId: string, amount: number, vatRate: number, pricingNote?: string) => Promise<boolean>;
+  reassignPricingRequest: (quoteId: string, toUserId: string, toUserName: string) => Promise<boolean>;
+  approvePriceQuote: (quoteId: string, paymentSchedule?: PaymentInstallment[], initialPayment?: number) => Promise<boolean>;
   rejectPriceQuote: (quoteId: string) => Promise<boolean>;
+  repRecordClientAcceptance: (quoteId: string, clientPayments: ClientPayment[]) => Promise<boolean>;
+  repRecordClientRejection: (quoteId: string, note?: string) => Promise<boolean>;
   updateAccountingPolicy: (patch: Partial<AccountingPolicy>) => Promise<void>;
   addExpense: (expense: Omit<Expense, 'id' | 'date' | 'approvalStatus' | 'approvedBy'>) => Promise<boolean>;
   updateExpenseStatus: (expenseId: string, status: Expense['status'], paymentMethod?: Expense['paymentMethod']) => Promise<boolean>;
@@ -1132,6 +1168,9 @@ interface DataContextType {
     bookingId: string,
     spendLinesDraft: Omit<BookingSpendLine, 'id' | 'createdAt'>[],
   ) => Promise<boolean>;
+  removeShootBooking: (id: string) => Promise<boolean>;
+  removeEquipmentBooking: (id: string) => Promise<boolean>;
+  removeMeetingBooking: (id: string) => Promise<boolean>;
   otherBookings: OtherBooking[];
   addOtherBooking: (data: { title?: string; statement: string; date?: string }) => Promise<boolean>;
   removeOtherBooking: (id: string) => Promise<boolean>;
@@ -1180,6 +1219,8 @@ interface DataContextType {
   managerSubmitCustodySettlement: (id: string, lines: CustodySpendLine[]) => Promise<boolean>;
   accountantApproveCustodySettlement: (id: string) => Promise<boolean>;
   accountantRejectCustodySettlement: (id: string, reason?: string) => Promise<boolean>;
+  hardDeleteCustodyFund: (id: string) => Promise<boolean>;
+  hardDeleteExpense: (id: string) => Promise<boolean>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -1820,6 +1861,30 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   /** لمرآة حجوزات localStorage بمفتاح المستخدم — يُقرأ بعد ريفريش عندما prev=[] */
   const bookingMirrorUidRef = useRef<string | undefined>(undefined);
   bookingMirrorUidRef.current = currentUser?.id;
+  // IDs deleted locally — persisted in localStorage so they survive page refreshes
+  const LS_DEL_SHOOT = 'prod_system_deleted_shoot_ids_v1';
+  const LS_DEL_EQUIP = 'prod_system_deleted_equip_ids_v1';
+  const LS_DEL_MEET  = 'prod_system_deleted_meet_ids_v1';
+
+  function loadDeletedIds(key: string): Set<string> {
+    try { return new Set(JSON.parse(localStorage.getItem(key) || '[]') as string[]); }
+    catch { return new Set(); }
+  }
+  function saveDeletedIds(key: string, set: Set<string>) {
+    try { localStorage.setItem(key, JSON.stringify([...set])); } catch { /* private mode */ }
+  }
+  function addDeletedId(key: string, ref: React.MutableRefObject<Set<string>>, id: string) {
+    ref.current.add(id);
+    saveDeletedIds(key, ref.current);
+  }
+  function purgeDeletedId(key: string, ref: React.MutableRefObject<Set<string>>, id: string) {
+    ref.current.delete(id);
+    saveDeletedIds(key, ref.current);
+  }
+
+  const deletedShootIdsRef = useRef<Set<string>>(loadDeletedIds(LS_DEL_SHOOT));
+  const deletedEquipIdsRef = useRef<Set<string>>(loadDeletedIds(LS_DEL_EQUIP));
+  const deletedMeetIdsRef  = useRef<Set<string>>(loadDeletedIds(LS_DEL_MEET));
 
   const SESSION_SIGNED_OUT_KEY = 'prod_system_session_signed_out_v1';
   const readSessionSignedOut = () => {
@@ -2888,19 +2953,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         if (shootList !== undefined) {
           const uid = bookingMirrorUidRef.current;
+          const filteredShootList = shootList.filter((b) => !deletedShootIdsRef.current.has(b.id));
+          // clean up IDs the server no longer returns (delete confirmed)
+          const shootServerIds = new Set(shootList.map((b) => b.id));
+          [...deletedShootIdsRef.current].filter((id) => !shootServerIds.has(id)).forEach((id) => purgeDeletedId(LS_DEL_SHOOT, deletedShootIdsRef, id));
           setShootBookings((prev) => {
             let next: ShootBooking[];
-            if (shootList.length > 0) {
-              next = shootList;
+            if (filteredShootList.length > 0) {
+              next = filteredShootList;
             } else if (prev.length > 0) {
-              next = prev;
+              next = prev.filter((b) => !deletedShootIdsRef.current.has(b.id));
             } else {
               const bk = readSessionBookingBackup(SESSION_BOOKING_BACKUP_SHOOT);
-              if (bk !== null && bk.length > 0) next = bk as ShootBooking[];
+              const bkFiltered = bk ? (bk as ShootBooking[]).filter((b) => !deletedShootIdsRef.current.has(b.id)) : null;
+              if (bkFiltered !== null && bkFiltered.length > 0) next = bkFiltered;
               else {
                 const lm = readLocalBookingMirror(uid);
                 const ls = lm?.shoot;
-                next = Array.isArray(ls) && ls.length > 0 ? (ls as ShootBooking[]) : shootList;
+                const lsFiltered = Array.isArray(ls) ? (ls as ShootBooking[]).filter((b) => !deletedShootIdsRef.current.has(b.id)) : [];
+                next = lsFiltered.length > 0 ? lsFiltered : filteredShootList;
               }
             }
             persistSessionBookingBackup(SESSION_BOOKING_BACKUP_SHOOT, next);
@@ -2910,29 +2981,35 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           const uid = bookingMirrorUidRef.current;
           const bk = readSessionBookingBackup(SESSION_BOOKING_BACKUP_SHOOT);
+          const bkFiltered = bk ? (bk as ShootBooking[]).filter((b) => !deletedShootIdsRef.current.has(b.id)) : null;
           const lm = readLocalBookingMirror(uid)?.shoot;
-          const fromLs = Array.isArray(lm) && lm.length > 0 ? (lm as ShootBooking[]) : null;
-          if (bk !== null && bk.length > 0) {
-            setShootBookings(bk as ShootBooking[]);
-          } else if (fromLs) {
+          const fromLs = Array.isArray(lm) ? (lm as ShootBooking[]).filter((b) => !deletedShootIdsRef.current.has(b.id)) : null;
+          if (bkFiltered !== null && bkFiltered.length > 0) {
+            setShootBookings(bkFiltered);
+          } else if (fromLs && fromLs.length > 0) {
             setShootBookings(fromLs);
             persistSessionBookingBackup(SESSION_BOOKING_BACKUP_SHOOT, fromLs);
           }
         }
         if (equipList !== undefined) {
           const uid = bookingMirrorUidRef.current;
+          const filteredEquipList = equipList.filter((b) => !deletedEquipIdsRef.current.has(b.id));
+          const equipServerIds = new Set(equipList.map((b) => b.id));
+          [...deletedEquipIdsRef.current].filter((id) => !equipServerIds.has(id)).forEach((id) => purgeDeletedId(LS_DEL_EQUIP, deletedEquipIdsRef, id));
           setEquipmentBookings((prev) => {
             let next: EquipmentBooking[];
-            if (equipList.length > 0) {
-              next = equipList;
+            if (filteredEquipList.length > 0) {
+              next = filteredEquipList;
             } else if (prev.length > 0) {
-              next = prev;
+              next = prev.filter((b) => !deletedEquipIdsRef.current.has(b.id));
             } else {
               const bk = readSessionBookingBackup(SESSION_BOOKING_BACKUP_EQUIP);
-              if (bk !== null && bk.length > 0) next = bk as EquipmentBooking[];
+              const bkFiltered = bk ? (bk as EquipmentBooking[]).filter((b) => !deletedEquipIdsRef.current.has(b.id)) : null;
+              if (bkFiltered !== null && bkFiltered.length > 0) next = bkFiltered;
               else {
                 const lm = readLocalBookingMirror(uid)?.equip;
-                next = Array.isArray(lm) && lm.length > 0 ? (lm as EquipmentBooking[]) : equipList;
+                const lsFiltered = Array.isArray(lm) ? (lm as EquipmentBooking[]).filter((b) => !deletedEquipIdsRef.current.has(b.id)) : [];
+                next = lsFiltered.length > 0 ? lsFiltered : filteredEquipList;
               }
             }
             persistSessionBookingBackup(SESSION_BOOKING_BACKUP_EQUIP, next);
@@ -2942,33 +3019,36 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           const uid = bookingMirrorUidRef.current;
           const bk = readSessionBookingBackup(SESSION_BOOKING_BACKUP_EQUIP);
+          const bkFiltered = bk ? (bk as EquipmentBooking[]).filter((b) => !deletedEquipIdsRef.current.has(b.id)) : null;
           const lm = readLocalBookingMirror(uid)?.equip;
-          const fromLs = Array.isArray(lm) && lm.length > 0 ? (lm as EquipmentBooking[]) : null;
-          if (bk !== null && bk.length > 0) {
-            setEquipmentBookings(bk as EquipmentBooking[]);
-          } else if (fromLs) {
+          const fromLs = Array.isArray(lm) ? (lm as EquipmentBooking[]).filter((b) => !deletedEquipIdsRef.current.has(b.id)) : null;
+          if (bkFiltered !== null && bkFiltered.length > 0) {
+            setEquipmentBookings(bkFiltered);
+          } else if (fromLs && fromLs.length > 0) {
             setEquipmentBookings(fromLs);
             persistSessionBookingBackup(SESSION_BOOKING_BACKUP_EQUIP, fromLs);
           }
         }
         if (meetList !== undefined) {
-          const normalizedMeetings = meetList.map(normalizeMeetingBooking);
+          const filteredMeetList = meetList.filter((b) => !deletedMeetIdsRef.current.has(b.id));
+          const meetServerIds = new Set(meetList.map((b) => b.id));
+          [...deletedMeetIdsRef.current].filter((id) => !meetServerIds.has(id)).forEach((id) => purgeDeletedId(LS_DEL_MEET, deletedMeetIdsRef, id));
+          const normalizedMeetings = filteredMeetList.map(normalizeMeetingBooking);
           const uid = bookingMirrorUidRef.current;
           setMeetingBookings((prev) => {
             let nextNormalized: MeetingBooking[];
             if (normalizedMeetings.length > 0) {
               nextNormalized = normalizedMeetings;
             } else if (prev.length > 0) {
-              nextNormalized = prev;
+              nextNormalized = prev.filter((b) => !deletedMeetIdsRef.current.has(b.id));
             } else {
               const bk = readSessionBookingBackup(SESSION_BOOKING_BACKUP_MEET);
-              if (bk !== null && bk.length > 0) nextNormalized = (bk as MeetingBooking[]).map(normalizeMeetingBooking);
+              const bkFiltered = bk ? (bk as MeetingBooking[]).filter((b) => !deletedMeetIdsRef.current.has(b.id)) : null;
+              if (bkFiltered !== null && bkFiltered.length > 0) nextNormalized = bkFiltered.map(normalizeMeetingBooking);
               else {
                 const lm = readLocalBookingMirror(uid)?.meet;
-                nextNormalized =
-                  Array.isArray(lm) && lm.length > 0
-                    ? (lm as MeetingBooking[]).map(normalizeMeetingBooking)
-                    : normalizedMeetings;
+                const lsFiltered = Array.isArray(lm) ? (lm as MeetingBooking[]).filter((b) => !deletedMeetIdsRef.current.has(b.id)) : [];
+                nextNormalized = lsFiltered.length > 0 ? lsFiltered.map(normalizeMeetingBooking) : normalizedMeetings;
               }
             }
             persistSessionBookingBackup(SESSION_BOOKING_BACKUP_MEET, nextNormalized);
@@ -2978,11 +3058,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           const uid = bookingMirrorUidRef.current;
           const bk = readSessionBookingBackup(SESSION_BOOKING_BACKUP_MEET);
+          const bkFiltered = bk ? (bk as MeetingBooking[]).filter((b) => !deletedMeetIdsRef.current.has(b.id)) : null;
           const lm = readLocalBookingMirror(uid)?.meet;
-          const fromLs =
-            Array.isArray(lm) && lm.length > 0 ? (lm as MeetingBooking[]).map(normalizeMeetingBooking) : null;
-          if (bk !== null && bk.length > 0) {
-            setMeetingBookings((bk as MeetingBooking[]).map(normalizeMeetingBooking));
+          const fromLsRaw = Array.isArray(lm) ? (lm as MeetingBooking[]).filter((b) => !deletedMeetIdsRef.current.has(b.id)) : null;
+          const fromLs = fromLsRaw && fromLsRaw.length > 0 ? fromLsRaw.map(normalizeMeetingBooking) : null;
+          if (bkFiltered !== null && bkFiltered.length > 0) {
+            setMeetingBookings((bkFiltered as MeetingBooking[]).map(normalizeMeetingBooking));
           } else if (fromLs) {
             setMeetingBookings(fromLs);
             persistSessionBookingBackup(SESSION_BOOKING_BACKUP_MEET, fromLs);
@@ -6072,20 +6153,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const addPriceQuote = async (data: Omit<PriceQuote, 'id' | 'createdAt' | 'status' | 'createdById' | 'createdByName' | 'approvedBy' | 'approvedAt' | 'invoiceId'>): Promise<boolean> => {
+  const addPriceQuote = async (data: Omit<PriceQuote, 'id' | 'createdAt' | 'status' | 'createdById' | 'createdByName' | 'approvedBy' | 'approvedAt' | 'invoiceId' | 'pricedById' | 'pricedByName' | 'pricedAt'>): Promise<boolean> => {
     if (!currentUser) return false;
     if (!(currentUser.role === 'مندوب' || currentUser.role === 'مدير مبيعات')) return false;
     const normAr = (s: string) => s.trim().normalize('NFC');
     const cc = normAr(data.costCenter || 'عام');
     const allowed = accountingPolicy.allowedCostCentersForQuotes;
     if (allowed.length > 0 && !allowed.some((a) => normAr(a) === cc)) {
-      return false;
+      const newAllowed = [...allowed, cc];
+      setAccountingPolicy((prev) => ({ ...prev, allowedCostCentersForQuotes: newAllowed }));
+      if (isServerDataMode()) {
+        patchAccountingPolicyApi({ allowedCostCentersForQuotes: newAllowed }).catch(() => {});
+      }
     }
-    const amount = Number(data.amount);
-    if (!amount || amount <= 0) return false;
+    const amount = Number(data.amount) || 0;
+    // if routed to production for pricing, amount can be 0
+    const routedToProduction = Boolean(data.productionAssignedId);
+    if (!routedToProduction && (!amount || amount <= 0)) return false;
     const vatRate = typeof data.vatRate === 'number' ? data.vatRate : 14;
-    const vatAmount = data.vatAmount ?? Math.round(amount * (vatRate / 100));
-    const totalAmount = data.totalAmount ?? amount + vatAmount;
+    const vatAmount = amount > 0 ? (data.vatAmount ?? Math.round(amount * (vatRate / 100))) : 0;
+    const totalAmount = amount > 0 ? (data.totalAmount ?? amount + vatAmount) : 0;
+    const initialStatus: PriceQuote['status'] = routedToProduction ? 'بانتظار التسعير' : 'قيد اعتماد المالك';
     const q: PriceQuote = {
       ...data,
       amount,
@@ -6095,7 +6183,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       costCenter: cc,
       id: `PQ-${Math.random().toString(36).substr(2, 5).toUpperCase()}`,
       createdAt: new Date().toISOString(),
-      status: 'قيد اعتماد المالك',
+      status: initialStatus,
       createdById: currentUser.id,
       createdByName: currentUser.name,
     };
@@ -6112,6 +6200,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           totalAmount: q.totalAmount,
           costCenter: q.costCenter,
           note: q.note,
+          createdById: q.createdById,
+          createdByName: q.createdByName,
+          productionAssignedId: q.productionAssignedId,
+          productionAssignedName: q.productionAssignedName,
+          pricingNote: q.pricingNote,
+          status: q.status as PriceQuote['status'],
         });
         setPriceQuotes((prev) => [row, ...prev]);
         addAuditEvent({
@@ -6121,8 +6215,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           details: `${q.title} — ${q.customerName} — ${amount} ج.م`,
         });
         return true;
-      } catch {
-        return false;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[addPriceQuote] createPriceQuoteApi failed:', msg);
+        throw new Error(msg);
       }
     }
     setPriceQuotes(prev => [q, ...prev]);
@@ -6135,7 +6231,79 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return true;
   };
 
-  const approvePriceQuote = async (quoteId: string): Promise<boolean> => {
+  const productionPriceQuote = async (
+    quoteId: string,
+    amount: number,
+    vatRate: number,
+    pricingNote?: string,
+  ): Promise<boolean> => {
+    if (!currentUser) return false;
+    if (!(currentUser.role === 'مدير إنتاج' || currentUser.role === 'مالك' || currentUser.role === 'مدير مبيعات')) return false;
+    const quote = priceQuotes.find((q) => q.id === quoteId);
+    if (!quote || quote.status !== 'بانتظار التسعير') return false;
+    const amt = Math.round(Number(amount));
+    if (!amt || amt <= 0) return false;
+    const vr = typeof vatRate === 'number' ? vatRate : 14;
+    const vatAmount = Math.round(amt * (vr / 100));
+    const totalAmount = amt + vatAmount;
+    const nowIso = new Date().toISOString();
+    const patch: Partial<PriceQuote> = {
+      status: 'قيد اعتماد المالك',
+      amount: amt,
+      vatRate: vr,
+      vatAmount,
+      totalAmount,
+      pricedById: currentUser.id,
+      pricedByName: currentUser.name,
+      pricedAt: nowIso,
+      pricingNote: pricingNote?.trim() || undefined,
+    };
+    if (isServerDataMode()) {
+      try {
+        const row = await patchPriceQuoteApi(quoteId, patch as Parameters<typeof patchPriceQuoteApi>[1]);
+        setPriceQuotes((prev) => prev.map((q) => (q.id === quoteId ? { ...q, ...row } : q)));
+      } catch {
+        setPriceQuotes((prev) => prev.map((q) => (q.id === quoteId ? { ...q, ...patch } : q)));
+      }
+    } else {
+      setPriceQuotes((prev) => prev.map((q) => (q.id === quoteId ? { ...q, ...patch } : q)));
+    }
+    addAuditEvent({
+      action: 'تسعير عرض سعر من الإنتاج',
+      entityType: 'system',
+      entityId: quoteId,
+      details: `${quote.title} — ${amt.toLocaleString()} ج.م — بانتظار اعتماد المالك`,
+    });
+    return true;
+  };
+
+  /** تحويل طلب التسعير لمدير إنتاج آخر */
+  const reassignPricingRequest = async (quoteId: string, toUserId: string, toUserName: string): Promise<boolean> => {
+    if (!currentUser) return false;
+    if (!(currentUser.role === 'مدير إنتاج' || currentUser.role === 'مالك')) return false;
+    const quote = priceQuotes.find((q) => q.id === quoteId);
+    if (!quote || quote.status !== 'بانتظار التسعير') return false;
+    const patch: Partial<PriceQuote> = { productionAssignedId: toUserId, productionAssignedName: toUserName };
+    if (isServerDataMode()) {
+      try {
+        const row = await patchPriceQuoteApi(quoteId, patch as Parameters<typeof patchPriceQuoteApi>[1]);
+        setPriceQuotes((prev) => prev.map((q) => (q.id === quoteId ? { ...q, ...row } : q)));
+      } catch {
+        setPriceQuotes((prev) => prev.map((q) => (q.id === quoteId ? { ...q, ...patch } : q)));
+      }
+    } else {
+      setPriceQuotes((prev) => prev.map((q) => (q.id === quoteId ? { ...q, ...patch } : q)));
+    }
+    addAuditEvent({
+      action: 'تحويل طلب تسعير',
+      entityType: 'system',
+      entityId: quoteId,
+      details: `من ${currentUser.name} إلى ${toUserName} — ${quote.title}`,
+    });
+    return true;
+  };
+
+  const approvePriceQuote = async (quoteId: string, paymentSchedule?: PaymentInstallment[], initialPayment?: number): Promise<boolean> => {
     if (!currentUser) return false;
     const canApproveQuote = workflowRulesSettings.quoteRequiresOwnerApproval
       ? currentUser.role === 'مالك'
@@ -6145,70 +6313,70 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!quote || quote.status !== 'قيد اعتماد المالك') return false;
     const nowIso = new Date().toISOString();
     if (isMonthClosed(getMonthKey(nowIso))) return false;
+    // Owner approval: store payment terms suggestion, move to "معتمد" (awaiting client)
+    // The invoice is created ONLY after the sales rep records the client's actual acceptance
+    const schedulePatch: Partial<PriceQuote> = {
+      status: 'معتمد',
+      approvedBy: currentUser.name,
+      approvedAt: nowIso,
+      paymentSchedule: paymentSchedule?.length ? paymentSchedule : undefined,
+      initialPayment: initialPayment || undefined,
+    };
+    if (isServerDataMode()) {
+      try {
+        const row = await patchPriceQuoteApi(quoteId, schedulePatch);
+        setPriceQuotes((prev) => prev.map((q) => (q.id === quoteId ? { ...q, ...row } : q)));
+      } catch {
+        setPriceQuotes((prev) => prev.map((q) => (q.id === quoteId ? { ...q, ...schedulePatch } : q)));
+      }
+    } else {
+      setPriceQuotes((prev) => prev.map((q) => (q.id === quoteId ? { ...q, ...schedulePatch } : q)));
+    }
+    addAuditEvent({
+      action: 'اعتماد عرض سعر — بانتظار موافقة العميل',
+      entityType: 'system',
+      entityId: quoteId,
+      details: `${quote.customerName} — سيُرسَل للمندوب لتقديمه للعميل`,
+    });
+    return true;
+  };
+
+  /** المندوب يسجل موافقة العميل وتفاصيل الدفع الفعلية → ينشئ الفاتورة */
+  const repRecordClientAcceptance = async (
+    quoteId: string,
+    clientPayments: ClientPayment[],
+  ): Promise<boolean> => {
+    if (!currentUser) return false;
+    if (!(currentUser.role === 'مندوب' || currentUser.role === 'مدير مبيعات')) return false;
+    const quote = priceQuotes.find((q) => q.id === quoteId);
+    if (!quote || quote.status !== 'معتمد') return false;
+    if (!clientPayments.length) return false;
+    const nowIso = new Date().toISOString();
     const vatRate = typeof quote.vatRate === 'number' ? quote.vatRate : 14;
     const vatAmount = quote.vatAmount ?? Math.round(quote.amount * (vatRate / 100));
     const totalAmount = quote.totalAmount ?? quote.amount + vatAmount;
     const invId = `INV-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
     const leadCustomerCode = leads.find((l) => l.id === quote.leadId)?.customerCode;
-    if (isServerDataMode()) {
-      try {
-        const invRow = await createInvoiceApi({
-          id: invId,
-          leadId: quote.leadId,
-          customerCode: leadCustomerCode || buildCustomerCodeFromSeed(quote.leadId || quote.customerName),
-          customerName: quote.customerName,
-          amount: quote.amount,
-          vatRate,
-          vatAmount,
-          totalAmount,
-          costCenter: quote.costCenter || 'عام',
-          status: 'قيد الانتظار',
+    // first payment (immediate) becomes a collection entry; future ones stay as schedule
+    const immediatePayment = clientPayments.find((p) => !p.dueDate || p.dueDate <= nowIso.slice(0, 10));
+    const initCollections: InvoiceCollection[] = immediatePayment
+      ? [{
+          id: `COL-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
           date: nowIso,
-          recordOrigin: 'عرض_سعر_معتمد',
-          priceQuoteId: quote.id,
-          collections: [],
-          paidAmount: 0,
-          remainingAmount: totalAmount,
-        });
-        const ni = normalizeInvoice(invRow);
-        setInvoices((prev) => [ni, ...prev]);
-        try {
-          const updatedQuote = await patchPriceQuoteApi(quoteId, {
-            status: 'معتمد',
-            approvedBy: currentUser.name,
-            approvedAt: nowIso,
-            invoiceId: ni.id,
-          });
-          setPriceQuotes((prev) =>
-            prev.map((q) => (q.id === quoteId ? updatedQuote : q))
-          );
-        } catch {
-          setPriceQuotes((prev) =>
-            prev.map((q) =>
-              q.id === quoteId
-                ? {
-                    ...q,
-                    status: 'معتمد',
-                    approvedBy: currentUser.name,
-                    approvedAt: nowIso,
-                    invoiceId: ni.id,
-                  }
-                : q
-            )
-          );
-        }
-        addAuditEvent({
-          action: 'اعتماد عرض سعر وتسجيل فاتورة محاسبية',
-          entityType: 'invoice',
-          entityId: invId,
-          details: `من عرض ${quoteId} — ${quote.customerName}`,
-        });
-        return true;
-      } catch {
-        return false;
-      }
-    }
+          amount: Math.round(immediatePayment.amount),
+          method: immediatePayment.method,
+          note: immediatePayment.note || 'دفعة فورية عند التعاقد',
+        }]
+      : [];
+    const initPaid = initCollections.reduce((s, c) => s + c.amount, 0);
+    const quotePatch: Partial<PriceQuote> = {
+      status: 'مكتمل',
+      clientPayments,
+      clientAcceptedAt: nowIso,
+      invoiceId: invId,
+    };
     const newInvoice: Invoice = {
+      id: invId,
       leadId: quote.leadId,
       customerCode: leadCustomerCode || buildCustomerCodeFromSeed(quote.leadId || quote.customerName),
       customerName: quote.customerName,
@@ -6217,32 +6385,63 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       vatAmount,
       totalAmount,
       costCenter: quote.costCenter || 'عام',
-      status: 'قيد الانتظار',
-      id: invId,
+      status: initPaid >= totalAmount ? 'مدفوع' : 'قيد الانتظار',
       date: nowIso,
       recordOrigin: 'عرض_سعر_معتمد',
       priceQuoteId: quote.id,
+      collections: initCollections,
+      paidAmount: initPaid,
+      remainingAmount: totalAmount - initPaid,
     };
-    setInvoices(prev => [newInvoice, ...prev]);
-    setPriceQuotes(prev =>
-      prev.map(q =>
-        q.id === quoteId
-          ? {
-              ...q,
-              status: 'معتمد',
-              approvedBy: currentUser.name,
-              approvedAt: nowIso,
-              invoiceId: invId,
-            }
-          : q
-      )
-    );
+    if (isServerDataMode()) {
+      try {
+        const invRow = await createInvoiceApi({
+          ...newInvoice,
+          collections: initCollections,
+        });
+        const ni = normalizeInvoice(invRow);
+        setInvoices((prev) => [ni, ...prev]);
+        try {
+          const row = await patchPriceQuoteApi(quoteId, { ...quotePatch, invoiceId: ni.id });
+          setPriceQuotes((prev) => prev.map((q) => (q.id === quoteId ? { ...q, ...row } : q)));
+        } catch {
+          setPriceQuotes((prev) => prev.map((q) => (q.id === quoteId ? { ...q, ...quotePatch, invoiceId: ni.id } : q)));
+        }
+      } catch {
+        return false;
+      }
+    } else {
+      setInvoices((prev) => [newInvoice, ...prev]);
+      setPriceQuotes((prev) => prev.map((q) => (q.id === quoteId ? { ...q, ...quotePatch } : q)));
+    }
     addAuditEvent({
-      action: 'اعتماد عرض سعر وتسجيل فاتورة محاسبية',
+      action: 'موافقة العميل — تم تسجيل الصفقة وإنشاء الفاتورة',
       entityType: 'invoice',
       entityId: invId,
-      details: `من عرض ${quoteId} — ${quote.customerName}`,
+      details: `${quote.title} — ${quote.customerName} — ${totalAmount.toLocaleString()} ج.م`,
     });
+    return true;
+  };
+
+  /** المندوب يسجل رفض العميل */
+  const repRecordClientRejection = async (quoteId: string, note?: string): Promise<boolean> => {
+    if (!currentUser) return false;
+    if (!(currentUser.role === 'مندوب' || currentUser.role === 'مدير مبيعات')) return false;
+    const quote = priceQuotes.find((q) => q.id === quoteId);
+    if (!quote || quote.status !== 'معتمد') return false;
+    const nowIso = new Date().toISOString();
+    const patch: Partial<PriceQuote> = { status: 'مغلق - رفض العميل', clientRejectedAt: nowIso, clientRejectionNote: note?.trim() || undefined };
+    if (isServerDataMode()) {
+      try {
+        const row = await patchPriceQuoteApi(quoteId, patch);
+        setPriceQuotes((prev) => prev.map((q) => (q.id === quoteId ? { ...q, ...row } : q)));
+      } catch {
+        setPriceQuotes((prev) => prev.map((q) => (q.id === quoteId ? { ...q, ...patch } : q)));
+      }
+    } else {
+      setPriceQuotes((prev) => prev.map((q) => (q.id === quoteId ? { ...q, ...patch } : q)));
+    }
+    addAuditEvent({ action: 'رفض العميل لعرض السعر', entityType: 'system', entityId: quoteId, details: note || quote.customerName });
     return true;
   };
 
@@ -7193,6 +7392,54 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         entityId: row.id,
         details: row.title.slice(0, 200),
       });
+      return true;
+    },
+    [currentUser],
+  );
+
+  const removeShootBooking = useCallback(
+    async (id: string): Promise<boolean> => {
+      if (!currentUser) return false;
+      const canDelete = currentUser.role === 'مالك' || currentUser.role === 'مدير مبيعات' || currentUser.role === 'مدير إنتاج';
+      if (!canDelete) return false;
+      addDeletedId(LS_DEL_SHOOT, deletedShootIdsRef, id);
+      setShootBookings((prev) => prev.filter((b) => b.id !== id));
+      if (isServerDataMode()) {
+        try { await deleteShootBookingApi(id); } catch { /* keep hidden even if server fails */ }
+      }
+      addAuditEvent({ action: 'حذف حجز تصوير', entityType: 'system', entityId: id });
+      return true;
+    },
+    [currentUser],
+  );
+
+  const removeEquipmentBooking = useCallback(
+    async (id: string): Promise<boolean> => {
+      if (!currentUser) return false;
+      const canDelete = currentUser.role === 'مالك' || currentUser.role === 'مدير مبيعات' || currentUser.role === 'مدير إنتاج';
+      if (!canDelete) return false;
+      addDeletedId(LS_DEL_EQUIP, deletedEquipIdsRef, id);
+      setEquipmentBookings((prev) => prev.filter((b) => b.id !== id));
+      if (isServerDataMode()) {
+        try { await deleteEquipmentBookingApi(id); } catch { /* keep hidden even if server fails */ }
+      }
+      addAuditEvent({ action: 'حذف حجز معدات', entityType: 'system', entityId: id });
+      return true;
+    },
+    [currentUser],
+  );
+
+  const removeMeetingBooking = useCallback(
+    async (id: string): Promise<boolean> => {
+      if (!currentUser) return false;
+      const canDelete = currentUser.role === 'مالك' || currentUser.role === 'مدير مبيعات' || currentUser.role === 'مدير إنتاج';
+      if (!canDelete) return false;
+      addDeletedId(LS_DEL_MEET, deletedMeetIdsRef, id);
+      setMeetingBookings((prev) => prev.filter((b) => b.id !== id));
+      if (isServerDataMode()) {
+        try { await deleteMeetingBookingApi(id); } catch { /* keep hidden even if server fails */ }
+      }
+      addAuditEvent({ action: 'حذف حجز اجتماع', entityType: 'system', entityId: id });
       return true;
     },
     [currentUser],
@@ -8631,6 +8878,30 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return ok;
   };
 
+  const hardDeleteCustodyFund = async (id: string): Promise<boolean> => {
+    setCustodyFunds((prev) => prev.filter((f) => f.id !== id));
+    if (isServerDataMode()) {
+      try {
+        await deleteCustodyFundApi(id);
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const hardDeleteExpense = async (id: string): Promise<boolean> => {
+    setExpenses((prev) => prev.filter((e) => e.id !== id));
+    if (isServerDataMode()) {
+      try {
+        await deleteExpenseApi(id);
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  };
+
   const logout = () => {
     const mirrorUid = currentUser?.id;
     clearBookingMirrorBuckets(mirrorUid);
@@ -8698,7 +8969,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <DataContext.Provider value={{ 
       leads, users, manualCustomers, invoices, priceQuotes, accountingPolicy, expenses, currentUser, setCurrentUser: setCurrentUserPublic, addLead, bulkAddLeads, 
       updateLeadStatus, logLeadInteraction, reviewLeadActivity, setLeadFollowUp, assignLead, deleteLead, updateUserSkills, addEmployee, addManualCustomer, updateEmployeeSalary, updateEmployeeProfile, removeEmployee, getLeadScore, refreshSLA, logout, addInvoice,
-      updateInvoiceStatus, recordInvoiceCollection, addPriceQuote, approvePriceQuote, rejectPriceQuote, updateAccountingPolicy, addExpense, updateExpenseStatus, approveExpense, rejectExpense,
+      updateInvoiceStatus, recordInvoiceCollection, addPriceQuote, productionPriceQuote, reassignPricingRequest, approvePriceQuote, rejectPriceQuote, repRecordClientAcceptance, repRecordClientRejection, updateAccountingPolicy, addExpense, updateExpenseStatus, approveExpense, rejectExpense,
       getRepSnapshots, monthlyTargets, updateMonthlyTarget, getPerformanceAlerts, getSlaHeatmap,
       closedMonths, closeMonth, reopenMonth, isMonthClosed,
       chartOfAccounts, addChartAccount, removeChartAccount,
@@ -8717,7 +8988,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       attendanceRecords, logAttendance,
       payrollApprovals, payrollApprovalRequests, financialReopenRequests, approvePayroll, reopenPayroll, isPayrollApproved, requestPayrollApproval, ownerApprovePayrollRequest, ownerRejectPayrollRequest, requestMonthReopen, ownerApproveMonthReopenRequest, ownerRejectMonthReopenRequest, getSystemNotifications, refreshServerWorkspace,
       auditEvents, addAuditEvent,
-      shootBookings, equipmentBookings, meetingBookings, otherBookings, equipmentItems, addShootBooking, addEquipmentBooking, addMeetingBooking, addOtherBooking, removeOtherBooking, addEquipmentItem, updateShootBookingStatus, updateEquipmentBookingStatus, updateMeetingBookingStatus, accountantExecuteShootBookingClaim, accountantExecuteEquipmentBookingClaim, accountantExecuteMeetingBookingClaim, productionSubmitBookingSpendToAccountant,
+      shootBookings: shootBookings.filter((b) => !deletedShootIdsRef.current.has(b.id)),
+      equipmentBookings: equipmentBookings.filter((b) => !deletedEquipIdsRef.current.has(b.id)),
+      meetingBookings: meetingBookings.filter((b) => !deletedMeetIdsRef.current.has(b.id)),
+      otherBookings, equipmentItems, addShootBooking, addEquipmentBooking, addMeetingBooking, addOtherBooking, removeOtherBooking, removeShootBooking, removeEquipmentBooking, removeMeetingBooking, addEquipmentItem, updateShootBookingStatus, updateEquipmentBookingStatus, updateMeetingBookingStatus, accountantExecuteShootBookingClaim, accountantExecuteEquipmentBookingClaim, accountantExecuteMeetingBookingClaim, productionSubmitBookingSpendToAccountant,
       printBrandingSettings, updatePrintBrandingSettings,
       leadIngestionSettings, updateLeadIngestionSettings,
       slaEscalationSettings, updateSlaEscalationSettings,
@@ -8731,6 +9005,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       accountantRecordCustodyPayment,
       managerReceiveCustody, managerUpdateCustodySpendLines, managerUpdateApprovedExpenseSpendLines, managerSubmitCustodySettlement,
       accountantApproveCustodySettlement, accountantRejectCustodySettlement,
+      hardDeleteCustodyFund, hardDeleteExpense,
     } as any}>
       {children}
     </DataContext.Provider>

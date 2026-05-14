@@ -4,6 +4,7 @@ import {
   fetchEquipmentBookingsSb,
   createEquipmentBookingSb,
   patchEquipmentBookingSb,
+  deleteEquipmentBookingSb,
 } from '@/lib/supabase/directApiSb';
 
 function authHeaders(): HeadersInit {
@@ -51,6 +52,20 @@ export async function createEquipmentBookingApi(
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(typeof data.error === 'string' ? data.error : 'create equipment booking');
   return data.booking as import('@/app/context/DataContext').EquipmentBooking;
+}
+
+export async function deleteEquipmentBookingApi(id: string): Promise<void> {
+  if (isSupabaseDirectMode()) {
+    return deleteEquipmentBookingSb(id);
+  }
+  const r = await fetch(`${getApiBaseUrl()}/api/equipment-bookings/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (!r.ok) {
+    const data = await r.json().catch(() => ({}));
+    throw new Error(typeof (data as { error?: string }).error === 'string' ? (data as { error: string }).error : 'delete equipment booking');
+  }
 }
 
 export async function patchEquipmentBookingApi(

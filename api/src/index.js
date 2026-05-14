@@ -131,6 +131,7 @@ app.get('/health', async (req, res) => {
   }
 });
 
+
 app.use((req, res) => {
   res.status(404).json({ error: 'المسار غير موجود' });
 });

@@ -1,6 +1,6 @@
 import { getApiBaseUrl } from '@/config/api';
 import { isSupabaseDirectMode } from '@/config/supabaseMode';
-import { fetchCustodyFundsSb, createCustodyFundSb, putCustodyFundSb } from '@/lib/supabase/directApiSb';
+import { fetchCustodyFundsSb, createCustodyFundSb, putCustodyFundSb, deleteCustodyFundSb } from '@/lib/supabase/directApiSb';
 
 function authHeaders(): HeadersInit {
   const token = localStorage.getItem('prod_system_jwt');
@@ -29,6 +29,15 @@ export async function createCustodyFundApi(
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(typeof data.error === 'string' ? data.error : 'create custody fund');
   return data.fund as import('@/app/context/DataContext').CustodyFund;
+}
+
+export async function deleteCustodyFundApi(id: string): Promise<void> {
+  if (isSupabaseDirectMode()) return deleteCustodyFundSb(id);
+  const r = await fetch(`${getApiBaseUrl()}/api/custody-funds/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (!r.ok) throw new Error('فشل حذف العهدة');
 }
 
 export async function putCustodyFundApi(

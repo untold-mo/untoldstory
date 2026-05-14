@@ -1,6 +1,6 @@
 import { getApiBaseUrl } from '@/config/api';
 import { isSupabaseDirectMode } from '@/config/supabaseMode';
-import { fetchShootBookingsSb, createShootBookingSb, patchShootBookingSb } from '@/lib/supabase/directApiSb';
+import { fetchShootBookingsSb, createShootBookingSb, patchShootBookingSb, deleteShootBookingSb } from '@/lib/supabase/directApiSb';
 
 function authHeaders(): HeadersInit {
   const token = localStorage.getItem('prod_system_jwt');
@@ -67,6 +67,20 @@ export async function createShootBookingApi(
     throw new Error('استجابة الخادم لا تحتوي حجزاً صالحاً — تحقق من حفظ الطلب على السيرفر');
   }
   return booking;
+}
+
+export async function deleteShootBookingApi(id: string): Promise<void> {
+  if (isSupabaseDirectMode()) {
+    return deleteShootBookingSb(id);
+  }
+  const r = await fetch(`${getApiBaseUrl()}/api/shoot-bookings/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (!r.ok) {
+    const data = await r.json().catch(() => ({}));
+    throw new Error(typeof (data as { error?: string }).error === 'string' ? (data as { error: string }).error : 'delete shoot booking');
+  }
 }
 
 export async function patchShootBookingApi(

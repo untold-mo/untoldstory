@@ -601,6 +601,12 @@ export async function createExpenseSb(payload: Partial<Expense> & { title: strin
   return mapExpenseFromRow(data as Record<string, unknown>);
 }
 
+export async function deleteExpenseSb(id: string): Promise<void> {
+  const sb = getSupabase();
+  const { error } = await sb.from('expenses').delete().eq('id', id);
+  if (error) throw new Error(error.message || 'فشل حذف المصروف');
+}
+
 export async function patchExpenseSb(id: string, patch: Partial<Expense>): Promise<Expense> {
   const actor = await getSupabaseActor();
   const sb = getSupabase();
@@ -711,17 +717,27 @@ export async function fetchPriceQuotesSb(): Promise<PriceQuote[]> {
 }
 
 export async function createPriceQuoteSb(
-  payload: Omit<PriceQuote, 'createdAt' | 'status' | 'approvedBy' | 'approvedAt' | 'invoiceId' | 'createdById' | 'createdByName'> & {
+  payload: Omit<PriceQuote, 'createdAt' | 'approvedBy' | 'approvedAt' | 'invoiceId'> & {
     id?: string;
   },
 ): Promise<PriceQuote> {
-  const actor = await getSupabaseActor();
-  if (actor.role !== 'مندوب' && actor.role !== 'مدير مبيعات') throw new Error('غير مصرح');
   const leadId = String(payload.leadId || '').trim();
   const customerName = String(payload.customerName || '').trim();
   const title = String(payload.title || '').trim();
   const amount = Math.max(0, Math.round(Number(payload.amount) || 0));
   if (!leadId || !customerName || !title || !amount) throw new Error('بيانات عرض السعر ناقصة');
+  // resolve actor for created_by fields — fall back to payload if getSupabaseActor fails
+  let actorId = String(payload.createdById || '').trim();
+  let actorName = String(payload.createdByName || '').trim();
+  if (!actorId || !actorName) {
+    try {
+      const actor = await getSupabaseActor();
+      actorId = actorId || actor.id;
+      actorName = actorName || actor.name;
+    } catch {
+      // session may not be needed if actorId/Name already provided
+    }
+  }
   const vatRate = typeof payload.vatRate === 'number' ? payload.vatRate : 14;
   const vatAmount =
     typeof payload.vatAmount === 'number' ? Math.round(payload.vatAmount) : Math.round(amount * (vatRate / 100));
@@ -737,9 +753,13 @@ export async function createPriceQuoteSb(
     total_amount: totalAmount,
     cost_center: payload.costCenter ? String(payload.costCenter).trim() : 'عام',
     note: payload.note ? String(payload.note).trim() : null,
-    created_by_id: actor.id,
-    created_by_name: actor.name,
-    status: 'قيد اعتماد المالك',
+    created_by_id: actorId || 'unknown',
+    created_by_name: actorName || 'unknown',
+    status: payload.status || 'قيد اعتماد المالك',
+    production_assigned_id: payload.productionAssignedId || null,
+    production_assigned_name: payload.productionAssignedName || null,
+    pricing_note: payload.pricingNote || null,
+    updated_at: new Date().toISOString(),
   };
   const sb = getSupabase();
   const { data, error } = await sb.from('price_quotes').insert(row).select('*').single();
@@ -749,36 +769,31 @@ export async function createPriceQuoteSb(
 
 export async function patchPriceQuoteSb(
   id: string,
-  patch: Partial<{
-    status: PriceQuote['status'];
-    approvedBy: string;
-    approvedAt: string;
-    invoiceId: string;
-  }>,
+  patch: Partial<PriceQuote>,
 ): Promise<PriceQuote> {
-  const actor = await getSupabaseActor();
   const sb = getSupabase();
   const { data: exRow, error: exErr } = await sb.from('price_quotes').select('*').eq('id', id).maybeSingle();
   if (exErr || !exRow) throw new Error('غير موجود');
-  const existing = mapPriceQuoteFromRow(exRow as Record<string, unknown>);
-  if (existing.status !== 'قيد اعتماد المالك') throw new Error('عرض السعر ليس قيد الاعتماد');
 
-  const rowUp: Record<string, unknown> = {};
-  if (patch.status != null) {
-    const st = String(patch.status).trim() as PriceQuote['status'];
-    if (st === 'مرفوض') {
-      if (actor.role !== 'مالك') throw new Error('غير مصرح');
-      rowUp.status = 'مرفوض';
-      rowUp.approved_by = actor.name;
-      rowUp.approved_at = new Date().toISOString();
-    } else if (st === 'معتمد') {
-      if (actor.role !== 'مالك' && actor.role !== 'مدير مبيعات') throw new Error('غير مصرح');
-      rowUp.status = 'معتمد';
-      rowUp.approved_by = patch.approvedBy ? String(patch.approvedBy) : actor.name;
-      rowUp.approved_at = patch.approvedAt ? String(patch.approvedAt) : new Date().toISOString();
-      if (patch.invoiceId) rowUp.invoice_id = String(patch.invoiceId).trim();
-    } else throw new Error('حالة غير صالحة');
-  } else throw new Error('لا يوجد تحديث');
+  const rowUp: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (patch.status != null) rowUp.status = String(patch.status).trim();
+  if (patch.approvedBy != null) rowUp.approved_by = String(patch.approvedBy);
+  if (patch.approvedAt != null) rowUp.approved_at = String(patch.approvedAt);
+  if (patch.invoiceId != null) rowUp.invoice_id = String(patch.invoiceId);
+  if (patch.amount != null) rowUp.amount = Math.round(Number(patch.amount));
+  if (patch.vatRate != null) rowUp.vat_rate = Number(patch.vatRate);
+  if (patch.vatAmount != null) rowUp.vat_amount = Math.round(Number(patch.vatAmount));
+  if (patch.totalAmount != null) rowUp.total_amount = Math.round(Number(patch.totalAmount));
+  if (patch.pricedById != null) rowUp.priced_by_id = String(patch.pricedById);
+  if (patch.pricedByName != null) rowUp.priced_by_name = String(patch.pricedByName);
+  if (patch.pricedAt != null) rowUp.priced_at = String(patch.pricedAt);
+  if (patch.pricingNote != null) rowUp.pricing_note = String(patch.pricingNote);
+  if (patch.paymentSchedule != null) rowUp.payment_schedule_json = JSON.stringify(patch.paymentSchedule);
+  if (patch.initialPayment != null) rowUp.initial_payment = Number(patch.initialPayment);
+  if (patch.clientPayments != null) rowUp.client_payments_json = JSON.stringify(patch.clientPayments);
+  if (patch.clientAcceptedAt != null) rowUp.client_accepted_at = String(patch.clientAcceptedAt);
+  if (patch.clientRejectedAt != null) rowUp.client_rejected_at = String(patch.clientRejectedAt);
+  if (patch.clientRejectionNote != null) rowUp.client_rejection_note = String(patch.clientRejectionNote);
 
   const { data, error } = await sb.from('price_quotes').update(rowUp).eq('id', id).select('*').single();
   if (error || !data) throw new Error(error?.message || 'فشل التحديث');
@@ -1085,6 +1100,12 @@ export async function createCustodyFundSb(doc: unknown): Promise<unknown> {
   return (data as { doc_json: unknown }).doc_json;
 }
 
+export async function deleteCustodyFundSb(id: string): Promise<void> {
+  const sb = getSupabase();
+  const { error } = await sb.from('custody_funds').delete().eq('id', id);
+  if (error) throw new Error(error.message || 'فشل حذف العهدة');
+}
+
 export async function putCustodyFundSb(id: string, doc: unknown): Promise<unknown> {
   const actor = await getSupabaseActor();
   if (!['محاسب', 'مالك', 'مدير إنتاج'].includes(actor.role)) throw new Error('غير مصرح');
@@ -1132,6 +1153,18 @@ async function insertDocBookingSb(
   return (data as { doc_json: unknown }).doc_json;
 }
 
+async function deleteDocBookingSb(
+  table: string,
+  id: string,
+  canDelete: (role: string) => boolean,
+): Promise<void> {
+  const actor = await getSupabaseActor();
+  if (!canDelete(actor.role)) throw new Error('غير مصرح');
+  const sb = getSupabase();
+  const { error } = await sb.from(table).delete().eq('id', id);
+  if (error) throw new Error(error.message || 'فشل الحذف');
+}
+
 async function patchDocBookingSb(
   table: string,
   id: string,
@@ -1162,6 +1195,10 @@ export async function patchShootBookingSb(id: string, patch: Record<string, unkn
   );
 }
 
+export async function deleteShootBookingSb(id: string): Promise<void> {
+  return deleteDocBookingSb('shoot_bookings', id, (r) => ['مالك', 'مدير مبيعات', 'مدير إنتاج'].includes(r));
+}
+
 export async function createEquipmentBookingSb(doc: Record<string, unknown>): Promise<unknown> {
   return insertDocBookingSb('equipment_bookings', doc, (r) => r === 'مندوب' || r === 'مدير إنتاج');
 }
@@ -1172,6 +1209,10 @@ export async function patchEquipmentBookingSb(id: string, patch: Record<string, 
   );
 }
 
+export async function deleteEquipmentBookingSb(id: string): Promise<void> {
+  return deleteDocBookingSb('equipment_bookings', id, (r) => ['مالك', 'مدير مبيعات', 'مدير إنتاج'].includes(r));
+}
+
 export async function createMeetingBookingSb(doc: Record<string, unknown>): Promise<unknown> {
   return insertDocBookingSb('meeting_bookings', doc, (r) => r === 'مندوب' || r === 'مدير مبيعات');
 }
@@ -1180,6 +1221,10 @@ export async function patchMeetingBookingSb(id: string, patch: Record<string, un
   return patchDocBookingSb('meeting_bookings', id, patch, (r) =>
     ['مالك', 'مدير مبيعات', 'محاسب', 'مدير إنتاج'].includes(r),
   );
+}
+
+export async function deleteMeetingBookingSb(id: string): Promise<void> {
+  return deleteDocBookingSb('meeting_bookings', id, (r) => ['مالك', 'مدير مبيعات', 'مدير إنتاج'].includes(r));
 }
 
 /* ---------- workspace state ---------- */

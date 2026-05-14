@@ -21,12 +21,9 @@ export async function createPriceQuoteApi(
   payload: Omit<
     import('@/app/context/DataContext').PriceQuote,
     | 'createdAt'
-    | 'status'
     | 'approvedBy'
     | 'approvedAt'
     | 'invoiceId'
-    | 'createdById'
-    | 'createdByName'
   > & { id?: string }
 ): Promise<import('@/app/context/DataContext').PriceQuote> {
   if (isSupabaseDirectMode()) return createPriceQuoteSb(payload);
@@ -42,12 +39,7 @@ export async function createPriceQuoteApi(
 
 export async function patchPriceQuoteApi(
   id: string,
-  patch: Partial<{
-    status: import('@/app/context/DataContext').PriceQuote['status'];
-    approvedBy: string;
-    approvedAt: string;
-    invoiceId: string;
-  }>
+  patch: Partial<import('@/app/context/DataContext').PriceQuote>
 ): Promise<import('@/app/context/DataContext').PriceQuote> {
   if (isSupabaseDirectMode()) return patchPriceQuoteSb(id, patch);
   const r = await fetch(`${getApiBaseUrl()}/api/price-quotes/${encodeURIComponent(id)}`, {

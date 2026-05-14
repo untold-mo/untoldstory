@@ -8,9 +8,11 @@ import {
   MoreVertical,
   Plus,
   Filter,
+  Trash2,
 } from 'lucide-react';
 import { motion as Motion } from 'motion/react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { useData } from '../context/DataContext';
 
 type ProdFilter = 'الكل' | 'جاري' | 'مجدول' | 'مكتمل' | 'معلق';
@@ -45,8 +47,21 @@ function formatArDate(iso: string) {
 }
 
 export default function ProductionPage() {
-  const { shootBookings, equipmentBookings, meetingBookings } = useData();
+  const { shootBookings, equipmentBookings, meetingBookings, removeShootBooking, removeEquipmentBooking, removeMeetingBooking } = useData();
   const [filter, setFilter] = useState<ProdFilter>('الكل');
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!openMenuId) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [openMenuId]);
 
   const cards = useMemo<ProdCard[]>(() => {
     const out: ProdCard[] = [];
@@ -205,13 +220,40 @@ export default function ProductionPage() {
 
                 <div className="flex items-center justify-between pt-4 border-t border-zinc-800">
                   <span className="text-[11px] font-bold text-zinc-500 bg-zinc-800/50 px-2 py-0.5 rounded-lg">{prod.type}</span>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 relative" ref={openMenuId === prod.id ? menuRef : null}>
                     <button type="button" className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-all">
                       <Filter className="h-4 w-4" />
                     </button>
-                    <button type="button" className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-all">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === prod.id ? null : prod.id); }}
+                      className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-all"
+                    >
                       <MoreVertical className="h-4 w-4" />
                     </button>
+                    {openMenuId === prod.id && (
+                      <div className="absolute left-0 bottom-full mb-1 z-50 bg-[#18181B] border border-zinc-700 rounded-xl shadow-2xl min-w-[130px] overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOpenMenuId(null);
+                            void (async () => {
+                              const rawId = prod.id.replace(/^(sh|eq|mt)-/, '');
+                              let ok = false;
+                              if (prod.id.startsWith('sh-')) ok = await removeShootBooking(rawId);
+                              else if (prod.id.startsWith('eq-')) ok = await removeEquipmentBooking(rawId);
+                              else if (prod.id.startsWith('mt-')) ok = await removeMeetingBooking(rawId);
+                              if (ok) toast.success('تم حذف الطلب');
+                              else toast.error('تعذر الحذف — تحقق من الصلاحيات');
+                            })();
+                          }}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-rose-400 hover:bg-rose-500/10 transition-colors"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          حذف الطلب
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </Motion.div>

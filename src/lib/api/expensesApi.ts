@@ -1,6 +1,6 @@
 import { getApiBaseUrl } from '@/config/api';
 import { isSupabaseDirectMode } from '@/config/supabaseMode';
-import { fetchExpensesSb, createExpenseSb, patchExpenseSb } from '@/lib/supabase/directApiSb';
+import { fetchExpensesSb, createExpenseSb, patchExpenseSb, deleteExpenseSb } from '@/lib/supabase/directApiSb';
 
 function authHeaders(): HeadersInit {
   const token = localStorage.getItem('prod_system_jwt');
@@ -32,6 +32,15 @@ export async function createExpenseApi(
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(typeof data.error === 'string' ? data.error : 'create expense');
   return data.expense as import('@/app/context/DataContext').Expense;
+}
+
+export async function deleteExpenseApi(id: string): Promise<void> {
+  if (isSupabaseDirectMode()) return deleteExpenseSb(id);
+  const r = await fetch(`${getApiBaseUrl()}/api/expenses/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (!r.ok) throw new Error('فشل حذف المصروف');
 }
 
 export async function patchExpenseApi(

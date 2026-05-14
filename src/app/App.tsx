@@ -5,7 +5,8 @@ import {
   MoreVertical, Filter, ArrowUpRight, Target, UserPlus, Trophy, Clock, LogOut, 
   Menu, X, ChevronRight, MessageSquare, CheckCircle2, TrendingUp, Building2, Home,
   DollarSign, ShieldCheck, Lock, Wallet, Receipt, FileUp, PieChart as PieIcon, 
-  BarChart3, Calendar, Layers, Zap, Star, AlertCircle, FileText, Banknote, Trash2
+  BarChart3, Calendar, Layers, Zap, Star, AlertCircle, FileText, Banknote, Trash2,
+  XCircle, ArrowLeftRight
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -25,6 +26,7 @@ import {
   ChartOfAccount,
   ManualJournalLine,
   PriceQuote,
+  ClientPayment,
   CustodyFund,
   CustodySpendLine,
   CustodySpendAttachment,
@@ -411,26 +413,62 @@ const OwnerDashboard = ({ onGoToTab, openAccountantSubTab, openBookingsWithInten
             <Layers className="w-5 h-5 text-emerald-500" />
             مراحل المبيعات الموحدة
           </h3>
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
-            <div className="h-80 xl:col-span-2">
-              <ResponsiveContainer width="100%" height="100%">
-                <FunnelChart margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
-                  <Tooltip
-                    formatter={(value: any, _name: any, payload: any) => [`${value}`, payload?.payload?.name || '']}
-                    contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }}
-                  />
-                  <Funnel dataKey="value" data={funnelData} isAnimationActive />
-                </FunnelChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="space-y-2">
-              {funnelData.map((stage) => (
-                <div key={stage.name} className="flex items-center justify-between bg-slate-950/40 border border-white/10 rounded-xl px-3 py-2 text-sm">
-                  <span className="text-zinc-300 font-bold">{stage.name}</span>
-                  <span className="text-emerald-400 font-black">{stage.value}</span>
-                </div>
-              ))}
-            </div>
+          <div className="space-y-3 mt-2">
+            {(() => {
+              const activeStages = funnelData.filter((s: any) => s.name !== 'مغلق - خسارة');
+              const lossStage = funnelData.find((s: any) => s.name === 'مغلق - خسارة');
+              const maxVal = Math.max(...funnelData.map((s: any) => s.value), 1);
+              const stageColors: Record<string, { bar: string }> = {
+                'جديد':          { bar: '#6366f1' },
+                'قيد التواصل':  { bar: '#8b5cf6' },
+                'عرض سعر':      { bar: '#f59e0b' },
+                'تفاوض':        { bar: '#f97316' },
+                'مغلق - فوز':   { bar: '#10b981' },
+                'مغلق - خسارة': { bar: '#ef4444' },
+              };
+              const total = funnelData[0]?.value || 1;
+              return (
+                <>
+                  {funnelData.map((stage: any, idx: number) => {
+                    const isLoss = stage.name === 'مغلق - خسارة';
+                    const pct = maxVal > 0 ? Math.max((stage.value / maxVal) * 100, stage.value > 0 ? 4 : 0) : 0;
+                    const convPct = total > 0 ? Math.round((stage.value / total) * 100) : 0;
+                    const color = stageColors[stage.name]?.bar ?? '#10b981';
+                    return (
+                      <div key={stage.name} className="flex items-center gap-3 group">
+                        <div className="w-28 shrink-0 text-right">
+                          <span className={`text-xs font-bold ${isLoss ? 'text-rose-300' : 'text-zinc-300'}`}>{stage.name}</span>
+                        </div>
+                        <div className="flex-1 relative h-8 bg-white/[0.03] rounded-xl overflow-hidden border border-white/[0.06]">
+                          <div
+                            className="h-full rounded-xl transition-all duration-700"
+                            style={{ width: `${pct}%`, backgroundColor: color + '33', borderRight: `2px solid ${color}99` }}
+                          />
+                          <div className="absolute inset-0 flex items-center px-3 justify-between">
+                            <span className="text-[11px] font-black" style={{ color }}>{stage.value}</span>
+                            <span className="text-[10px] text-zinc-500">{convPct}%</span>
+                          </div>
+                        </div>
+                        {idx < funnelData.length - 2 && (
+                          <div className="shrink-0 w-6 flex justify-center">
+                            <svg width="10" height="14" viewBox="0 0 10 14" fill="none">
+                              <path d="M5 0 L10 7 L5 14 L0 7 Z" fill="#334155" />
+                            </svg>
+                          </div>
+                        )}
+                        {idx === funnelData.length - 2 && <div className="w-6 shrink-0" />}
+                        {idx === funnelData.length - 1 && <div className="w-6 shrink-0" />}
+                      </div>
+                    );
+                  })}
+                  <div className="mt-3 pt-3 border-t border-white/[0.06] flex gap-4 text-[11px] text-zinc-500">
+                    <span>إجمالي: <b className="text-zinc-300">{funnelData.reduce((s: number, d: any) => s + d.value, 0)}</b></span>
+                    <span>معدل الفوز: <b className="text-emerald-300">{total > 0 ? Math.round(((funnelData.find((d: any) => d.name === 'مغلق - فوز')?.value ?? 0) / total) * 100) : 0}%</b></span>
+                    <span>الخسارة: <b className="text-rose-300">{total > 0 ? Math.round(((funnelData.find((d: any) => d.name === 'مغلق - خسارة')?.value ?? 0) / total) * 100) : 0}%</b></span>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
 
@@ -2629,6 +2667,25 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
                   )}
                   <span className="text-xs text-zinc-400">يشترط توازن المدين والدائن.</span>
                 </div>
+                {(currentUser?.role === 'محاسب' || currentUser?.role === 'مالك') && manualJournalEntries.length > 0 && (
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!window.confirm('حذف جميع قيود الحسابات نهائياً؟ لا يمكن التراجع.')) return;
+                        let deletedCount = 0;
+                        for (const entry of [...manualJournalEntries]) {
+                          const ok = await removeManualJournalEntry(entry.id);
+                          if (ok) deletedCount++;
+                        }
+                        toast.success(`تم حذف ${deletedCount} قيد`);
+                      }}
+                      className="rounded-xl border border-rose-500/40 bg-rose-500/15 px-3 py-1.5 text-xs font-black text-rose-200 hover:bg-rose-500/25 transition-colors"
+                    >
+                      حذف الكل
+                    </button>
+                  </div>
+                )}
                 <div className="space-y-2 max-h-64 overflow-auto">
                   {displayedJournals.map(entry => (
                     <div key={entry.id} className={`rounded-xl p-3 ${journalFocusId === entry.id ? 'bg-indigo-500/10 border border-indigo-400/40' : 'bg-slate-950/40 border border-white/10'}`}>
@@ -3275,14 +3332,20 @@ const PriceQuoteSubmitModal = ({
   open: boolean;
   onClose: () => void;
 }) => {
-  const { addPriceQuote, accountingPolicy } = useData();
+  const { addPriceQuote, accountingPolicy, users } = useData();
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [vatRate, setVatRate] = useState('14');
   const [costCenter, setCostCenter] = useState('عام');
   const [note, setNote] = useState('');
+  const [productionUserId, setProductionUserId] = useState('');
 
   const allowedCC = accountingPolicy.allowedCostCentersForQuotes;
+  const productionUsers = useMemo(
+    () => users.filter((u) => u.role === 'مدير إنتاج' || u.role === 'إنتاج'),
+    [users]
+  );
+  const routeToProduction = productionUserId !== '';
 
   useEffect(() => {
     if (open && lead) {
@@ -3291,10 +3354,10 @@ const PriceQuoteSubmitModal = ({
       setVatRate('14');
       setCostCenter(allowedCC.includes('عام') ? 'عام' : allowedCC[0] || 'عام');
       setNote('');
+      setProductionUserId('');
     }
   }, [open, lead?.id, allowedCC.join(',')]);
 
-  // when policy loads from server after modal already opened, correct the selection
   useEffect(() => {
     if (!open) return;
     if (allowedCC.length > 0 && !allowedCC.includes(costCenter)) {
@@ -3304,31 +3367,40 @@ const PriceQuoteSubmitModal = ({
 
   if (!open || !lead) return null;
 
+  const selectedProdUser = productionUsers.find((u) => u.id === productionUserId);
+
   const submit = async () => {
+    if (!title.trim()) { toast.error('أدخل عنوان العرض'); return; }
     const amt = Number(amount);
-    if (!title.trim() || !amt || amt <= 0) {
-      toast.error('أدخل عنوانًا ومبلغًا صحيحًا');
+    if (!routeToProduction && (!amt || amt <= 0)) {
+      toast.error('أدخل المبلغ، أو اختر موظف إنتاج للتسعير');
       return;
     }
     const vr = Number(vatRate);
-    if (Number.isNaN(vr) || vr < 0 || vr > 100) {
-      toast.error('نسبة ضريبة غير صحيحة');
+    if (Number.isNaN(vr) || vr < 0 || vr > 100) { toast.error('نسبة ضريبة غير صحيحة'); return; }
+    let ok = false;
+    try {
+      ok = await addPriceQuote({
+        leadId: lead.id,
+        customerName: `${lead.name} / ${lead.company}`,
+        title: title.trim(),
+        amount: amt,
+        vatRate: vr,
+        costCenter: costCenter.trim() || 'عام',
+        note: note.trim() || undefined,
+        productionAssignedId: selectedProdUser?.id,
+        productionAssignedName: selectedProdUser?.name,
+      });
+    } catch (err) {
+      toast.error(`تعذر الإرسال: ${err instanceof Error ? err.message : String(err)}`);
       return;
     }
-    const ok = await addPriceQuote({
-      leadId: lead.id,
-      customerName: `${lead.name} / ${lead.company}`,
-      title: title.trim(),
-      amount: amt,
-      vatRate: vr,
-      costCenter: costCenter.trim() || 'عام',
-      note: note.trim() || undefined,
-    });
-    if (!ok) {
-      toast.error('تعذر الإرسال: تحقق من مركز التكلفة ضمن القيود التي حددها المحاسب، أو البيانات');
-      return;
-    }
-    toast.success('تم إرسال عرض السعر لاعتماد المالك — لن يُسجّل عند المحاسب إلا بعد الاعتماد');
+    if (!ok) { toast.error('تعذر الإرسال: تحقق من البيانات'); return; }
+    toast.success(
+      routeToProduction
+        ? `تم إرسال طلب التسعير إلى ${selectedProdUser?.name} — سيُرسَل للمالك بعد التسعير`
+        : 'تم إرسال عرض السعر للمالك — لن يُسجَّل محاسبياً إلا بعد الاعتماد'
+    );
     onClose();
   };
 
@@ -3336,36 +3408,66 @@ const PriceQuoteSubmitModal = ({
     <div className="fixed inset-0 z-[240] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" dir="rtl">
       <div className="w-full max-w-lg rounded-3xl border border-white/15 bg-[#0B1020] shadow-2xl p-6 space-y-4">
         <div>
-          <p className="text-xs text-zinc-500">عرض سعر مالي — يحتاج اعتماد المالك قبل التسجيل المحاسبي</p>
-          <h3 className="text-lg font-black text-white mt-1">{lead.name}</h3>
+          <p className="text-xs text-zinc-500">طلب عرض سعر — يمكن إرساله مباشرةً للمالك أو لموظف إنتاج للتسعير أولاً</p>
+          <h3 className="text-lg font-black text-white mt-1">{lead.name} / {lead.company}</h3>
         </div>
-        <label className="block text-xs font-bold text-zinc-400">عنوان العرض</label>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-sm" />
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs font-bold text-zinc-400">المبلغ (قبل الضريبة)</label>
-            <input value={amount} onChange={(e) => setAmount(e.target.value)} type="number" className="w-full bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-sm mt-1" />
-          </div>
-          <div>
-            <label className="text-xs font-bold text-zinc-400">ضريبة %</label>
-            <input value={vatRate} onChange={(e) => setVatRate(e.target.value)} type="number" className="w-full bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-sm mt-1" />
-          </div>
-        </div>
+
         <div>
-          <label className="text-xs font-bold text-zinc-400">مركز التكلفة</label>
-          <select value={costCenter} onChange={(e) => setCostCenter(e.target.value)} className="w-full mt-1 bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-sm">
-            {(accountingPolicy.allowedCostCentersForQuotes.length > 0 ? accountingPolicy.allowedCostCentersForQuotes : ['عام']).map((cc) => (
+          <label className="block text-xs font-bold text-zinc-400 mb-1">عنوان العرض <span className="text-rose-400">*</span></label>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-sm" placeholder="مثال: تغطية حفل شركة..." />
+        </div>
+
+        {productionUsers.length > 0 && (
+          <div>
+            <label className="block text-xs font-bold text-zinc-400 mb-1">توجيه التسعير إلى موظف إنتاج (اختياري)</label>
+            <select
+              value={productionUserId}
+              onChange={(e) => setProductionUserId(e.target.value)}
+              className="w-full bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-sm"
+            >
+              <option value="">— أُسعِّر بنفسي الآن —</option>
+              {productionUsers.map((u) => (
+                <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+              ))}
+            </select>
+            {routeToProduction && (
+              <p className="text-[11px] text-amber-300/80 mt-1">سيحصل {selectedProdUser?.name} على الطلب لوضع السعر ثم يُحوَّل للمالك تلقائياً.</p>
+            )}
+          </div>
+        )}
+
+        {!routeToProduction && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-bold text-zinc-400">المبلغ (قبل الضريبة)</label>
+              <input value={amount} onChange={(e) => setAmount(e.target.value)} type="number" min={0} className="w-full bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-sm mt-1" />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-zinc-400">ضريبة %</label>
+              <input value={vatRate} onChange={(e) => setVatRate(e.target.value)} type="number" min={0} max={100} className="w-full bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-sm mt-1" />
+            </div>
+          </div>
+        )}
+
+        <div>
+          <label className="block text-xs font-bold text-zinc-400 mb-1">مركز التكلفة</label>
+          <select value={costCenter} onChange={(e) => setCostCenter(e.target.value)} className="w-full bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-sm">
+            {(allowedCC.length > 0 ? allowedCC : ['عام']).map((cc) => (
               <option key={cc} value={cc}>{cc}</option>
             ))}
           </select>
         </div>
+
         <div>
-          <label className="text-xs font-bold text-zinc-400">ملاحظات</label>
-          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} className="w-full mt-1 bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-sm resize-y" />
+          <label className="block text-xs font-bold text-zinc-400 mb-1">تفاصيل / ملاحظات</label>
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} className="w-full bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-sm resize-y" placeholder="تفاصيل الخدمة المطلوبة، مواعيد، متطلبات..." />
         </div>
+
         <div className="flex gap-2 justify-end pt-2">
           <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-bold bg-white/10 border border-white/15">إلغاء</button>
-          <button type="button" onClick={submit} className="px-4 py-2 rounded-xl text-sm font-black bg-[#7C6BFF] text-white">إرسال للاعتماد</button>
+          <button type="button" onClick={submit} className={`px-4 py-2 rounded-xl text-sm font-black text-white ${routeToProduction ? 'bg-amber-500 hover:bg-amber-400' : 'bg-[#7C6BFF] hover:bg-[#6B5AEE]'} transition-colors`}>
+            {routeToProduction ? `إرسال للتسعير → ${selectedProdUser?.name}` : 'إرسال للمالك'}
+          </button>
         </div>
       </div>
     </div>
@@ -4817,33 +4919,11 @@ const SalesManagerSettings = ({
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
             <div>
               <h3 className="text-lg font-black">ربط مصادر الليدز — تسجيل الدخول الرسمي</h3>
-              <p className="text-xs text-zinc-400 mt-1">
-                نوع ربط واحد: اضغط «ربط» لفتح تسجيل الدخول الرسمي (OAuth) للمنصة. بعد نجاح الاتصال يظهر زر «سحب ليدز الآن» لنفس مسار الاستيراد الحالي (تجريبي على الخادم حتى يُفعّل السحب الحي).
-                إنستغرام يستخدم نفس مسار فيسبوك التجريبي للسحب بعد ربط أحد الحسابين.
-              </p>
-              {isServerDataMode() ? (
-                <p className="text-[11px] text-amber-200/90 mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2">
-                  وضع السيرفر: «سحب ليدز الآن» يستدعي مساراً تجريبياً على الخادم وليس سحباً حياً من Meta / Google / LinkedIn حتى يُكمّل فريقك التكامل على الـ API.
-                </p>
-              ) : (
-                <p className="text-[11px] text-amber-200/90 mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2">
-                  الوضع المحلي: السحب تجريبي داخل المتصفح فقط.
-                </p>
-              )}
-              {isSupabaseDirectMode() && (
-                <p className="text-[11px] text-sky-200/90 mt-2 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2">
-                  وضع Supabase المباشر: زر السحب من الخادم غير مفعّل بعد؛ يمكنك حفظ إعدادات الربط OAuth، وتفعيل السحب لاحقاً عبر خادم تكامل أو Edge Function.
-                </p>
-              )}
             </div>
             <div className="text-xs text-zinc-300 bg-white/5 px-3 py-2 rounded-xl border border-white/10 shrink-0">
               المدير المستلم: <span className="font-black">{salesManager?.name || 'غير محدد'}</span>
             </div>
           </div>
-          <p className="text-[11px] text-zinc-500">
-            يتطلب حساب مالك وصلاحيات مطوّر على المنصة، وخادماً يعرّض مسارات OAuth (مثل VITE_OAUTH_API_ORIGIN) إن لم يكن نفس أصل الواجهة.
-          </p>
-
           <div className="flex items-center gap-3 text-xs flex-wrap">
             <button
               type="button"
@@ -5470,8 +5550,61 @@ const BulkUploadModal = ({ isOpen, onClose }: any) => {
 };
 
 const RepProfessionalDashboard = ({ currentUser, onGoToTab }: { currentUser: User; onGoToTab?: (tab: string) => void }) => {
-  const { leads, logLeadInteraction, updateLeadStatus, setLeadFollowUp, printBrandingSettings } = useData();
+  const { leads, logLeadInteraction, updateLeadStatus, setLeadFollowUp, printBrandingSettings, priceQuotes, repRecordClientAcceptance, repRecordClientRejection } = useData();
   const [quoteLead, setQuoteLead] = useState<Lead | null>(null);
+
+  // ---- State for client-response modal ----
+  const [clientRespQuote, setClientRespQuote] = useState<PriceQuote | null>(null);
+  const [clientRespMode, setClientRespMode] = useState<'accepted' | 'rejected' | null>(null);
+  const [clientPaymentMethod, setClientPaymentMethod] = useState<'كاش' | 'تحويل'>('كاش');
+  const [clientPaymentType, setClientPaymentType] = useState<'single' | 'multi'>('single');
+  const [clientPaymentLines, setClientPaymentLines] = useState<{ id: string; amount: string; dueDate: string; method: 'كاش' | 'تحويل'; note: string }[]>([]);
+  const [clientRejectionNote, setClientRejectionNote] = useState('');
+
+  const openClientRespModal = (q: PriceQuote) => {
+    setClientRespQuote(q);
+    setClientRespMode(null);
+    setClientPaymentMethod('كاش');
+    setClientPaymentType('single');
+    setClientPaymentLines([{ id: `cp-${Date.now()}`, amount: String(q.totalAmount ?? q.amount), dueDate: new Date().toISOString().slice(0, 10), method: 'كاش', note: '' }]);
+    setClientRejectionNote('');
+  };
+
+  const submitClientAcceptance = async () => {
+    if (!clientRespQuote) return;
+    const lines = clientPaymentLines.filter((l) => Number(l.amount) > 0);
+    if (!lines.length) { toast.error('أدخل تفاصيل الدفع'); return; }
+    const payments: ClientPayment[] = lines.map((l) => ({
+      id: l.id,
+      amount: Math.round(Number(l.amount)),
+      dueDate: l.dueDate,
+      method: l.method,
+      note: l.note.trim() || undefined,
+    }));
+    const ok = await repRecordClientAcceptance(clientRespQuote.id, payments);
+    if (ok) {
+      toast.success('تم تسجيل موافقة العميل وإنشاء الفاتورة');
+      setClientRespQuote(null);
+    } else {
+      toast.error('تعذر الحفظ');
+    }
+  };
+
+  const submitClientRejection = async () => {
+    if (!clientRespQuote) return;
+    const ok = await repRecordClientRejection(clientRespQuote.id, clientRejectionNote.trim() || undefined);
+    if (ok) {
+      toast.warning('تم تسجيل رفض العميل');
+      setClientRespQuote(null);
+    } else {
+      toast.error('تعذر الحفظ');
+    }
+  };
+
+  const myApprovedQuotes = useMemo(
+    () => (priceQuotes as PriceQuote[]).filter((q) => q.status === 'معتمد' && q.createdById === currentUser.id),
+    [priceQuotes, currentUser.id]
+  );
   const [followUpDrafts, setFollowUpDrafts] = useState<Record<string, string>>({});
   const [leadFilter, setLeadFilter] = useState<'all' | 'today' | 'overdue'>('all');
   const [showEndOfDayPanel, setShowEndOfDayPanel] = useState(false);
@@ -5896,6 +6029,191 @@ const RepProfessionalDashboard = ({ currentUser, onGoToTab }: { currentUser: Use
           >
             ابدأ بالمتأخر
           </button>
+        </div>
+      )}
+
+      {/* ===== عروض معتمدة — بانتظار موافقة العميل ===== */}
+      {myApprovedQuotes.length > 0 && (
+        <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-[3rem] p-6 space-y-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-lg font-black text-emerald-200">عروض أسعار معتمدة — قدمها للعميل</p>
+              <p className="text-xs text-zinc-400 mt-1">هذه العروض اعتمدها المالك وتنتظر ردك بعد عرضها على العميل. سجل الموافقة أو الرفض.</p>
+            </div>
+            <span className="px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-500/25 text-emerald-200 border border-emerald-500/40">
+              {myApprovedQuotes.length} عرض
+            </span>
+          </div>
+          <div className="space-y-3">
+            {myApprovedQuotes.map((q) => {
+              const total = (q.totalAmount ?? q.amount).toLocaleString('ar-EG');
+              const schedule = q.paymentSchedule && q.paymentSchedule.length > 0
+                ? `${q.paymentSchedule.length} دفعة مجدولة`
+                : q.initialPayment && q.initialPayment > 0
+                  ? `دفعة أولى: ${q.initialPayment.toLocaleString('ar-EG')} ج.م`
+                  : 'دفعة واحدة';
+              return (
+                <div key={q.id} className="bg-[#0F1528]/80 border border-emerald-500/20 rounded-2xl p-4 flex items-center justify-between gap-3 flex-wrap">
+                  <div className="min-w-0">
+                    <p className="font-black text-white text-sm">{q.title}</p>
+                    <p className="text-xs text-zinc-400 mt-1">{q.customerName}</p>
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        {total} ج.م (شامل الضريبة)
+                      </span>
+                      <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                        {schedule}
+                      </span>
+                      {q.approvedAt && (
+                        <span className="text-[10px] text-zinc-500">
+                          اعتُمد: {new Date(q.approvedAt).toLocaleDateString('ar-EG')}
+                        </span>
+                      )}
+                    </div>
+                    {q.note && <p className="text-[11px] text-zinc-400 mt-1.5 italic">{q.note}</p>}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => openClientRespModal(q)}
+                      className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-500 text-slate-950 hover:bg-emerald-400 transition-colors"
+                    >
+                      تسجيل رد العميل
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ===== Modal: تسجيل رد العميل ===== */}
+      {clientRespQuote && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[300] flex items-center justify-center p-6" dir="rtl">
+          <div className="bg-[#0E1426] border border-white/10 rounded-[3rem] p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scrollbar space-y-6">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-xl font-black">تسجيل رد العميل</h3>
+              <button onClick={() => setClientRespQuote(null)} className="p-2 hover:bg-white/10 rounded-xl"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="bg-white/5 rounded-2xl p-4 space-y-1">
+              <p className="font-black text-white">{clientRespQuote.title}</p>
+              <p className="text-xs text-zinc-400">{clientRespQuote.customerName}</p>
+              <p className="text-sm font-black text-emerald-300 mt-1">{(clientRespQuote.totalAmount ?? clientRespQuote.amount).toLocaleString('ar-EG')} ج.م</p>
+            </div>
+
+            {/* اختيار وافق أم رفض */}
+            {clientRespMode === null && (
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  onClick={() => setClientRespMode('accepted')}
+                  className="flex flex-col items-center gap-3 p-6 rounded-2xl border-2 border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all text-emerald-200"
+                >
+                  <CheckCircle2 className="w-10 h-10" />
+                  <span className="font-black text-lg">وافق العميل</span>
+                  <span className="text-xs text-zinc-400 text-center">سيتم تسجيل الصفقة وإنشاء الفاتورة</span>
+                </button>
+                <button
+                  onClick={() => setClientRespMode('rejected')}
+                  className="flex flex-col items-center gap-3 p-6 rounded-2xl border-2 border-rose-500/40 bg-rose-500/10 hover:bg-rose-500/20 transition-all text-rose-200"
+                >
+                  <XCircle className="w-10 h-10" />
+                  <span className="font-black text-lg">رفض العميل</span>
+                  <span className="text-xs text-zinc-400 text-center">سيُغلق العرض ويُسجَّل سبب الرفض</span>
+                </button>
+              </div>
+            )}
+
+            {/* فورم الموافقة — تفاصيل الدفع */}
+            {clientRespMode === 'accepted' && (
+              <div className="space-y-5">
+                <p className="text-sm font-black text-emerald-200">تفاصيل الدفع المتفق عليه مع العميل</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-zinc-400 mb-1 block">نوع الدفعات</label>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setClientPaymentType('single'); setClientPaymentLines([{ id: `cp-${Date.now()}`, amount: String(clientRespQuote.totalAmount ?? clientRespQuote.amount), dueDate: new Date().toISOString().slice(0, 10), method: clientPaymentMethod, note: '' }]); }}
+                        className={`flex-1 px-3 py-2 rounded-xl text-xs font-black border transition-all ${clientPaymentType === 'single' ? 'bg-emerald-500/25 border-emerald-500/50 text-emerald-200' : 'bg-white/5 border-white/15 text-zinc-400'}`}
+                      >دفعة واحدة</button>
+                      <button
+                        onClick={() => setClientPaymentType('multi')}
+                        className={`flex-1 px-3 py-2 rounded-xl text-xs font-black border transition-all ${clientPaymentType === 'multi' ? 'bg-emerald-500/25 border-emerald-500/50 text-emerald-200' : 'bg-white/5 border-white/15 text-zinc-400'}`}
+                      >كذا دفعة</button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-zinc-400 mb-1 block">طريقة الدفع الافتراضية</label>
+                    <div className="flex gap-2">
+                      <button onClick={() => { setClientPaymentMethod('كاش'); setClientPaymentLines((prev) => prev.map((l) => ({ ...l, method: 'كاش' }))); }} className={`flex-1 px-3 py-2 rounded-xl text-xs font-black border transition-all ${clientPaymentMethod === 'كاش' ? 'bg-amber-500/25 border-amber-500/50 text-amber-200' : 'bg-white/5 border-white/15 text-zinc-400'}`}>كاش</button>
+                      <button onClick={() => { setClientPaymentMethod('تحويل'); setClientPaymentLines((prev) => prev.map((l) => ({ ...l, method: 'تحويل' }))); }} className={`flex-1 px-3 py-2 rounded-xl text-xs font-black border transition-all ${clientPaymentMethod === 'تحويل' ? 'bg-blue-500/25 border-blue-500/50 text-blue-200' : 'bg-white/5 border-white/15 text-zinc-400'}`}>تحويل بنكي</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {clientPaymentLines.map((line, idx) => (
+                    <div key={line.id} className="bg-white/5 border border-white/10 rounded-xl p-3 grid grid-cols-4 gap-2 items-end">
+                      <div>
+                        <label className="text-[10px] text-zinc-400 mb-1 block">المبلغ (ج.م)</label>
+                        <input type="number" min={1} value={line.amount} onChange={(e) => setClientPaymentLines((prev) => prev.map((l, i) => i === idx ? { ...l, amount: e.target.value } : l))} className="w-full bg-[#0F1528] border border-white/15 rounded-xl px-3 py-2 text-sm" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-400 mb-1 block">تاريخ الاستحقاق</label>
+                        <input type="date" value={line.dueDate} onChange={(e) => setClientPaymentLines((prev) => prev.map((l, i) => i === idx ? { ...l, dueDate: e.target.value } : l))} className="w-full bg-[#0F1528] border border-white/15 rounded-xl px-3 py-2 text-sm" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-400 mb-1 block">طريقة</label>
+                        <select value={line.method} onChange={(e) => setClientPaymentLines((prev) => prev.map((l, i) => i === idx ? { ...l, method: e.target.value as 'كاش' | 'تحويل' } : l))} className="w-full bg-[#0F1528] border border-white/15 rounded-xl px-3 py-2 text-sm">
+                          <option value="كاش">كاش</option>
+                          <option value="تحويل">تحويل</option>
+                        </select>
+                      </div>
+                      <div className="flex items-end gap-1">
+                        <input placeholder="ملاحظة" value={line.note} onChange={(e) => setClientPaymentLines((prev) => prev.map((l, i) => i === idx ? { ...l, note: e.target.value } : l))} className="flex-1 bg-[#0F1528] border border-white/15 rounded-xl px-3 py-2 text-sm" />
+                        {clientPaymentLines.length > 1 && (
+                          <button onClick={() => setClientPaymentLines((prev) => prev.filter((_, i) => i !== idx))} className="p-2 hover:bg-rose-500/20 rounded-xl text-rose-400"><Trash2 className="w-3.5 h-3.5" /></button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {clientPaymentType === 'multi' && (
+                    <button onClick={() => setClientPaymentLines((prev) => [...prev, { id: `cp-${Date.now()}`, amount: '', dueDate: new Date(Date.now() + 30*24*60*60*1000).toISOString().slice(0, 10), method: clientPaymentMethod, note: '' }])} className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-black bg-white/5 border border-white/15 text-zinc-300 hover:bg-white/10 transition-colors">
+                      <Plus className="w-3.5 h-3.5" /> إضافة دفعة
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between gap-3">
+                  <button onClick={() => setClientRespMode(null)} className="px-4 py-2 rounded-xl text-xs font-black bg-white/5 border border-white/15 text-zinc-300">رجوع</button>
+                  <button onClick={submitClientAcceptance} className="px-6 py-2.5 rounded-xl text-sm font-black bg-emerald-500 text-slate-950 hover:bg-emerald-400 transition-colors">
+                    تأكيد الموافقة وإنشاء الفاتورة
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* فورم الرفض */}
+            {clientRespMode === 'rejected' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs text-zinc-400 mb-1 block">سبب رفض العميل (اختياري)</label>
+                  <textarea
+                    value={clientRejectionNote}
+                    onChange={(e) => setClientRejectionNote(e.target.value)}
+                    rows={3}
+                    placeholder="اكتب سبب الرفض أو ملاحظة للفريق..."
+                    className="w-full bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm resize-none"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <button onClick={() => setClientRespMode(null)} className="px-4 py-2 rounded-xl text-xs font-black bg-white/5 border border-white/15 text-zinc-300">رجوع</button>
+                  <button onClick={submitClientRejection} className="px-6 py-2.5 rounded-xl text-sm font-black bg-rose-500 text-white hover:bg-rose-400 transition-colors">
+                    تأكيد رفض العميل
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -7540,49 +7858,64 @@ const TeamPerformanceHub = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }
               <div key={`${rep.repId}-target`} className="bg-[#0F1528]/70 border border-white/10 rounded-2xl p-4">
                 <p className="font-bold mb-3">{rep.repName}</p>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                  <input
-                    type="number"
-                    min={1}
-                    value={rep.leadsTarget}
-                    disabled={!canEditTargets}
-                    onChange={(e) => { void updateMonthlyTarget(rep.repId, { leadsTarget: Number(e.target.value) || 1 }); }}
-                    className="bg-[#0B1020] border border-white/15 rounded-xl px-3 py-2 text-xs"
-                  />
-                  <input
-                    type="number"
-                    min={1000}
-                    step={1000}
-                    value={rep.revenueTarget}
-                    disabled={!canEditTargets}
-                    onChange={(e) => { void updateMonthlyTarget(rep.repId, { revenueTarget: Number(e.target.value) || 1000 }); }}
-                    className="bg-[#0B1020] border border-white/15 rounded-xl px-3 py-2 text-xs"
-                  />
-                  <input
-                    type="number"
-                    min={1}
-                    value={rep.callsTarget}
-                    disabled={!canEditTargets}
-                    onChange={(e) => { void updateMonthlyTarget(rep.repId, { callsTarget: Number(e.target.value) || 1 }); }}
-                    className="bg-[#0B1020] border border-white/15 rounded-xl px-3 py-2 text-xs"
-                  />
-                  <input
-                    type="number"
-                    min={1}
-                    value={rep.dailyCallsTarget}
-                    disabled={!canEditTargets}
-                    onChange={(e) => { void updateMonthlyTarget(rep.repId, { dailyCallsTarget: Number(e.target.value) || 1 }); }}
-                    className="bg-[#0B1020] border border-white/15 rounded-xl px-3 py-2 text-xs"
-                    placeholder="هدف يومي"
-                  />
-                  <input
-                    type="number"
-                    min={1}
-                    value={rep.weeklyCallsTarget}
-                    disabled={!canEditTargets}
-                    onChange={(e) => { void updateMonthlyTarget(rep.repId, { weeklyCallsTarget: Number(e.target.value) || 1 }); }}
-                    className="bg-[#0B1020] border border-white/15 rounded-xl px-3 py-2 text-xs"
-                    placeholder="هدف أسبوعي"
-                  />
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-zinc-500 font-bold">هدف الليدز</p>
+                    <input
+                      type="number"
+                      min={1}
+                      value={rep.leadsTarget}
+                      disabled={!canEditTargets}
+                      onChange={(e) => { void updateMonthlyTarget(rep.repId, { leadsTarget: Number(e.target.value) || 1 }); }}
+                      className="w-full bg-[#0B1020] border border-white/15 rounded-xl px-3 py-2 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-zinc-500 font-bold">هدف الإيراد (ج.م)</p>
+                    <input
+                      type="number"
+                      min={1000}
+                      step={1000}
+                      value={rep.revenueTarget}
+                      disabled={!canEditTargets}
+                      onChange={(e) => { void updateMonthlyTarget(rep.repId, { revenueTarget: Number(e.target.value) || 1000 }); }}
+                      className="w-full bg-[#0B1020] border border-white/15 rounded-xl px-3 py-2 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-zinc-500 font-bold">مكالمات شهرية</p>
+                    <input
+                      type="number"
+                      min={1}
+                      value={rep.callsTarget}
+                      disabled={!canEditTargets}
+                      onChange={(e) => { void updateMonthlyTarget(rep.repId, { callsTarget: Number(e.target.value) || 1 }); }}
+                      className="w-full bg-[#0B1020] border border-white/15 rounded-xl px-3 py-2 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-zinc-500 font-bold">مكالمات يومية</p>
+                    <input
+                      type="number"
+                      min={1}
+                      value={rep.dailyCallsTarget}
+                      disabled={!canEditTargets}
+                      onChange={(e) => { void updateMonthlyTarget(rep.repId, { dailyCallsTarget: Number(e.target.value) || 1 }); }}
+                      className="w-full bg-[#0B1020] border border-white/15 rounded-xl px-3 py-2 text-xs"
+                      placeholder="هدف يومي"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-zinc-500 font-bold">مكالمات أسبوعية</p>
+                    <input
+                      type="number"
+                      min={1}
+                      value={rep.weeklyCallsTarget}
+                      disabled={!canEditTargets}
+                      onChange={(e) => { void updateMonthlyTarget(rep.repId, { weeklyCallsTarget: Number(e.target.value) || 1 }); }}
+                      className="w-full bg-[#0B1020] border border-white/15 rounded-xl px-3 py-2 text-xs"
+                      placeholder="هدف أسبوعي"
+                    />
+                  </div>
                 </div>
                 <p className="text-[11px] text-zinc-400 mt-2">
                   إنجاز الإيراد: {rep.revenueTargetProgress.toFixed(1)}% | إنجاز شهري: {rep.callsTargetProgress.toFixed(1)}% | يومي: {rep.dailyCallsProgress.toFixed(1)}% | أسبوعي: {rep.weeklyCallsProgress.toFixed(1)}%
@@ -7668,7 +8001,18 @@ const ApprovalCenter = ({
   onApproveCustodyRequest,
   onRejectCustodyRequest,
   onGoToTab,
+  entityComments,
+  setEntityComments,
+  commentDrafts,
+  setCommentDrafts,
+  currentUserName,
 }: any) => {
+  const [quotePaymentForm, setQuotePaymentForm] = useState<Record<string, { initPayment: string; lines: PaymentInstallment[] }>>({});
+
+  const getQPF = (qid: string) => quotePaymentForm[qid] || { initPayment: '', lines: [] };
+  const setQPF = (qid: string, patch: Partial<{ initPayment: string; lines: PaymentInstallment[] }>) =>
+    setQuotePaymentForm((prev) => ({ ...prev, [qid]: { ...getQPF(qid), ...patch } }));
+
   const goClient360 = (leadId?: string) => {
     if (!leadId) return;
     localStorage.setItem(NAV_INTENT_KEY, JSON.stringify({ tab: 'leads', leadsClient360Id: leadId }));
@@ -7718,6 +8062,34 @@ const ApprovalCenter = ({
               ) : (
                 <p className="text-[10px] text-amber-300/90 mt-2">بانتظار اعتماد المالك</p>
               )}
+              {ownerOnly && (
+                <div className="mt-2 border-t border-white/10 pt-2">
+                  {(entityComments?.[e.id] || []).slice(-3).map((cmnt: any, idx: number) => (
+                    <p key={idx} className="text-[11px] text-zinc-400">{cmnt.by}: {cmnt.text}</p>
+                  ))}
+                  <div className="flex gap-1 mt-1">
+                    <input
+                      value={commentDrafts?.[e.id] || ''}
+                      onChange={(ev) => setCommentDrafts?.((prev: any) => ({ ...prev, [e.id]: ev.target.value }))}
+                      placeholder="أضف تعليق..."
+                      className="flex-1 bg-[#0B1020] border border-white/10 rounded-lg px-2 py-1 text-[11px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const txt = (commentDrafts?.[e.id] || '').trim();
+                        if (!txt) return;
+                        setEntityComments?.((prev: any) => ({
+                          ...prev,
+                          [e.id]: [...(prev[e.id] || []), { by: currentUserName || '', text: txt, at: new Date().toISOString() }],
+                        }));
+                        setCommentDrafts?.((prev: any) => ({ ...prev, [e.id]: '' }));
+                      }}
+                      className="px-2 py-1 rounded-lg text-[11px] bg-white/10 whitespace-nowrap"
+                    >حفظ</button>
+                  </div>
+                </div>
+              )}
             </div>
             );
           })}
@@ -7743,6 +8115,34 @@ const ApprovalCenter = ({
               ) : (
                 <p className="text-[10px] text-amber-300/90 mt-2">بانتظار اعتماد المالك</p>
               )}
+              {ownerOnly && (
+                <div className="mt-2 border-t border-white/10 pt-2">
+                  {(entityComments?.[b.id] || []).slice(-3).map((cmnt: any, idx: number) => (
+                    <p key={idx} className="text-[11px] text-zinc-400">{cmnt.by}: {cmnt.text}</p>
+                  ))}
+                  <div className="flex gap-1 mt-1">
+                    <input
+                      value={commentDrafts?.[b.id] || ''}
+                      onChange={(ev) => setCommentDrafts?.((prev: any) => ({ ...prev, [b.id]: ev.target.value }))}
+                      placeholder="أضف تعليق..."
+                      className="flex-1 bg-[#0B1020] border border-white/10 rounded-lg px-2 py-1 text-[11px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const txt = (commentDrafts?.[b.id] || '').trim();
+                        if (!txt) return;
+                        setEntityComments?.((prev: any) => ({
+                          ...prev,
+                          [b.id]: [...(prev[b.id] || []), { by: currentUserName || '', text: txt, at: new Date().toISOString() }],
+                        }));
+                        setCommentDrafts?.((prev: any) => ({ ...prev, [b.id]: '' }));
+                      }}
+                      className="px-2 py-1 rounded-lg text-[11px] bg-white/10 whitespace-nowrap"
+                    >حفظ</button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
           {pendingShoot.length === 0 && <p className="text-xs text-zinc-500">لا توجد طلبات.</p>}
@@ -7766,6 +8166,34 @@ const ApprovalCenter = ({
               ) : (
                 <p className="text-[10px] text-amber-300/90 mt-2">بانتظار اعتماد المالك</p>
               )}
+              {ownerOnly && (
+                <div className="mt-2 border-t border-white/10 pt-2">
+                  {(entityComments?.[b.id] || []).slice(-3).map((cmnt: any, idx: number) => (
+                    <p key={idx} className="text-[11px] text-zinc-400">{cmnt.by}: {cmnt.text}</p>
+                  ))}
+                  <div className="flex gap-1 mt-1">
+                    <input
+                      value={commentDrafts?.[b.id] || ''}
+                      onChange={(ev) => setCommentDrafts?.((prev: any) => ({ ...prev, [b.id]: ev.target.value }))}
+                      placeholder="أضف تعليق..."
+                      className="flex-1 bg-[#0B1020] border border-white/10 rounded-lg px-2 py-1 text-[11px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const txt = (commentDrafts?.[b.id] || '').trim();
+                        if (!txt) return;
+                        setEntityComments?.((prev: any) => ({
+                          ...prev,
+                          [b.id]: [...(prev[b.id] || []), { by: currentUserName || '', text: txt, at: new Date().toISOString() }],
+                        }));
+                        setCommentDrafts?.((prev: any) => ({ ...prev, [b.id]: '' }));
+                      }}
+                      className="px-2 py-1 rounded-lg text-[11px] bg-white/10 whitespace-nowrap"
+                    >حفظ</button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
           {pendingEquipment.length === 0 && <p className="text-xs text-zinc-500">لا توجد طلبات.</p>}
@@ -7783,15 +8211,71 @@ const ApprovalCenter = ({
               ) : (
                 <p className="text-xs text-zinc-400 mt-1">{q.customerName}</p>
               )}
-              <p className="text-xs text-zinc-300 mt-1">{q.amount.toLocaleString()} ج.م + ضريبة — {q.costCenter || 'عام'}</p>
-              <p className="text-[10px] text-zinc-500 mt-1">من: {q.createdByName}</p>
+              <p className="text-xs text-zinc-300 mt-1">{q.amount.toLocaleString()} ج.م {q.vatRate ? `+ ضريبة ${q.vatRate}%` : ''} — {q.costCenter || 'عام'}</p>
+              {q.pricedByName && <p className="text-[10px] text-teal-300/80 mt-0.5">سُعِّر بواسطة: {q.pricedByName}</p>}
+              <p className="text-[10px] text-zinc-500 mt-1">من: {q.createdByName} {q.note && `— ${q.note}`}</p>
               {ownerOnly ? (
-                <div className="flex gap-2 mt-2">
-                  <button onClick={() => onApprovePriceQuote(q.id)} className="px-2 py-1 rounded-lg text-xs bg-emerald-500 text-slate-950 font-black">اعتماد وتسجيل فاتورة</button>
-                  <button onClick={() => onRejectPriceQuote(q.id)} className="px-2 py-1 rounded-lg text-xs bg-rose-500 text-white font-black">رفض</button>
+                <div className="mt-3 space-y-2">
+                  {/* Payment schedule builder */}
+                  <div className="bg-black/20 rounded-xl p-3 space-y-2 border border-white/10">
+                    <p className="text-[11px] font-black text-zinc-300">شروط الدفع عند الاعتماد</p>
+                    <div className="flex items-center gap-2">
+                      <label className="text-[11px] text-zinc-400 whitespace-nowrap">دفعة أولى (ج.م)</label>
+                      <input
+                        type="number" min={0}
+                        value={getQPF(q.id).initPayment}
+                        onChange={(e) => setQPF(q.id, { initPayment: e.target.value })}
+                        className="flex-1 bg-[#0B1020] border border-white/10 rounded-lg px-2 py-1 text-xs"
+                        placeholder="0 = لا يوجد دفعة الآن"
+                      />
+                    </div>
+                    {getQPF(q.id).lines.map((ln, li) => (
+                      <div key={ln.id} className="grid grid-cols-[1fr_1fr_auto] gap-1">
+                        <input type="date" value={ln.dueDate} onChange={(e) => setQPF(q.id, { lines: getQPF(q.id).lines.map((l, i) => i === li ? { ...l, dueDate: e.target.value } : l) })} className="bg-[#0B1020] border border-white/10 rounded-lg px-2 py-1 text-xs" />
+                        <input type="number" min={0} placeholder="المبلغ" value={ln.amount || ''} onChange={(e) => setQPF(q.id, { lines: getQPF(q.id).lines.map((l, i) => i === li ? { ...l, amount: Number(e.target.value) } : l) })} className="bg-[#0B1020] border border-white/10 rounded-lg px-2 py-1 text-xs" />
+                        <button type="button" onClick={() => setQPF(q.id, { lines: getQPF(q.id).lines.filter((_, i) => i !== li) })} className="rounded-lg bg-rose-500/20 text-rose-300 px-2 py-1 text-xs">×</button>
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => setQPF(q.id, { lines: [...getQPF(q.id).lines, { id: `inst-${Date.now()}`, dueDate: '', amount: 0 }] })} className="text-[11px] text-indigo-300 hover:underline">+ إضافة دفعة مجدولة</button>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => onApprovePriceQuote(q.id, getQPF(q.id).lines.filter(l => l.dueDate && l.amount > 0), Number(getQPF(q.id).initPayment) || 0)}
+                      className="flex-1 px-2 py-1.5 rounded-lg text-xs bg-emerald-500 text-slate-950 font-black"
+                    >اعتماد العرض — يُرسَل للمندوب</button>
+                    <button onClick={() => onRejectPriceQuote(q.id)} className="px-2 py-1.5 rounded-lg text-xs bg-rose-500 text-white font-black">رفض</button>
+                  </div>
                 </div>
               ) : (
                 <p className="text-[10px] text-amber-300/90 mt-2">بانتظار اعتماد المالك</p>
+              )}
+              {ownerOnly && (
+                <div className="mt-2 border-t border-white/10 pt-2">
+                  {(entityComments?.[q.id] || []).slice(-3).map((cmnt: any, idx: number) => (
+                    <p key={idx} className="text-[11px] text-zinc-400">{cmnt.by}: {cmnt.text}</p>
+                  ))}
+                  <div className="flex gap-1 mt-1">
+                    <input
+                      value={commentDrafts?.[q.id] || ''}
+                      onChange={(ev) => setCommentDrafts?.((prev: any) => ({ ...prev, [q.id]: ev.target.value }))}
+                      placeholder="أضف تعليق..."
+                      className="flex-1 bg-[#0B1020] border border-white/10 rounded-lg px-2 py-1 text-[11px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const txt = (commentDrafts?.[q.id] || '').trim();
+                        if (!txt) return;
+                        setEntityComments?.((prev: any) => ({
+                          ...prev,
+                          [q.id]: [...(prev[q.id] || []), { by: currentUserName || '', text: txt, at: new Date().toISOString() }],
+                        }));
+                        setCommentDrafts?.((prev: any) => ({ ...prev, [q.id]: '' }));
+                      }}
+                      className="px-2 py-1 rounded-lg text-[11px] bg-white/10 whitespace-nowrap"
+                    >حفظ</button>
+                  </div>
+                </div>
               )}
             </div>
           ))}
@@ -7819,6 +8303,34 @@ const ApprovalCenter = ({
               ) : (
                 <p className="text-[10px] text-amber-300/90 mt-2">بانتظار اعتماد المالك</p>
               )}
+              {ownerOnly && (
+                <div className="mt-2 border-t border-white/10 pt-2">
+                  {(entityComments?.[m.id] || []).slice(-3).map((cmnt: any, idx: number) => (
+                    <p key={idx} className="text-[11px] text-zinc-400">{cmnt.by}: {cmnt.text}</p>
+                  ))}
+                  <div className="flex gap-1 mt-1">
+                    <input
+                      value={commentDrafts?.[m.id] || ''}
+                      onChange={(ev) => setCommentDrafts?.((prev: any) => ({ ...prev, [m.id]: ev.target.value }))}
+                      placeholder="أضف تعليق..."
+                      className="flex-1 bg-[#0B1020] border border-white/10 rounded-lg px-2 py-1 text-[11px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const txt = (commentDrafts?.[m.id] || '').trim();
+                        if (!txt) return;
+                        setEntityComments?.((prev: any) => ({
+                          ...prev,
+                          [m.id]: [...(prev[m.id] || []), { by: currentUserName || '', text: txt, at: new Date().toISOString() }],
+                        }));
+                        setCommentDrafts?.((prev: any) => ({ ...prev, [m.id]: '' }));
+                      }}
+                      className="px-2 py-1 rounded-lg text-[11px] bg-white/10 whitespace-nowrap"
+                    >حفظ</button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
           {pendingMeetings.length === 0 && <p className="text-xs text-zinc-500">لا توجد طلبات.</p>}
@@ -7828,7 +8340,6 @@ const ApprovalCenter = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div className="bg-white/[0.04] border border-white/10 rounded-3xl p-5 space-y-2 md:col-span-2">
           <h4 className="font-black">طلبات عهدة إنتاج</h4>
-          <p className="text-[11px] text-zinc-500">بعد اعتمادك يُوجَّه الطلب للمحاسب لتسجيل الدفع وقيد الصرف (مدين عهدة / دائن بنك)، ثم يستلم مدير الإنتاج ويسجل التفاصيل، ويُقفل القيد عند المحاسب بعد التسوية.</p>
           {pendingCustodyRequest.map((c: CustodyFund) => (
             <div key={c.id} className="bg-[#0F1528]/70 border border-white/10 rounded-xl p-3">
               <p className="font-bold">{c.title}</p>
@@ -7842,9 +8353,36 @@ const ApprovalCenter = ({
               ) : (
                 <p className="text-[10px] text-amber-300/90 mt-2">بانتظار اعتماد المالك</p>
               )}
+              {ownerOnly && (
+                <div className="mt-2 border-t border-white/10 pt-2">
+                  {(entityComments?.[c.id] || []).slice(-3).map((cmnt: any, idx: number) => (
+                    <p key={idx} className="text-[11px] text-zinc-400">{cmnt.by}: {cmnt.text}</p>
+                  ))}
+                  <div className="flex gap-1 mt-1">
+                    <input
+                      value={commentDrafts?.[c.id] || ''}
+                      onChange={(ev) => setCommentDrafts?.((prev: any) => ({ ...prev, [c.id]: ev.target.value }))}
+                      placeholder="أضف تعليق..."
+                      className="flex-1 bg-[#0B1020] border border-white/10 rounded-lg px-2 py-1 text-[11px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const txt = (commentDrafts?.[c.id] || '').trim();
+                        if (!txt) return;
+                        setEntityComments?.((prev: any) => ({
+                          ...prev,
+                          [c.id]: [...(prev[c.id] || []), { by: currentUserName || '', text: txt, at: new Date().toISOString() }],
+                        }));
+                        setCommentDrafts?.((prev: any) => ({ ...prev, [c.id]: '' }));
+                      }}
+                      className="px-2 py-1 rounded-lg text-[11px] bg-white/10 whitespace-nowrap"
+                    >حفظ</button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
-          {pendingCustodyRequest.length === 0 && <p className="text-xs text-zinc-500">لا توجد طلبات عهدة معلقة.</p>}
         </div>
       </div>
     </div>
@@ -7939,12 +8477,63 @@ const ProductionCustodyDashboard = () => {
     currentUser,
     custodyFunds,
     expenses,
+    priceQuotes,
     addExpense,
     managerReceiveCustody,
     managerUpdateCustodySpendLines,
     managerUpdateApprovedExpenseSpendLines,
     managerSubmitCustodySettlement,
+    hardDeleteCustodyFund,
+    hardDeleteExpense,
+    productionPriceQuote,
+    reassignPricingRequest,
+    users,
   } = useData();
+  type PricingLine = { id: string; desc: string; amount: string };
+  const newLine = (): PricingLine => ({ id: `pl-${Date.now()}-${Math.random().toString(36).slice(2,6)}`, desc: '', amount: '' });
+  type PricingDraft = { lines: PricingLine[]; vatRate: string; note: string };
+  const [pricingForm, setPricingForm] = useState<Record<string, PricingDraft>>({});
+  const getPF = (id: string): PricingDraft => pricingForm[id] || { lines: [newLine()], vatRate: '14', note: '' };
+  const setPF = (id: string, patch: Partial<PricingDraft>) =>
+    setPricingForm((prev) => ({ ...prev, [id]: { ...getPF(id), ...patch } }));
+  const setPFLine = (qid: string, lineId: string, patch: Partial<PricingLine>) =>
+    setPF(qid, { lines: getPF(qid).lines.map((l) => l.id === lineId ? { ...l, ...patch } : l) });
+  const addPFLine = (qid: string) => setPF(qid, { lines: [...getPF(qid).lines, newLine()] });
+  const removePFLine = (qid: string, lineId: string) => {
+    const remaining = getPF(qid).lines.filter((l) => l.id !== lineId);
+    setPF(qid, { lines: remaining.length ? remaining : [newLine()] });
+  };
+  const calcPFTotal = (qid: string) => getPF(qid).lines.reduce((s, l) => s + (Number(l.amount) || 0), 0);
+
+  // default to pricing tab if there are pending pricing requests on first mount
+  const otherProductionUsers = useMemo(
+    () => users.filter((u) => u.role === 'مدير إنتاج' && u.id !== currentUser?.id),
+    [users, currentUser?.id]
+  );
+  const [reassignTarget, setReassignTarget] = useState<Record<string, string>>({});
+
+  const [prodActiveTab, setProdActiveTab] = useState<'requests' | 'pricing'>(() => {
+    if (!currentUser?.id) return 'requests';
+    const pending = (priceQuotes as PriceQuote[]).some(
+      (q) => q.status === 'بانتظار التسعير' &&
+        (q.productionAssignedId === currentUser.id || q.productionAssignedName === currentUser.name)
+    );
+    return pending ? 'pricing' : 'requests';
+  });
+
+  const myPricingQueue = useMemo(() => {
+    if (!currentUser?.id) return [];
+    return (priceQuotes as PriceQuote[]).filter(
+      (q) =>
+        q.status === 'بانتظار التسعير' &&
+        (q.productionAssignedId === currentUser.id || q.productionAssignedName === currentUser.name)
+    );
+  }, [priceQuotes, currentUser?.id, currentUser?.name]);
+
+  // switch to pricing tab automatically when new quotes arrive
+  useEffect(() => {
+    if (myPricingQueue.length > 0) setProdActiveTab('pricing');
+  }, [myPricingQueue.length]);
   const [activeRowKey, setActiveRowKey] = useState<string | null>(null);
   const [draftLines, setDraftLines] = useState<CustodySpendLine[]>([]);
   const [expenseSpendDraftLines, setExpenseSpendDraftLines] = useState<CustodySpendLine[]>([]);
@@ -8208,12 +8797,210 @@ const ProductionCustodyDashboard = () => {
   return (
     <div className="animate-in fade-in duration-500 space-y-6">
       <SectionTitle
-        title="عهود وتمويل الإنتاج"
-        subtitle="جدول واحد لطلباتك: أمانة عهدة (صرف نقدي ثم تصفية) أو طلب مصروف (اعتماد مالك ثم تنفيذ محاسب). من النموذج أدناه يُسجَّل طلب مصروف يظهر في نفس الجدول."
+        title="لوحة الإنتاج"
+        subtitle="طلبات التسعير من فريق المبيعات، وعهود وتمويل الإنتاج"
         icon={Briefcase}
       />
+
+      {/* Tab navigation */}
+      <div className="flex items-center gap-1 bg-[#0F1528]/70 border border-white/10 rounded-2xl p-1 w-fit">
+        <button
+          onClick={() => setProdActiveTab('requests')}
+          className={`px-5 py-2 rounded-xl text-sm font-black transition-all ${prodActiveTab === 'requests' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-white'}`}
+        >
+          عهدة ومصروفات
+        </button>
+        <button
+          onClick={() => setProdActiveTab('pricing')}
+          className={`relative px-5 py-2 rounded-xl text-sm font-black transition-all ${prodActiveTab === 'pricing' ? 'bg-amber-500 text-black' : 'text-zinc-400 hover:text-white'}`}
+        >
+          طلبات التسعير
+          {myPricingQueue.length > 0 && (
+            <span className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center">
+              {myPricingQueue.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* ===== TAB: طلبات التسعير ===== */}
+      {prodActiveTab === 'pricing' && (
+        <div className="space-y-5">
+          {myPricingQueue.length === 0 ? (
+            <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-12 text-center text-zinc-500">
+              <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
+              لا توجد طلبات تسعير معلقة
+            </div>
+          ) : (
+            myPricingQueue.map((q: PriceQuote) => {
+              const draft = getPF(q.id);
+              const subtotal = calcPFTotal(q.id);
+              const vatAmt = Math.round(subtotal * (Number(draft.vatRate) || 0) / 100);
+              const total = subtotal + vatAmt;
+              return (
+                <div key={q.id} className="bg-[#0F1528]/80 border border-amber-400/25 rounded-3xl p-6 space-y-5">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                      <p className="font-black text-white text-lg">{q.title}</p>
+                      <p className="text-sm text-zinc-400 mt-0.5">{q.customerName}</p>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-zinc-700/60 text-zinc-300">{q.costCenter || 'عام'}</span>
+                        <span className="text-[10px] text-zinc-500">أرسله: {q.createdByName}</span>
+                      </div>
+                      {q.note && (
+                        <p className="text-xs text-amber-300/80 mt-1.5 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-1.5">
+                          ملاحظات المندوب: {q.note}
+                        </p>
+                      )}
+                    </div>
+                    <span className="px-3 py-1 rounded-xl text-xs font-black bg-amber-500/20 text-amber-200 border border-amber-500/30 shrink-0">
+                      بانتظار التسعير
+                    </span>
+                  </div>
+
+                  {/* ===== تحويل للمدير آخر ===== */}
+                  <div className="flex items-center gap-2 bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 flex-wrap">
+                    <ArrowLeftRight className="w-4 h-4 text-zinc-400 shrink-0" />
+                    <span className="text-xs text-zinc-400 shrink-0">تحويل لمدير إنتاج آخر:</span>
+                    {otherProductionUsers.length === 0 ? (
+                      <span className="text-xs text-zinc-600 italic">لا يوجد مدير إنتاج آخر مسجل في النظام حالياً</span>
+                    ) : (
+                      <>
+                        <select
+                          value={reassignTarget[q.id] || ''}
+                          onChange={(e) => setReassignTarget((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                          className="flex-1 min-w-[160px] bg-[#0B1020] border border-white/15 rounded-xl px-3 py-1.5 text-sm"
+                        >
+                          <option value="">— اختر مدير إنتاج —</option>
+                          {otherProductionUsers.map((u) => (
+                            <option key={u.id} value={u.id}>{u.name}</option>
+                          ))}
+                        </select>
+                        <button
+                          disabled={!reassignTarget[q.id]}
+                          onClick={async () => {
+                            const targetId = reassignTarget[q.id];
+                            const targetUser = otherProductionUsers.find((u) => u.id === targetId);
+                            if (!targetUser) return;
+                            const ok = await reassignPricingRequest(q.id, targetUser.id, targetUser.name);
+                            if (ok) {
+                              toast.success(`تم تحويل الطلب إلى ${targetUser.name}`);
+                              setReassignTarget((prev) => { const n = { ...prev }; delete n[q.id]; return n; });
+                            } else {
+                              toast.error('تعذر التحويل');
+                            }
+                          }}
+                          className="px-4 py-1.5 rounded-xl text-xs font-black bg-indigo-500/20 border border-indigo-500/35 text-indigo-200 hover:bg-indigo-500/30 transition-colors disabled:opacity-40 disabled:pointer-events-none shrink-0"
+                        >
+                          تحويل
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-black text-zinc-200">بنود التسعير</p>
+                      <button
+                        onClick={() => addPFLine(q.id)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-amber-500/15 border border-amber-500/30 text-amber-200 hover:bg-amber-500/25 transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> إضافة بند
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-[1fr_160px_36px] gap-2 px-3 py-1">
+                      <span className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">البند / الوصف</span>
+                      <span className="text-[10px] text-zinc-500 font-black uppercase tracking-widest text-center">السعر (ج.م)</span>
+                      <span />
+                    </div>
+                    {draft.lines.map((line, idx) => (
+                      <div key={line.id} className="grid grid-cols-[1fr_160px_36px] gap-2 items-center bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2">
+                        <input
+                          value={line.desc}
+                          onChange={(e) => setPFLine(q.id, line.id, { desc: e.target.value })}
+                          placeholder={`بند ${idx + 1} — مثال: تصوير فيديو إعلاني`}
+                          className="bg-transparent border-none outline-none text-sm text-white placeholder-zinc-600 w-full"
+                        />
+                        <input
+                          type="number" min={0}
+                          value={line.amount}
+                          onChange={(e) => setPFLine(q.id, line.id, { amount: e.target.value })}
+                          placeholder="0"
+                          className="bg-[#0B1020] border border-white/15 rounded-xl px-3 py-1.5 text-sm text-center w-full"
+                        />
+                        <button onClick={() => removePFLine(q.id, line.id)} className="p-1.5 hover:bg-rose-500/20 rounded-lg text-zinc-500 hover:text-rose-400 transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    <div className="bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 space-y-1.5 mt-1">
+                      <div className="flex items-center justify-between text-sm text-zinc-400">
+                        <span>إجمالي قبل الضريبة</span>
+                        <span className="font-black text-white">{subtotal.toLocaleString('ar-EG')} ج.م</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm text-zinc-400">
+                        <div className="flex items-center gap-2">
+                          <span>ضريبة</span>
+                          <input type="number" min={0} max={100} value={draft.vatRate} onChange={(e) => setPF(q.id, { vatRate: e.target.value })} className="w-16 bg-[#0B1020] border border-white/15 rounded-lg px-2 py-0.5 text-xs text-center" />
+                          <span>%</span>
+                        </div>
+                        <span className="font-black text-amber-300">{vatAmt.toLocaleString('ar-EG')} ج.م</span>
+                      </div>
+                      <div className="border-t border-white/10 pt-1.5 flex items-center justify-between">
+                        <span className="font-black text-white">الإجمالي الكلي</span>
+                        <span className="font-black text-emerald-300 text-lg">{total.toLocaleString('ar-EG')} ج.م</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1">ملاحظة التسعير (اختياري)</label>
+                    <input value={draft.note} onChange={(e) => setPF(q.id, { note: e.target.value })} placeholder="شرح التسعير أو أي تفاصيل إضافية..." className="w-full bg-[#0B1020] border border-white/15 rounded-xl px-3 py-2 text-sm" />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (subtotal <= 0) { toast.error('أضف بند واحد على الأقل بسعر'); return; }
+                      const ok = await productionPriceQuote(q.id, subtotal, Number(draft.vatRate) || 14, draft.note || undefined);
+                      if (ok) { toast.success('تم إرسال السعر للمالك للاعتماد'); setPricingForm((p) => { const n = { ...p }; delete n[q.id]; return n; }); }
+                      else toast.error('تعذر التسعير');
+                    }}
+                    className="w-full py-3 rounded-2xl bg-amber-500 text-black text-sm font-black hover:bg-amber-400 transition-colors"
+                  >
+                    إرسال السعر للمالك للاعتماد
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* ===== TAB: عهدة ومصروفات ===== */}
+      {prodActiveTab === 'requests' && <>
+
       <div className="bg-white/[0.04] border border-white/10 rounded-3xl p-5 space-y-3">
-        <h4 className="font-black">جدول طلباتك (عهدة + مصروف)</h4>
+
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <h4 className="font-black">جدول طلباتك (عهدة + مصروف)</h4>
+          {unifiedProductionRows.length > 0 && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (!window.confirm('هل أنت متأكد من حذف جميع الطلبات؟ لا يمكن التراجع.')) return;
+                for (const row of unifiedProductionRows) {
+                  if (row.kind === 'custody') await hardDeleteCustodyFund(row.fund.id);
+                  else await hardDeleteExpense(row.expense.id);
+                }
+                toast.success('تم حذف جميع الطلبات');
+              }}
+              className="shrink-0 rounded-xl border border-rose-500/40 bg-rose-500/15 px-3 py-1 text-xs font-black text-rose-200 hover:bg-rose-500/25 transition-colors"
+            >
+              حذف الكل
+            </button>
+          )}
+        </div>
         <p className="text-[11px] text-zinc-500 leading-relaxed">
           الصفوف من نوع <strong className="text-zinc-300">«أمانة عهدة»</strong> تمرّ بمسار العهدة (مالك → محاسب صرف → استلامك → بنود صرف وتسوية). الصفوف <strong className="text-zinc-300">«طلب مصروف»</strong> نفس تمويل الإنتاج لكن تُثبَّت في الدفاتر كمصروف بعد اعتماد المالك وتنفيذ المحاسب — انقر أي صف للتفاصيل.
         </p>
@@ -8227,6 +9014,7 @@ const ProductionCustodyDashboard = () => {
                 <th className="p-2 font-black">الحالة</th>
                 <th className="p-2 font-black">قيد صرف / ملاحظة</th>
                 <th className="p-2 font-black">قيد إقفال</th>
+                <th className="p-2 font-black"></th>
               </tr>
             </thead>
             <tbody>
@@ -8288,6 +9076,20 @@ const ProductionCustodyDashboard = () => {
                   </td>
                   <td className="p-2 text-emerald-300/90">
                     {row.kind === 'custody' ? row.fund.journalEntrySettlementId ?? row.fund.journalEntryId ?? '—' : <span className="text-zinc-500">—</span>}
+                  </td>
+                  <td className="p-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!window.confirm('حذف هذا الطلب نهائياً؟')) return;
+                        if (row.kind === 'custody') hardDeleteCustodyFund(row.fund.id).then((ok) => ok && toast.success('تم الحذف'));
+                        else hardDeleteExpense(row.expense.id).then((ok) => ok && toast.success('تم الحذف'));
+                      }}
+                      className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[10px] font-black text-rose-300 hover:bg-rose-500/20 transition-colors"
+                    >
+                      حذف
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -8759,6 +9561,7 @@ const ProductionCustodyDashboard = () => {
             </>
           )}
       </div>
+      </>}
     </div>
   );
 };
@@ -8854,7 +9657,6 @@ const NavItems = ({ role, active, onChange, allowedTabs }: any) => {
     { id: 'production', label: 'تمويل الإنتاج', icon: Briefcase },
     { id: 'bookings', label: 'الحجوزات', icon: Calendar },
     { id: 'leads', label: 'العملاء', icon: Users },
-    { id: 'linked-views', label: 'عروض البيانات', icon: Layers },
   ];
 
   const rep = [
@@ -10053,41 +10855,8 @@ const Root = () => {
                     رجوع
                   </span>
                 </button>
-                <button
-                  onClick={exportSnapshot}
-                  title="تصدير نسخة"
-                  className="premium-top-action group relative h-12 w-12 sm:w-auto sm:px-4 rounded-xl bg-gradient-to-b from-white/[0.08] to-white/[0.03] border border-white/15 text-zinc-100 hover:border-rose-300/40 hover:shadow-[0_10px_24px_rgba(244,63,94,0.15)] transition-all text-sm font-black leading-tight shrink-0 inline-flex items-center justify-center gap-2"
-                >
-                  <ArrowUpRight className="w-4 h-4" />
-                  <span className="hidden lg:inline">تصدير نسخة</span>
-                  <span className="lg:hidden pointer-events-none absolute left-1/2 -translate-x-1/2 top-[110%] whitespace-nowrap rounded-lg border border-white/15 bg-[#0B1020]/95 px-2 py-1 text-[10px] text-zinc-100 opacity-0 group-hover:opacity-100 transition-opacity z-30">
-                    تصدير نسخة
-                  </span>
-                </button>
-                <button
-                  onClick={() => restoreInputRef.current?.click()}
-                  title="استيراد نسخة"
-                  className="premium-top-action group relative h-12 w-12 sm:w-auto sm:px-4 rounded-xl bg-gradient-to-b from-white/[0.08] to-white/[0.03] border border-white/15 text-zinc-100 hover:border-rose-300/40 hover:shadow-[0_10px_24px_rgba(244,63,94,0.15)] transition-all text-sm font-black leading-tight shrink-0 inline-flex items-center justify-center gap-2"
-                >
-                  <FileUp className="w-4 h-4" />
-                  <span className="hidden lg:inline">استيراد نسخة</span>
-                  <span className="lg:hidden pointer-events-none absolute left-1/2 -translate-x-1/2 top-[110%] whitespace-nowrap rounded-lg border border-white/15 bg-[#0B1020]/95 px-2 py-1 text-[10px] text-zinc-100 opacity-0 group-hover:opacity-100 transition-opacity z-30">
-                    استيراد نسخة
-                  </span>
-                </button>
               </>
             )}
-            <input
-              ref={restoreInputRef}
-              type="file"
-              accept="application/json"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) restoreSnapshot(file);
-                e.currentTarget.value = '';
-              }}
-            />
             {currentUser.role === 'مندوب' && (
               <button 
                 onClick={() => setIsBulkModalOpen(true)}
@@ -10397,9 +11166,14 @@ const Root = () => {
                 })();
               }}
               onGoToTab={handleTabChange}
-              onApprovePriceQuote={(id: string) => {
+              entityComments={entityComments}
+              setEntityComments={setEntityComments}
+              commentDrafts={commentDrafts}
+              setCommentDrafts={setCommentDrafts}
+              currentUserName={currentUser.name}
+              onApprovePriceQuote={(id: string, paymentSchedule?: PaymentInstallment[], initialPayment?: number) => {
                 void (async () => {
-                const ok = await approvePriceQuote(id);
+                const ok = await approvePriceQuote(id, paymentSchedule, initialPayment);
                 if (!ok) toast.error('تعذر الاعتماد — تحقق من صلاحية المالك أو إغلاق الشهر');
                 else toast.success('تم اعتماد عرض السعر وتسجيل الفاتورة للمحاسب');
                 })();
@@ -10468,43 +11242,6 @@ const Root = () => {
                 })();
               }}
             />
-            <div className="bg-white/[0.04] border border-white/10 rounded-3xl p-4">
-              <h4 className="font-black mb-3">تعليقات الكيانات (فواتير/حجوزات)</h4>
-              <div className="space-y-3 max-h-[320px] overflow-auto">
-                {[...safeExpenses.slice(0, 8).map(e => ({ id: e.id, label: `مصروف: ${e.title}` })), ...safeShootBookings.slice(0, 8).map(b => ({ id: b.id, label: `تصوير: ${b.customerName}` })), ...safeEquipmentBookings.slice(0, 8).map(b => ({ id: b.id, label: `معدات: ${b.equipmentName}` })), ...safeMeetingBookings.slice(0, 8).map(m => ({ id: m.id, label: `اجتماع/مكان: ${m.title}` }))].map((entity) => (
-                  <div key={entity.id} className="bg-[#0F1528]/70 border border-white/10 rounded-xl p-3">
-                    <p className="text-sm font-bold">{entity.label}</p>
-                    <div className="mt-2 space-y-1">
-                      {(entityComments[entity.id] || []).slice(-2).map((c, idx) => (
-                        <p key={`${entity.id}-c-${idx}`} className="text-[11px] text-zinc-300">{c.by}: {c.text}</p>
-                      ))}
-                    </div>
-                    <div className="flex gap-2 mt-2">
-                      <input
-                        value={commentDrafts[entity.id] || ''}
-                        onChange={(e) => setCommentDrafts(prev => ({ ...prev, [entity.id]: e.target.value }))}
-                        placeholder="أضف تعليق..."
-                        className="flex-1 bg-[#0B1020] border border-white/10 rounded-lg px-2 py-1 text-xs"
-                      />
-                      <button
-                        onClick={() => {
-                          const text = (commentDrafts[entity.id] || '').trim();
-                          if (!text) return;
-                          setEntityComments(prev => ({
-                            ...prev,
-                            [entity.id]: [...(prev[entity.id] || []), { by: currentUser.name, text, at: new Date().toISOString() }],
-                          }));
-                          setCommentDrafts(prev => ({ ...prev, [entity.id]: '' }));
-                        }}
-                        className="px-2 py-1 rounded-lg text-xs bg-white/10"
-                      >
-                        حفظ
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         )}
         {activeTab === 'owner-dash' && (
