@@ -149,10 +149,23 @@ router.patch('/:id', requireAuth(), async (req, res) => {
       } else if (st === 'مكتمل' || st === 'مغلق - رفض العميل') {
         data.status = st;
       } else if (st === 'بانتظار التسعير') {
-        if (actor.role !== 'مالك' && actor.role !== 'مدير مبيعات') {
-          return res.status(403).json({ error: 'غير مصرح' });
+        /** إرجاع للإنتاج بعد طلب تعديل من المالك — كان العرض «قيد اعتماد المالك» */
+        if (actor.role !== 'مالك') {
+          return res.status(403).json({ error: 'إرجاع التسعير للإنتاج للمالك فقط' });
+        }
+        if (existing.status !== 'قيد اعتماد المالك') {
+          return res.status(400).json({ error: 'لا يُرجَع للإنتاج إلا من حالة قيد اعتماد المالك' });
+        }
+        if (!existing.productionAssignedId && !existing.pricedById) {
+          return res.status(400).json({ error: 'لا يوجد مسار إنتاج مرتبط بهذا العرض' });
         }
         data.status = 'بانتظار التسعير';
+        data.approvedBy = null;
+        data.approvedAt = null;
+        if (!existing.productionAssignedId && existing.pricedById) {
+          data.productionAssignedId = existing.pricedById;
+          data.productionAssignedName = existing.pricedByName || null;
+        }
       } else {
         return res.status(400).json({ error: 'حالة غير صالحة' });
       }

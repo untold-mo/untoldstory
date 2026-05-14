@@ -8247,6 +8247,7 @@ const ApprovalCenter = ({
   onRejectMeeting,
   onApprovePriceQuote,
   onRejectPriceQuote,
+  onReturnPriceQuoteToProduction,
   onApproveCustodyRequest,
   onRejectCustodyRequest,
   onGoToTab,
@@ -8496,12 +8497,25 @@ const ApprovalCenter = ({
                     ))}
                     <button type="button" onClick={() => setQPF(q.id, { lines: [...getQPF(q.id).lines, { id: `inst-${Date.now()}`, dueDate: '', amount: 0 }] })} className="text-[11px] text-indigo-300 hover:underline">+ إضافة دفعة مجدولة</button>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => onApprovePriceQuote(q.id, getQPF(q.id).lines.filter(l => l.dueDate && l.amount > 0), Number(getQPF(q.id).initPayment) || 0)}
-                      className="flex-1 px-2 py-1.5 rounded-lg text-xs bg-emerald-500 text-slate-950 font-black"
+                      className="flex-1 min-w-[140px] px-2 py-1.5 rounded-lg text-xs bg-emerald-500 text-slate-950 font-black"
                     >اعتماد العرض — يُرسَل للمندوب</button>
-                    <button onClick={() => onRejectPriceQuote(q.id)} className="px-2 py-1.5 rounded-lg text-xs bg-rose-500 text-white font-black">رفض</button>
+                    {(q.productionAssignedId || q.pricedById) && onReturnPriceQuoteToProduction ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const raw = window.prompt('ملاحظات لمدير الإنتاج (اختياري):');
+                          if (raw === null) return;
+                          onReturnPriceQuoteToProduction(q.id, raw.trim() || undefined);
+                        }}
+                        className="px-2 py-1.5 rounded-lg text-xs bg-amber-500/25 border border-amber-400/40 text-amber-100 font-black hover:bg-amber-500/35 transition-colors"
+                      >
+                        إرجاع للإنتاج — تعديل تسعير
+                      </button>
+                    ) : null}
+                    <button onClick={() => onRejectPriceQuote(q.id)} className="px-2 py-1.5 rounded-lg text-xs bg-rose-500 text-white font-black shrink-0">رفض</button>
                   </div>
                 </div>
               ) : (
@@ -8793,6 +8807,33 @@ const ProductionCustodyDashboard = () => {
         (String(q.productionAssignedId || '').trim() === uid ||
           (uname && String(q.productionAssignedName || '').trim() === uname)),
     );
+  }, [priceQuotes, currentUser?.id, currentUser?.name]);
+
+  const quoteStatusLabel: Record<PriceQuote['status'], string> = {
+    'بانتظار التسعير': 'بانتظار التسعير',
+    'قيد اعتماد المالك': 'قيد اعتماد المالك',
+    معتمد: 'معتمد — بانتظار العميل',
+    مرفوض: 'مرفوض من المالك',
+    مكتمل: 'مكتمل',
+    'مغلق - رفض العميل': 'رفض العميل',
+  };
+
+  const myPricingArchive = useMemo(() => {
+    if (!currentUser?.id) return [];
+    const uid = String(currentUser.id).trim();
+    const uname = (currentUser.name || '').trim();
+    const touchedByMe = (q: PriceQuote) =>
+      String(q.productionAssignedId || '').trim() === uid ||
+      String(q.pricedById || '').trim() === uid ||
+      (uname && String(q.productionAssignedName || '').trim() === uname);
+    return (priceQuotes as PriceQuote[])
+      .filter(
+        (q) =>
+          touchedByMe(q) &&
+          q.status !== 'بانتظار التسعير' &&
+          !!(q.productionAssignedId || q.pricedById),
+      )
+      .sort((a, b) => new Date(b.pricedAt || b.createdAt).getTime() - new Date(a.pricedAt || a.createdAt).getTime());
   }, [priceQuotes, currentUser?.id, currentUser?.name]);
 
   // switch to pricing tab automatically when new quotes arrive
@@ -9278,6 +9319,41 @@ const ProductionCustodyDashboard = () => {
                 </div>
               );
             })
+          )}
+          {myPricingArchive.length > 0 && (
+            <details className="group bg-[#0F1528]/60 border border-white/10 rounded-3xl overflow-hidden">
+              <summary className="cursor-pointer list-none px-5 py-4 flex items-center justify-between gap-3 text-sm font-black text-zinc-200 hover:bg-white/[0.04] transition-colors [&::-webkit-details-marker]:hidden">
+                <span className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-zinc-500" />
+                  أرشيف طلبات التسعير (غير المعلقة)
+                  <span className="text-[11px] font-black text-zinc-500 bg-white/5 border border-white/10 rounded-lg px-2 py-0.5">{myPricingArchive.length}</span>
+                </span>
+                <span className="text-[10px] text-zinc-500 font-normal max-w-[min(420px,55vw)] text-left">
+                  عروض مرّت بك أو سُعِّرت منك وتُرشَح هنا بعد إرسالها للمالك أو اعتمادها — لا تظهر في قائمة «بانتظار التسعير» النشطة.
+                </span>
+              </summary>
+              <div className="border-t border-white/10 px-4 py-3 space-y-2 max-h-[min(420px,50vh)] overflow-y-auto custom-scrollbar">
+                {myPricingArchive.map((q: PriceQuote) => (
+                  <div key={q.id} className="flex flex-wrap items-start justify-between gap-2 bg-black/20 border border-white/5 rounded-2xl px-3 py-2.5 text-xs">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-white truncate">{q.title}</p>
+                      <p className="text-zinc-500 truncate">{q.customerName}</p>
+                      {q.pricingNote && /طلب تعديل من المالك/.test(q.pricingNote) && (
+                        <p className="text-[10px] text-amber-200/90 mt-1 line-clamp-2 whitespace-pre-wrap">{q.pricingNote}</p>
+                      )}
+                    </div>
+                    <div className="shrink-0 text-left space-y-0.5">
+                      <span className="inline-block px-2 py-0.5 rounded-lg text-[10px] font-black bg-zinc-700/50 text-zinc-300 border border-white/10">
+                        {quoteStatusLabel[q.status] ?? q.status}
+                      </span>
+                      <p className="text-[10px] text-zinc-500">
+                        {typeof q.totalAmount === 'number' ? `${q.totalAmount.toLocaleString('ar-EG')} ج.م` : `${q.amount.toLocaleString('ar-EG')} ج.م قبل الضريبة`}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </details>
           )}
         </div>
       )}
@@ -10302,6 +10378,7 @@ const Root = () => {
     logout,
     getSystemNotifications,
     refreshServerWorkspace,
+    ownerReturnPriceQuoteToProduction,
     leads,
     invoices,
     expenses,
@@ -11615,6 +11692,13 @@ const Root = () => {
                 const ok = await rejectPriceQuote(id);
                 if (!ok) toast.error('تعذر الرفض');
                 else toast.info('تم رفض عرض السعر');
+                })();
+              }}
+              onReturnPriceQuoteToProduction={(id: string, ownerNote?: string) => {
+                void (async () => {
+                  const ok = await ownerReturnPriceQuoteToProduction(id, ownerNote);
+                  if (!ok) toast.error('تعذر الإرجاع — تحقق من مسار الإنتاج أو الاتصال بالخادم');
+                  else toast.success('أُعيد العرض لمدير الإنتاج لإعادة التسعير');
                 })();
               }}
               onApproveExpense={(id: string) => {

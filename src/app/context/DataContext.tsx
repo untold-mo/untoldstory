@@ -1125,6 +1125,8 @@ interface DataContextType {
   reassignPricingRequest: (quoteId: string, toUserId: string, toUserName: string) => Promise<boolean>;
   approvePriceQuote: (quoteId: string, paymentSchedule?: PaymentInstallment[], initialPayment?: number) => Promise<boolean>;
   rejectPriceQuote: (quoteId: string) => Promise<boolean>;
+  /** المالك يعيد العرض لمسار الإنتاج لإعادة التسعير (من قيد اعتماد المالك) */
+  ownerReturnPriceQuoteToProduction: (quoteId: string, ownerNote?: string) => Promise<boolean>;
   repRecordClientAcceptance: (quoteId: string, clientPayments: ClientPayment[]) => Promise<boolean>;
   repRecordClientRejection: (quoteId: string, note?: string) => Promise<boolean>;
   updateAccountingPolicy: (patch: Partial<AccountingPolicy>) => Promise<void>;
@@ -6693,6 +6695,47 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return true;
   };
 
+  const ownerReturnPriceQuoteToProduction = async (quoteId: string, ownerNote?: string): Promise<boolean> => {
+    if (currentUser?.role !== 'مالك') return false;
+    const quote = priceQuotes.find((q) => q.id === quoteId);
+    if (!quote || quote.status !== 'قيد اعتماد المالك') return false;
+    if (!quote.productionAssignedId && !quote.pricedById) return false;
+    const stamp = `طلب تعديل من المالك (${new Date().toLocaleString('ar-EG')})`;
+    const noteLine = ownerNote?.trim() ? `${stamp}: ${ownerNote.trim()}` : stamp;
+    const mergedPricingNote = [quote.pricingNote?.trim(), noteLine].filter(Boolean).join('\n---\n');
+    const patch: Partial<PriceQuote> = {
+      status: 'بانتظار التسعير',
+      pricingNote: mergedPricingNote,
+    };
+    if (!quote.productionAssignedId?.trim() && quote.pricedById) {
+      patch.productionAssignedId = String(quote.pricedById).trim();
+      if (quote.pricedByName) patch.productionAssignedName = String(quote.pricedByName).trim();
+    }
+    if (isServerDataMode()) {
+      try {
+        const row = await patchPriceQuoteApi(quoteId, patch as Parameters<typeof patchPriceQuoteApi>[1]);
+        setPriceQuotes((prev) => prev.map((q) => (q.id === quoteId ? { ...q, ...row } : q)));
+      } catch {
+        return false;
+      }
+    } else {
+      setPriceQuotes((prev) =>
+        prev.map((q) =>
+          q.id === quoteId
+            ? { ...q, ...patch, approvedBy: undefined, approvedAt: undefined }
+            : q,
+        ),
+      );
+    }
+    addAuditEvent({
+      action: 'إرجاع عرض سعر للإنتاج لإعادة التسعير',
+      entityType: 'system',
+      entityId: quoteId,
+      details: ownerNote?.trim() || quote.customerName,
+    });
+    return true;
+  };
+
   const rejectPriceQuote = async (quoteId: string): Promise<boolean> => {
     if (currentUser?.role !== 'مالك') return false;
     const quote = priceQuotes.find(q => q.id === quoteId);
@@ -9250,7 +9293,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <DataContext.Provider value={{ 
       leads, users, manualCustomers, invoices, priceQuotes, accountingPolicy, expenses, currentUser, setCurrentUser: setCurrentUserPublic, addLead, bulkAddLeads, 
       updateLeadStatus, logLeadInteraction, reviewLeadActivity, setLeadFollowUp, assignLead, deleteLead, updateUserSkills, addEmployee, addManualCustomer, updateEmployeeSalary, updateEmployeeProfile, ownerSetEmployeePassword, removeEmployee, getLeadScore, refreshSLA, logout, addInvoice,
-      updateInvoiceStatus, recordInvoiceCollection, addPriceQuote, productionPriceQuote, reassignPricingRequest, approvePriceQuote, rejectPriceQuote, repRecordClientAcceptance, repRecordClientRejection, updateAccountingPolicy, addExpense, updateExpenseStatus, approveExpense, rejectExpense,
+      updateInvoiceStatus, recordInvoiceCollection, addPriceQuote, productionPriceQuote, reassignPricingRequest, approvePriceQuote, rejectPriceQuote, ownerReturnPriceQuoteToProduction, repRecordClientAcceptance, repRecordClientRejection, updateAccountingPolicy, addExpense, updateExpenseStatus, approveExpense, rejectExpense,
       getRepSnapshots, monthlyTargets, updateMonthlyTarget, getPerformanceAlerts, getSlaHeatmap,
       closedMonths, closeMonth, reopenMonth, isMonthClosed,
       chartOfAccounts, addChartAccount, removeChartAccount,
