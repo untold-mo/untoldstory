@@ -72,7 +72,7 @@ type InvoiceQuickFilter = 'all' | 'overdue_installments' | 'due_today_installmen
 type ExpenseQuickFilter = 'all' | 'pending_approval';
 type BookingQuickFilter = 'all' | 'today' | 'pending_review' | 'financial_claims_pending_execution';
 
-/** أدوار يُخزَّن لها راتب أساسي (عرض عند المحاسب وتعديل الراتب) */
+/** أدوار يظهر لها الراتب في شاشة المحاسب وتعديله من المحاسب؛ المالك يضع الراتب لجميع الموظفين من جدول الإدارة */
 const PAYROLL_SALARY_ROLES: User['role'][] = ['مندوب', 'محاسب', 'مدير مبيعات', 'مدير إنتاج'];
 
 type BookingHubTab = 'shoot' | 'equipment' | 'meeting' | 'other';
@@ -4764,7 +4764,7 @@ const SalesManagerSettings = ({
             role: user.role,
             avatar: user.avatar || '',
             email: (user.email || '').trim(),
-            baseSalary: PAYROLL_SALARY_ROLES.includes(user.role) ? String(user.baseSalary ?? 0) : '',
+            baseSalary: String(user.baseSalary ?? 0),
           };
         setEmployeeEdits((prev) => ({ ...prev, [userId]: { ...draft, avatar: avatarDataUrl } }));
       } else {
@@ -4836,7 +4836,7 @@ const SalesManagerSettings = ({
           role: u.role,
           avatar: u.avatar || '',
           email: (u.email || '').trim(),
-          baseSalary: PAYROLL_SALARY_ROLES.includes(u.role) ? String(u.baseSalary ?? 0) : '',
+          baseSalary: String(u.baseSalary ?? 0),
         },
       };
     });
@@ -4868,9 +4868,7 @@ const SalesManagerSettings = ({
       avatar: newEmployee.avatar.trim() || undefined,
       email: emailTrim,
       password: pwd.length >= 8 ? pwd : undefined,
-      baseSalary: PAYROLL_SALARY_ROLES.includes(newEmployee.role)
-        ? Math.max(0, Math.round(Number(String(newEmployee.baseSalary).replace(/,/g, '')) || 0))
-        : undefined,
+      baseSalary: Math.max(0, Math.round(Number(String(newEmployee.baseSalary).replace(/,/g, '')) || 0)),
     });
     if (ok) setNewEmployee({ name: '', role: 'مندوب', avatar: '', loginEmail: '', password: '', baseSalary: '10000' });
   };
@@ -4883,15 +4881,13 @@ const SalesManagerSettings = ({
       toast.error('صيغة البريد غير صالحة');
       return;
     }
-    const salaryParsed = PAYROLL_SALARY_ROLES.includes(draft.role)
-      ? Math.max(0, Math.round(Number(String(draft.baseSalary).replace(/,/g, '')) || 0))
-      : undefined;
+    const salaryParsed = Math.max(0, Math.round(Number(String(draft.baseSalary).replace(/,/g, '')) || 0));
     const ok = await updateEmployeeProfile(userId, {
       name: draft.name,
       role: draft.role,
       avatar: draft.avatar,
       ...(canEditBranding ? { email: draft.email } : {}),
-      ...(PAYROLL_SALARY_ROLES.includes(draft.role) && salaryParsed !== undefined ? { baseSalary: salaryParsed } : {}),
+      ...(canEditBranding ? { baseSalary: salaryParsed } : {}),
     });
     if (!ok) {
       return;
@@ -5269,9 +5265,8 @@ const SalesManagerSettings = ({
                   setNewEmployee((p) => ({
                     ...p,
                     role,
-                    baseSalary: PAYROLL_SALARY_ROLES.includes(role) && (!p.baseSalary || p.baseSalary.trim() === '')
-                      ? '10000'
-                      : p.baseSalary,
+                    baseSalary:
+                      !p.baseSalary || p.baseSalary.trim() === '' ? '10000' : p.baseSalary,
                   }));
                 }}
                 className="bg-[#0F1528] border border-white/10 rounded-xl px-3 py-2 text-sm"
@@ -5284,13 +5279,12 @@ const SalesManagerSettings = ({
                 type="text"
                 inputMode="numeric"
                 dir="ltr"
-                disabled={!PAYROLL_SALARY_ROLES.includes(newEmployee.role)}
                 value={newEmployee.baseSalary}
                 onChange={(e) =>
                   setNewEmployee((p) => ({ ...p, baseSalary: e.target.value.replace(/[^\d]/g, '') }))
                 }
-                className="bg-[#0F1528] border border-white/10 rounded-xl px-3 py-2 text-sm disabled:opacity-45"
-                placeholder="راتب أساسي (مندوب)"
+                className="bg-[#0F1528] border border-white/10 rounded-xl px-3 py-2 text-sm"
+                placeholder="راتب أساسي"
               />
               <input
                 type="email"
@@ -5362,7 +5356,7 @@ const SalesManagerSettings = ({
                     role: employee.role,
                     avatar: employee.avatar || '',
                     email: (employee.email || '').trim(),
-                    baseSalary: PAYROLL_SALARY_ROLES.includes(employee.role) ? String(employee.baseSalary ?? 0) : '',
+                    baseSalary: String(employee.baseSalary ?? 0),
                   };
                 return (
                   <tr key={employee.id} className={trafficRowClass(employee.role === 'مندوب' ? (employee.skills.length > 0 ? 'safe' : 'warn') : 'neutral')}>
@@ -5410,11 +5404,9 @@ const SalesManagerSettings = ({
                             setEmployeeEdits((prev) => {
                               const d = prev[employee.id] || draft;
                               const nextBase =
-                                PAYROLL_SALARY_ROLES.includes(role)
-                                  ? d.baseSalary && d.baseSalary.trim() !== ''
-                                    ? d.baseSalary
-                                    : String(employee.baseSalary ?? 10000)
-                                  : '';
+                                d.baseSalary && d.baseSalary.trim() !== ''
+                                  ? d.baseSalary
+                                  : String(employee.baseSalary ?? 10000);
                               return { ...prev, [employee.id]: { ...d, role, baseSalary: nextBase } };
                             });
                           }}
@@ -5454,7 +5446,7 @@ const SalesManagerSettings = ({
                       )}
                     </td>
                     <td className="p-3 min-w-[120px]">
-                      {canOwnerEditEmployeeRow(employee) && PAYROLL_SALARY_ROLES.includes(draft.role) ? (
+                      {canOwnerEditEmployeeRow(employee) ? (
                         <div className="flex items-center gap-1">
                           <input
                             type="text"
@@ -5473,10 +5465,8 @@ const SalesManagerSettings = ({
                           />
                           <span className="text-[10px] text-zinc-500 shrink-0">ج.م</span>
                         </div>
-                      ) : PAYROLL_SALARY_ROLES.includes(employee.role) ? (
-                        `${(employee.baseSalary || 0).toLocaleString('ar-EG')} ج.م`
                       ) : (
-                        '—'
+                        `${(employee.baseSalary || 0).toLocaleString('ar-EG')} ج.م`
                       )}
                     </td>
                     <td className="p-3 text-xs text-zinc-300">

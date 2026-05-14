@@ -74,9 +74,12 @@ router.post('/', requireAuth(), async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const skills = Array.isArray(body.skills) ? body.skills : [];
     const payrollRolesForSalary = ['مندوب', 'محاسب', 'مدير مبيعات', 'مدير إنتاج'];
-    const baseSalary = payrollRolesForSalary.includes(role)
-      ? Math.max(0, Math.round(Number(body.baseSalary) || 0))
-      : null;
+    const baseSalary =
+      actorRole === 'مالك'
+        ? Math.max(0, Math.round(Number(body.baseSalary) || 0))
+        : payrollRolesForSalary.includes(role)
+          ? Math.max(0, Math.round(Number(body.baseSalary) || 0))
+          : null;
     const user = await prisma.user.create({
       data: {
         email,
@@ -159,11 +162,15 @@ router.patch('/:id', requireAuth(), async (req, res) => {
       if (existingRoleN === 'مالك' && existing.id !== actor.id) {
         return res.status(403).json({ error: 'لا يمكن تعديل راتب مالك آخر' });
       }
-      if (!canAccountingSalary && !canOwner) return res.status(403).json({ error: 'غير مصرح' });
-      if (!payrollRolesForSalary.includes(existingRoleN) && !(existingRoleN === 'مالك' && existing.id === actor.id)) {
-        return res.status(400).json({ error: 'لا يُخزَّن راتب أساسي لهذا الدور' });
+      if (canOwner) {
+        data.baseSalary = Math.max(0, Math.round(Number(patch.baseSalary) || 0));
+      } else {
+        if (!canAccountingSalary) return res.status(403).json({ error: 'غير مصرح' });
+        if (!payrollRolesForSalary.includes(existingRoleN) && !(existingRoleN === 'مالك' && existing.id === actor.id)) {
+          return res.status(400).json({ error: 'لا يُخزَّن راتب أساسي لهذا الدور' });
+        }
+        data.baseSalary = Math.max(0, Math.round(Number(patch.baseSalary) || 0));
       }
-      data.baseSalary = Math.max(0, Math.round(Number(patch.baseSalary) || 0));
     }
     if (patch.stats != null && typeof patch.stats === 'object') {
       if (!canOwner) return res.status(403).json({ error: 'غير مصرح' });

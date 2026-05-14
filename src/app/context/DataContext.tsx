@@ -5270,7 +5270,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return false;
     }
     const payrollSalaryRoles: User['role'][] = ['مندوب', 'محاسب', 'مدير مبيعات', 'مدير إنتاج'];
-    const hasPayrollSalary = payrollSalaryRoles.includes(employee.role);
+    const fromOwnerAdd = currentUser?.role === 'مالك';
+    const includeBaseSalary = fromOwnerAdd || payrollSalaryRoles.includes(employee.role);
     if (isServerDataMode()) {
       const emailRaw = typeof employee.email === 'string' ? employee.email.trim().toLowerCase() : '';
       const pwdRaw = typeof employee.password === 'string' ? employee.password.trim() : '';
@@ -5279,7 +5280,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           name: cleanName,
           role: employee.role,
           avatar: employee.avatar,
-          baseSalary: hasPayrollSalary ? Math.max(0, Number(employee.baseSalary) || 0) : undefined,
+          baseSalary: includeBaseSalary ? Math.max(0, Number(employee.baseSalary) || 0) : undefined,
           ...(emailRaw ? { email: emailRaw } : {}),
           ...(pwdRaw.length >= 8 ? { password: pwdRaw } : {}),
         });
@@ -5312,7 +5313,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           action: 'إضافة موظف جديد',
           entityType: 'user',
           entityId: created.id,
-          details: `${created.name} - ${created.role}${hasPayrollSalary ? ` - مرتب أساسي ${employee.baseSalary ?? 0}` : ''}`,
+          details: `${created.name} - ${created.role}${includeBaseSalary && (employee.baseSalary ?? 0) > 0 ? ` - مرتب أساسي ${employee.baseSalary ?? 0}` : ''}`,
         });
         return true;
       } catch (e: unknown) {
@@ -5442,14 +5443,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const em = patch.email.trim().toLowerCase();
           if (em && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) p.email = em;
         }
-        const effectiveRole = patch.role ?? target.role;
-        const payrollSalaryRoles: User['role'][] = ['مندوب', 'محاسب', 'مدير مبيعات', 'مدير إنتاج'];
         const cannotSetSalaryOnOtherOwner = target.role === 'مالك' && target.id !== currentUser.id;
-        if (
-          patch.baseSalary != null &&
-          payrollSalaryRoles.includes(effectiveRole) &&
-          !cannotSetSalaryOnOtherOwner
-        ) {
+        if (patch.baseSalary != null && !cannotSetSalaryOnOtherOwner) {
           p.baseSalary = Math.max(0, Math.round(Number(patch.baseSalary) || 0));
         }
         return Object.keys(p).length > 0 ? p : null;
@@ -5518,8 +5513,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             role: nextRole,
             skills: nextRole === 'مندوب' ? (u.skills || []) : [],
             baseSalary: (() => {
-              const payrollSalaryRoles: User['role'][] = ['مندوب', 'محاسب', 'مدير مبيعات', 'مدير إنتاج'];
-              if (!payrollSalaryRoles.includes(nextRole)) return undefined;
+              const cannot = u.role === 'مالك' && u.id !== currentUser?.id;
+              if (cannot) return u.baseSalary ?? 0;
               return patch.baseSalary != null
                 ? Math.max(0, Math.round(Number(patch.baseSalary) || 0))
                 : (u.baseSalary ?? 0);
@@ -5552,8 +5547,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: nextRole,
           skills: nextRole === 'مندوب' ? (cu.skills || []) : [],
           baseSalary: (() => {
-            const payrollSalaryRoles: User['role'][] = ['مندوب', 'محاسب', 'مدير مبيعات', 'مدير إنتاج'];
-            if (!payrollSalaryRoles.includes(nextRole)) return undefined;
+            const cannot = cu.role === 'مالك' && currentUser && cu.id !== currentUser.id;
+            if (cannot) return cu.baseSalary ?? 0;
             return patch.baseSalary != null
               ? Math.max(0, Math.round(Number(patch.baseSalary) || 0))
               : (cu.baseSalary ?? 0);
