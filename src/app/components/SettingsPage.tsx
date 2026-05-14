@@ -1,0 +1,348 @@
+import {
+  User,
+  Bell,
+  Shield,
+  Palette,
+  HelpCircle,
+  LogOut,
+  ChevronRight,
+  Database,
+  Mail,
+  Link2,
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { useData } from '../context/DataContext';
+
+function browserNotificationsSupported(): boolean {
+  return typeof window !== 'undefined' && 'Notification' in window && typeof Notification.requestPermission === 'function';
+}
+
+export default function SettingsPage() {
+  const { currentUser, logout, updateEmployeeProfile, desktopNotifyWhenVisible, setDesktopNotifyWhenVisible } = useData();
+  const [browserNotifyPerm, setBrowserNotifyPerm] = useState<NotificationPermission | 'unsupported'>(() =>
+    browserNotificationsSupported() ? Notification.permission : 'unsupported',
+  );
+
+  useEffect(() => {
+    if (!browserNotificationsSupported()) return;
+    const sync = () => setBrowserNotifyPerm(Notification.permission);
+    document.addEventListener('visibilitychange', sync);
+    window.addEventListener('focus', sync);
+    return () => {
+      document.removeEventListener('visibilitychange', sync);
+      window.removeEventListener('focus', sync);
+    };
+  }, []);
+  const [name, setName] = useState('');
+  const [emailDisplay, setEmailDisplay] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [avatarPreviewBroken, setAvatarPreviewBroken] = useState(false);
+
+  useEffect(() => {
+    setName(currentUser?.name || '');
+    setEmailDisplay(currentUser?.email || '');
+    setAvatarUrl(currentUser?.avatar || '');
+  }, [currentUser?.id, currentUser?.name, currentUser?.email, currentUser?.avatar]);
+
+  useEffect(() => {
+    setAvatarPreviewBroken(false);
+  }, [avatarUrl]);
+
+  const handleSave = async () => {
+    if (!currentUser) {
+      toast.error('سجّل الدخول من النظام الرئيسي أولاً');
+      return;
+    }
+    const trimmed = name.trim();
+    if (!trimmed) {
+      toast.error('أدخل الاسم كاملاً');
+      return;
+    }
+    const nextAvatar = avatarUrl.trim();
+    const prevAvatar = (currentUser.avatar || '').trim();
+    const nameUnchanged = trimmed === (currentUser.name || '').trim();
+    const avatarUnchanged = nextAvatar === prevAvatar;
+    if (nameUnchanged && avatarUnchanged) {
+      toast.message('لا توجد تغييرات للحفظ');
+      return;
+    }
+    const patch: { name: string; avatar?: string } = { name: trimmed };
+    if (!avatarUnchanged) {
+      patch.avatar = nextAvatar?.trim() || undefined;
+    }
+    const ok = await updateEmployeeProfile(currentUser.id, patch);
+    if (ok) toast.success('تم حفظ الملف الشخصي');
+    else toast.error('تعذر الحفظ — تحقق من الاتصال أو الصلاحيات');
+  };
+
+  const handleCancel = () => {
+    if (!currentUser) return;
+    setName(currentUser.name || '');
+    setAvatarUrl(currentUser.avatar || '');
+  };
+
+  const handleLogout = () => {
+    logout();
+    toast.success('تم تسجيل الخروج');
+  };
+
+  const roleLabel = currentUser?.role || '—';
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-8 pb-12">
+      <div>
+        <h2 className="text-3xl font-bold text-white mb-2">الإعدادات</h2>
+        <p className="text-zinc-400">عرض الحساب الحالي من السياق (JWT / قاعدة البيانات)</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+        <div className="md:col-span-1 space-y-2">
+          <SettingTab icon={User} label="الملف الشخصي" active />
+          <SettingTab
+            icon={Bell}
+            label="الإشعارات"
+            onClick={() =>
+              document.getElementById('settings-desktop-notifications')?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start',
+              })
+            }
+          />
+          <SettingTab icon={Shield} label="الأمان والخصوصية" />
+          <SettingTab icon={Palette} label="المظهر" />
+          <SettingTab icon={Database} label="البيانات والنسخ" />
+          <SettingTab icon={HelpCircle} label="المساعدة والدعم" />
+          <div className="pt-4 mt-4 border-t border-zinc-800">
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex items-center gap-3 w-full px-4 py-2 text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
+            >
+              <LogOut className="h-5 w-5" />
+              <span className="text-sm font-bold">تسجيل الخروج</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="md:col-span-3 space-y-8">
+          <div className="bg-[#18181B] border border-zinc-800 rounded-2xl p-8 shadow-xl">
+            <h3 className="text-lg font-bold text-white mb-6">المعلومات الشخصية</h3>
+            {!currentUser ? (
+              <p className="text-sm text-zinc-500">لا يوجد مستخدم مسجّل في هذا السياق. افتح التطبيق الرئيسي وسجّل الدخول.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-xs text-zinc-500 font-bold uppercase tracking-wider">الاسم الكامل</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full bg-[#09090B] border border-zinc-800 rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50 transition-all"
+                  />
+                </div>
+                <InputGroup label="الدور" value={roleLabel} disabled />
+                <div className="space-y-2">
+                  <label className="text-xs text-zinc-500 font-bold uppercase tracking-wider">البريد الإلكتروني</label>
+                  <div className="relative">
+                    <Mail className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+                    <input
+                      type="text"
+                      value={emailDisplay}
+                      readOnly
+                      className="w-full bg-[#09090B] border border-zinc-800 rounded-xl py-2.5 pr-10 pl-4 text-sm text-zinc-400 focus:outline-none opacity-80"
+                    />
+                  </div>
+                </div>
+                <InputGroup label="معرّف المستخدم" value={currentUser.id} disabled />
+              </div>
+            )}
+            {currentUser ? (
+              <div className="mt-8 space-y-4">
+                <p className="text-sm text-zinc-500">الصورة الشخصية</p>
+                <div className="flex flex-col sm:flex-row sm:items-start gap-6">
+                  <div className="h-20 w-20 shrink-0 rounded-2xl bg-zinc-800 overflow-hidden flex items-center justify-center text-3xl font-bold text-white">
+                    {!avatarPreviewBroken && (avatarUrl.trim() || currentUser.avatar) ? (
+                      <img
+                        src={avatarUrl.trim() || currentUser.avatar || ''}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        onError={() => setAvatarPreviewBroken(true)}
+                      />
+                    ) : (
+                      currentUser.name[0] || '?'
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-2 min-w-0">
+                    <label className="text-xs text-zinc-500 font-bold uppercase tracking-wider">رابط الصورة (اختياري)</label>
+                    <div className="relative">
+                      <Link2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+                      <input
+                        type="url"
+                        inputMode="url"
+                        placeholder="https://…"
+                        value={avatarUrl}
+                        onChange={(e) => setAvatarUrl(e.target.value)}
+                        className="w-full bg-[#09090B] border border-zinc-800 rounded-xl py-2.5 pr-10 pl-4 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50 transition-all"
+                      />
+                    </div>
+                    <p className="text-xs text-zinc-500">
+                      يُحفظ الرابط في قاعدة البيانات عند وضع السيرفر. افرغ الحقل ثم احفظ لإزالة الصورة إن كانت مضافة سابقاً.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div
+            id="settings-desktop-notifications"
+            className="bg-[#18181B] border border-zinc-800 rounded-2xl p-8 shadow-xl scroll-mt-8"
+          >
+            <div className="flex items-start gap-3 mb-6">
+              <Bell className="h-6 w-6 text-[#6366F1] shrink-0 mt-0.5" />
+              <div>
+                <h3 className="text-lg font-bold text-white">إشعارات المهام الشخصية</h3>
+                <p className="text-sm text-zinc-500 mt-1">
+                  عند تعيين موعد لمهمة من الرئيسية يظهر تنبيه على الشاشة (توست). يمكن تفعيل إشعار المتصفّح لسطح المكتب إن رغبت — يعمل أثناء فتح الصفحة أو عند الإخفاء حسب الخيار أدناه.
+                </p>
+              </div>
+            </div>
+            {!browserNotificationsSupported() ? (
+              <p className="text-sm text-zinc-500">المتصفّح الحالي لا يدعم إشعارات سطح المكتب لهذا الموقع.</p>
+            ) : (
+              <div className="space-y-4 rounded-xl border border-zinc-800 bg-[#09090B] p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <span className="text-sm font-bold text-white">إذن الإشعارات</span>
+                  {browserNotifyPerm === 'granted' && <span className="text-xs text-emerald-400 font-bold">مفعّل</span>}
+                  {browserNotifyPerm === 'denied' && (
+                    <span className="text-xs text-rose-300 text-right max-w-md">
+                      مرفوض — غيّر الإذن من أيقونة القفل أو «إعدادات الموقع» في المتصفّح
+                    </span>
+                  )}
+                  {browserNotifyPerm === 'default' && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const r = await Notification.requestPermission();
+                          setBrowserNotifyPerm(r);
+                          if (r === 'granted') toast.success('تم تفعيل إشعارات سطح المكتب مع تذكيرات المهام');
+                          else if (r === 'denied') toast.info('يمكنك السماح لاحقاً من إعدادات الموقع');
+                        } catch {
+                          toast.error('تعذّر طلب الإذن من هذا المتصفّح');
+                        }
+                      }}
+                      className="text-xs font-bold px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-200 border border-emerald-500/40 hover:bg-emerald-500/30 transition-colors"
+                    >
+                      السماح بالإشعارات
+                    </button>
+                  )}
+                </div>
+                {browserNotifyPerm === 'granted' && (
+                  <label className="flex items-start gap-3 cursor-pointer text-sm text-zinc-400 leading-relaxed">
+                    <input
+                      type="checkbox"
+                      className="mt-1 accent-[#6366F1]"
+                      checked={desktopNotifyWhenVisible}
+                      onChange={(e) => setDesktopNotifyWhenVisible(e.target.checked)}
+                    />
+                    <span>
+                      إظهار إشعار سطح المكتب حتى وأنا في هذا التبويب مفتوحاً (افتراضياً معطّل لتفادي التكرار مع التوست على الشاشة)
+                    </span>
+                  </label>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-[#18181B] border border-zinc-800 rounded-2xl p-8 shadow-xl">
+            <h3 className="text-lg font-bold text-white mb-6">إعدادات النظام (عرض)</h3>
+            <div className="space-y-6">
+              <ToggleGroup label="اللغة" description="واجهة النظام" value="العربية" />
+              <ToggleGroup label="مصدر الجلسة" description="مصدر بيانات المستخدم" value={currentUser?.authSource === 'database' ? 'قاعدة البيانات' : 'تجريبي / محلي'} />
+              <ToggleGroup label="الاتصال" description="وضع البيانات" value={import.meta.env.VITE_DATA_SOURCE === 'server' ? 'سيرفر' : 'محلي'} />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-4">
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="px-6 py-2.5 text-zinc-400 font-bold hover:text-white transition-all"
+            >
+              إلغاء
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              className="bg-[#6366F1] text-white px-8 py-2.5 rounded-xl font-bold hover:bg-[#5254E2] transition-all shadow-lg shadow-[#6366F1]/20"
+            >
+              حفظ التغييرات
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SettingTab({
+  icon: Icon,
+  label,
+  active,
+  onClick,
+}: {
+  icon: typeof User;
+  label: string;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center justify-between w-full px-4 py-3 rounded-xl transition-all group ${
+        active ? 'bg-[#6366F1] text-white shadow-lg shadow-[#6366F1]/20' : 'text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300'
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        <Icon className="h-5 w-5" />
+        <span className="text-sm font-bold">{label}</span>
+      </div>
+      <ChevronRight className={`h-4 w-4 transition-transform ${active ? 'rotate-90' : 'group-hover:translate-x-[-4px]'}`} />
+    </button>
+  );
+}
+
+function InputGroup({ label, value, icon: Icon, disabled }: { label: string; value: string; icon?: typeof Mail; disabled?: boolean }) {
+  return (
+    <div className="space-y-2">
+      <label className="text-xs text-zinc-500 font-bold uppercase tracking-wider">{label}</label>
+      <div className="relative">
+        {Icon && <Icon className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />}
+        <input
+          type="text"
+          value={value}
+          readOnly={disabled}
+          disabled={disabled}
+          className={`w-full bg-[#09090B] border border-zinc-800 rounded-xl py-2.5 ${Icon ? 'pr-10' : 'pr-4'} pl-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50 transition-all ${
+            disabled ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ToggleGroup({ label, description, value }: { label: string; description: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="text-sm font-bold text-white mb-0.5">{label}</p>
+        <p className="text-xs text-zinc-500 font-medium">{description}</p>
+      </div>
+      <span className="bg-zinc-800 border border-zinc-700 text-white text-xs font-bold px-4 py-2 rounded-lg">{value}</span>
+    </div>
+  );
+}

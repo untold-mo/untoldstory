@@ -1,0 +1,101 @@
+{
+  "meta": {
+    "title": "مصفوفة سيناريوهات النظام",
+    "description": "اختبارات وظيفية موصى بها لكل دور؛ التشغيل الآلي جزئيًا عبر scripts/run-system-scenarios.mjs مع بيانات E2E اختيارية.",
+    "roles": ["مالك", "مدير مبيعات", "مندوب", "محاسب", "مدير إنتاج"]
+  },
+  "acceptanceRoles": [
+    {"role": "مندوب", "focus": ["الهوم والمهام الشخصية", "الليدز المُسندة", "التقارير الشخصية", "الحجوزات — تصوير/معدات/اجتماع/أخرى", "عروض أسعار بحسب سياسة المسار"]},
+    {"role": "مدير مبيعات", "focus": ["لوحة متابعة الفريق", "جميع الليدز أو جزء من الفلتر", "توزيع/إسناد", "مراجعة نشاط ومزامنة أهداف", "اعتماد أجزاء من الحجوزات حيث يُسمح"], "overlap": ["نفس حقول التنفيذ لمندوب عند المراجعة"]},
+    {"role": "محاسب", "focus": ["الفواتير والتحصيل والمصاريف وسياسة المحاسبة", "قيود اليومية اليدوية", "الأشهر المغلقة/إعادة الفتح حسب سياسة المالك", "مهام العهد والعهود", "تنفيذ المطالبات المالية المعتمدة من الحجوزات", "سجلات الحضور عند مشاركة المعالج"]},
+    {"role": "مدير إنتاج", "focus": ["عبء العهد وطلبات العهد للمالك", "الحجوزات والمعدات وسيناريوهات الموافقة المالية عند خارج المقر", "العملاء الأساسيون حسب قائمة الوصول"]},
+    {"role": "مالك", "focus": ["الإعدادات ومساحة العمل وحالة الحسابات", "جميع الموافقات والموظفين", "سياسات التكامل والقواعد", "إغلاق/فتح سنوات مالية حيث تُطبق"]}
+  ],
+  "apiSurface": [
+    {"pathPrefix": "/api/leads", "frontendApi": "leadsApi.ts", "risk": ["تسرب ليد خارج نطاق المستخدم لا يقرأ JWT فقط؛ التحقق من فلترة الخادم"]},
+    {"pathPrefix": "/api/users", "frontendApi": "usersApi.ts", "risk": ["حذف/تعديل أدوار — مالك فقط لمسارات حساسة"]},
+    {"pathPrefix": "/api/invoices", "frontendApi": "invoicesApi.ts", "risk": ["ثبات مجموع وسجلات المحاسبة"]},
+    {"pathPrefix": "/api/expenses", "frontendApi": "expensesApi.ts", "risk": ["اعتماد المالك وربط المراكز التكلفة"]},
+    {"pathPrefix": "/api/price-quotes", "frontendApi": "priceQuotesApi.ts", "risk": ["سلسلة عرض سعر إلى فاتورة عند الموافقة"]},
+    {"pathPrefix": "/api/manual-journals", "frontendApi": "manualJournalsApi.ts", "risk": ["التحقق من أرصدة قبل إقفال الشهر إن كان نهجكم يفرض ذلك"]},
+    {"pathPrefix": "/api/manual-customers", "frontendApi": "manualCustomersApi.ts", "risk": []},
+    {"pathPrefix": "/api/accounting-policy", "frontendApi": "accountingPolicyApi.ts", "risk": ["اتساق المراكز المسموحة مع عروض الأسعار والمصاريف"]},
+    {"pathPrefix": "/api/closed-months", "frontendApi": "closedMonthsApi.ts", "risk": ["لا ترحيل بتاريخ شهر مغلق"]},
+    {"pathPrefix": "/api/monthly-targets", "frontendApi": "monthlyTargetsApi.ts", "risk": []},
+    {"pathPrefix": "/api/custody-settings", "frontendApi": "custodySettingsApi.ts", "risk": []},
+    {"pathPrefix": "/api/custody-funds", "frontendApi": "custodyFundsApi.ts", "risk": ["دورة طلب اعتماد دفع وسداد بين المالك/المحاسب/مدير الإنتاج"]},
+    {"pathPrefix": "/api/audit-events", "frontendApi": "auditEventsApi.ts", "risk": ["سعة السجل وحذف قديم اختياري"]},
+    {"pathPrefix": "/api/shoot-bookings", "frontendApi": "shootBookingsApi.ts", "risk": ["دور الموافقة والمحاسب للمطالبة المالية"]},
+    {"pathPrefix": "/api/equipment-bookings", "frontendApi": "equipmentBookingsApi.ts", "risk": ["تعارض الكميات المتاحة"]},
+    {"pathPrefix": "/api/meeting-bookings", "frontendApi": "meetingBookingsApi.ts", "risk": ["تعارض المواعيد"]},
+    {"pathPrefix": "/api/workspace-state", "frontendApi": "workspaceStateApi.ts", "risk": ["مفتاح PATCH محدود بالدور لتجنّب تلاعب مهام شخصية ومفاتيح المالك"]},
+    {"pathPrefix": "/api/attendance-records", "frontendApi": "attendanceRecordsApi.ts", "risk": ["من يمكنه تحميل قائمة الموظفين"]}
+  ],
+  "scenarioFlows": [
+    {
+      "id": "AUTH-LOGIN",
+      "titleAr": "تسجيل الدخول والجلسة",
+      "stepsAr": ["POST /auth/login ببريد/كلمة صحيحة يعيد JWT", "GET /auth/me مع Bearer يعيد المستخدم", "محاولة وصول بدون توكن أو بتوكن منتهي → 401 لمسارات API المحمية"]
+    },
+    {
+      "id": "BOOK-SHOOT-E2E",
+      "titleAr": "مسار طلب تصوير (مندوب → مراجعة → محاسب إن وجد مطالبة)",
+      "stepsAr": ["POST /api/shoot-bookings كمندوب أو مدير إنتاج بحقل تاريخ وقت مكان عميل", "مالك أو مدير مبيعات PATCH حالة الموافقة", "محاسب PATCH التنفيذ المالي حيث تُطبق القواعد"]
+    },
+    {
+      "id": "ACCOUNT-EXPENSE-FLOW",
+      "titleAr": "مصاريف ومطابقات المراكز",
+      "stepsAr": ["إنشاء مصروف بمركز مسموح في السياسة", "محاولة تجاوز حد تنبيه المبلغ", "مسار اعتماد المالك حيث يُطبق"]
+    },
+    {
+      "id": "WORKSPACE-STALE",
+      "titleAr": "مساحة العمل وحجوزات أخرى",
+      "stepsAr": ["GET /api/workspace-state يحمّل docJson كاملاً لمن يصرح له", "PATCH جزئي بمفتاح otherBookings يتلقّى الأدوار المصرح لها فقط على الخادم"]
+    },
+    {
+      "id": "QUOTE-INVOICE",
+      "titleAr": "عرض سعر إلى فاتورة",
+      "stepsAr": ["مندوب أو مدير يُنشئ عرض سعر بحالة قيد اعتماد المالك", "المالك يعتمد", "المحاسب يسجّل الفاتورة/التحصيل حسب شاشة المحاسب"]
+    },
+    {
+      "id": "CLOSED-MONTH",
+      "titleAr": "إغلاق شهر والامتثال",
+      "stepsAr": ["مالك يغلق شهراً عبر واجهة الإغلاق", "محاولة قيد تاريخه داخل شهر مغلق تُرفض أو تُعلَم", "طلب إعادة فتح من المحاسب حيث تُفعّل السياسة"]
+    },
+    {
+      "id": "LEAD-ASSIGN",
+      "titleAr": "مسار الليدز والإسناد",
+      "stepsAr": ["إنشاء أو استقبال ليد", "مالك/مدير يُسند للمندوب", "مندوب يُحدّث الحالة والخط الزمني؛ التحقق من أن المندوب لا يرى ليدز الآخرين"]
+    }
+  ],
+  "automatedSmoke": {
+    "publicPathsExpectedJson": [{"path": "/health", "okStatuses": [200, 503]}],
+    "protectedGetExpect401": [
+      "/api/leads",
+      "/api/users",
+      "/api/invoices",
+      "/api/expenses",
+      "/api/price-quotes",
+      "/api/manual-journals",
+      "/api/accounting-policy",
+      "/api/closed-months",
+      "/api/monthly-targets",
+      "/api/custody-settings",
+      "/api/custody-funds",
+      "/api/audit-events",
+      "/api/manual-customers",
+      "/api/shoot-bookings",
+      "/api/equipment-bookings",
+      "/api/meeting-bookings",
+      "/api/workspace-state",
+      "/api/attendance-records"
+    ],
+    "postLoginProbePaths": ["GET /api/leads", "GET /api/workspace-state"],
+    "envForLive": {
+      "API_BASE_URL": "http://localhost:4000",
+      "E2E_EMAIL": "بريد مستخدم موجود",
+      "E2E_PASSWORD": "كلمة مرور",
+      "STRICT_API_LIVE": "1 لإفشال السكربت إذا لم يكن الخادم شغّالًا"
+    }
+  }
+}

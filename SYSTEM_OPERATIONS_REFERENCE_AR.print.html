@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>الدليل التشغيلي الكامل للنظام</title>
+  <style>
+    @page { size: A4; margin: 16mm 14mm; }
+    :root {
+      --bg: #0b1220;
+      --panel: #111a2f;
+      --text: #f8fafc;
+      --muted: #cbd5e1;
+      --accent: #ef4444;
+      --line: #263246;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+      line-height: 1.8;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      font-size: 12.5pt;
+    }
+    .cover {
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #111a2f 0%, #0f172a 100%);
+      border-radius: 14px;
+      padding: 28px 24px;
+      margin-bottom: 20px;
+    }
+    .cover h1 {
+      margin: 0 0 8px;
+      font-size: 24pt;
+      line-height: 1.3;
+    }
+    .cover p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 11pt;
+    }
+    .content {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      padding: 16px 18px;
+    }
+    h1, h2, h3 { page-break-after: avoid; }
+    h1 { font-size: 20pt; margin: 0 0 14px; }
+    h2 {
+      font-size: 15pt;
+      margin: 22px 0 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--line);
+    }
+    h3 { font-size: 12.5pt; margin: 14px 0 8px; color: #fde68a; }
+    p, li { color: var(--text); }
+    ul { padding-right: 18px; margin: 8px 0; }
+    li { margin: 3px 0; }
+    hr {
+      border: 0;
+      border-top: 1px dashed var(--line);
+      margin: 16px 0;
+    }
+    code {
+      background: #0b1220;
+      border: 1px solid #334155;
+      padding: 1px 6px;
+      border-radius: 6px;
+      font-size: 10.5pt;
+    }
+    strong { color: #ffffff; }
+    blockquote {
+      margin: 10px 0;
+      border-right: 3px solid var(--accent);
+      padding: 8px 12px;
+      background: rgba(239, 68, 68, 0.08);
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <section class="cover">
+    <h1>الدليل التشغيلي الكامل للنظام</h1>
+  </section>
+  <main class="content"><h1>الدليل التشغيلي الشامل للنظام (الإصدار الحالي)</h1>
+<h2>1) نظرة عامة على النظام</h2>
+<p>النظام منصة تشغيل موحدة تربط:</p>
+<ul>
+<li><strong>المبيعات</strong>: من دخول الليد حتى إغلاق الصفقة.</li>
+<li><strong>الاعتمادات</strong>: مسارات موافقة واضحة للمالك.</li>
+<li><strong>المحاسبة</strong>: فواتير، مصروفات، قيود، وتكويد.</li>
+<li><strong>الإنتاج</strong>: حجوزات تشغيلية + دورة عهدة كاملة.</li>
+<li><strong>SEO Intelligence</strong>: وحدة متخصصة لمتابعة النمو العضوي.</li>
+</ul>
+<p>الهدف الأساسي: جعل كل خطوة “تُسمع” للخطوة التالية تلقائيًا مع صلاحيات مضبوطة وتدقيق واضح.</p>
+<hr>
+<h2>2) مكونات النظام الحالية</h2>
+<h2>A) Sales &amp; CRM</h2>
+<ul>
+<li>إدارة الليدز المستوردة واليدوية.</li>
+<li>توزيع الليدز على المندوبين.</li>
+<li>متابعة SLA (مستقر/متأخر/حرج).</li>
+<li>توثيق التفاعلات (مكالمة/شات/ملاحظة) مع أدلة.</li>
+<li>Playbooks جاهزة لتسريع توثيق التفاعل.</li>
+<li>Quality Gate قبل إغلاق &quot;خسارة&quot;.</li>
+<li>Client 360 Card لعرض ملف العميل الكامل في شاشة واحدة.</li>
+</ul>
+<h2>B) Approvals Center</h2>
+<ul>
+<li>اعتماد/رفض: مصروفات، حجوزات تشغيلية، عروض أسعار، طلبات عهد.</li>
+<li>تنسيق واضح: <strong>طلب → اعتماد مالك → تنفيذ مالي/تشغيلي</strong>.</li>
+</ul>
+<h2>C) Finance &amp; Accounting</h2>
+<ul>
+<li>إدارة الفواتير والتحصيل.</li>
+<li>إدارة المصروفات وسير الاعتماد.</li>
+<li>القيود اليدوية.</li>
+<li>دليل الحسابات (COA) + دليل التكويد (Codebook).</li>
+<li>مراكز تكلفة.</li>
+<li>قفل/فتح فترات مالية مع <strong>طلب اعتماد لإعادة الفتح</strong>.</li>
+<li>تقارير تنفيذية + تصدير CSV.</li>
+<li><strong>Profitability Dashboard</strong> حسب العميل.</li>
+<li><strong>Expected Cashflow Calendar</strong> (تحصيل متوقع 30 يوم).</li>
+</ul>
+<h2>D) Production Operations</h2>
+<ul>
+<li>حجوزات تصوير/معدات/اجتماعات.</li>
+<li>Queue موحدة لمدير الإنتاج.</li>
+<li>دورة عهدة إنتاج كاملة:<ol>
+<li>طلب  </li>
+<li>اعتماد مالك  </li>
+<li>تنفيذ دفع محاسب  </li>
+<li>استلام مدير إنتاج  </li>
+<li>تسجيل صرف  </li>
+<li>تسوية  </li>
+<li>إقفال</li>
+</ol>
+</li>
+</ul>
+<h2>E) Notifications &amp; Monitoring</h2>
+<ul>
+<li>مركز تنبيهات موحد.</li>
+<li>تصنيف أولوية: <strong>Critical / Normal</strong>.</li>
+<li>تنبيهات موجّهة حسب الدور.</li>
+<li>Escalation تلقائي لليدز غير المتابعة.</li>
+</ul>
+<h2>F) SEO Intelligence Module</h2>
+<p>داخل تبويب SEO Intelligence:</p>
+<ul>
+<li>Overview</li>
+<li>Audit</li>
+<li>Keywords</li>
+<li>Content</li>
+<li>Rankings</li>
+<li>Backlinks</li>
+<li>Reports</li>
+</ul>
+<hr>
+<h2>3) الأدوار والصلاحيات</h2>
+<h2>المالك</h2>
+<ul>
+<li>إدارة الموظفين (إضافة/تعديل/حذف) — الصلاحية الحصرية.</li>
+<li>اعتماد الطلبات الحرجة (عروض أسعار، مصروفات، مطالبات تشغيلية، عهد).</li>
+<li>الإشراف التنفيذي العام + تقارير.</li>
+</ul>
+<h2>مدير المبيعات</h2>
+<ul>
+<li>استقبال الليدز من القنوات المربوطة وتوزيعها.</li>
+<li>متابعة KPI اليومية/الأسبوعية/الشهرية.</li>
+<li>متابعة جودة التوثيق والأداء.</li>
+</ul>
+<h2>مندوب المبيعات</h2>
+<ul>
+<li>إدارة العملاء المسندين له.</li>
+<li>تسجيل التفاعل وتحديث المتابعة.</li>
+<li>إرسال عروض الأسعار.</li>
+<li>إغلاق الصفقة فوز/خسارة وفق قواعد الجودة.</li>
+</ul>
+<h2>المحاسب</h2>
+<ul>
+<li>إدارة الفواتير، المصروفات، القيود، ودليل الحسابات.</li>
+<li>تنفيذ المطالبات المعتمدة.</li>
+<li>إدارة دورة العهد ماليًا حتى الإقفال.</li>
+<li>تقارير مالية وتشغيلية.</li>
+</ul>
+<h2>مدير الإنتاج</h2>
+<ul>
+<li>متابعة التنفيذ التشغيلي.</li>
+<li>إدارة العهد بعد الاستلام.</li>
+<li>التنسيق مع المحاسب والمالك في التنفيذ والتسوية.</li>
+</ul>
+<hr>
+<h2>4) مسار العمل الأساسي (End-to-End)</h2>
+<ol>
+<li><strong>دخول الليد</strong> من الربط (Facebook / Google / Email / LinkedIn) أو إدخال يدوي.</li>
+<li><strong>ظهور الليد لمدير المبيعات</strong> لتوزيعه على المندوب.</li>
+<li><strong>تنفيذ متابعة المندوب</strong> مع توثيق التفاعل والدليل.</li>
+<li><strong>إنشاء عرض سعر</strong> عند الجاهزية.</li>
+<li><strong>اعتماد المالك</strong> للعرض.</li>
+<li><strong>توليد فاتورة تلقائيًا</strong> للمحاسبة بعد الاعتماد.</li>
+<li><strong>تنفيذ تشغيلي</strong> (إن وجد: اجتماع/تصوير/معدات/عهدة).</li>
+<li><strong>تنفيذ مالي وإقفال</strong> (تحصيل/مصروف/قيود/تسويات).</li>
+</ol>
+<hr>
+<h2>5) وحدة SEO Intelligence (المضافة حديثًا)</h2>
+<h2>SEO Overview</h2>
+<ul>
+<li>KPI Cards (Clicks / Top 10 / Avg Position / Health Score).</li>
+<li>Trend Chart (Clicks + Impressions).</li>
+<li>Rank Changes + Critical Issues.</li>
+</ul>
+<h2>SEO Audit</h2>
+<ul>
+<li>تشغيل فحص تقني وهمي (Mock Run).</li>
+<li>Score Gauge.</li>
+<li>Core Web Vitals (LCP/FID/CLS/TTFB).</li>
+<li>قائمة مشاكل مصنفة (Critical/Warning/Info).</li>
+<li>تاريخ آخر عمليات Audit.</li>
+</ul>
+<h2>Keyword Research</h2>
+<ul>
+<li>إدخال Seed Keywords.</li>
+<li>Location + Language.</li>
+<li>نتائج Keyword Expansion مع Opportunity Score.</li>
+<li>إضافة الكلمات مباشرة إلى Tracked Keywords.</li>
+</ul>
+<h2>Content Engine</h2>
+<ul>
+<li>قائمة المحتوى بحالات (draft/review/published).</li>
+<li>عرض/تحرير بيانات SEO الأساسية (Title/Meta).</li>
+<li>E-E-A-T Score + breakdown.</li>
+<li>Generate New (mock).</li>
+</ul>
+<h2>Rankings</h2>
+<ul>
+<li>Refresh Rankings (محاكاة تحديث).</li>
+<li>جدول Current/Previous/Change/Best.</li>
+<li>Side Sheet بتاريخ 30 يوم لكل كلمة.</li>
+<li>فلاتر: All / Improved / Dropped / Top 10 / Top 3.</li>
+</ul>
+<h2>Backlinks</h2>
+<ul>
+<li>إحصائيات فرص الروابط.</li>
+<li>Workflow حالة: New → Contacted → Acquired.</li>
+<li>Type / DR badges.</li>
+</ul>
+<h2>Reports</h2>
+<ul>
+<li>تقرير مجمّع قابل للطي (Collapsible Sections).</li>
+<li>Generate Report.</li>
+<li>Export PDF (Print) + Export HTML.</li>
+</ul>
+<hr>
+<h2>6) طريقة تشغيل النظام يوميًا (SOP)</h2>
+<h2>بداية اليوم</h2>
+<ul>
+<li><strong>مدير المبيعات</strong>: يراجع الليدز الجديدة ويوزعها.</li>
+<li><strong>المندوب</strong>: يبدأ بالأولوية (متأخر ثم اليوم) ويسجل كل تفاعل.</li>
+<li><strong>المحاسب</strong>: يراجع البنود المعلقة للتنفيذ.</li>
+<li><strong>مدير الإنتاج</strong>: يراجع Queue التشغيل والعهد.</li>
+</ul>
+<h2>أثناء اليوم</h2>
+<ul>
+<li>متابعة مستمرة للتنبيهات Critical.</li>
+<li>اعتماد الطلبات العالقة لمنع التكدس.</li>
+<li>تحديث حالات التنفيذ أولًا بأول.</li>
+</ul>
+<h2>نهاية اليوم</h2>
+<ul>
+<li>المندوب ينهي يومه من لوحة المتابعة.</li>
+<li>مدير المبيعات يراجع KPI والجودة.</li>
+<li>المحاسب يراجع التحصيل والمطالبات المفتوحة.</li>
+</ul>
+<hr>
+<h2>7) تشغيل وحدة SEO يوميًا/أسبوعيًا</h2>
+<h2>يوميًا</h2>
+<ul>
+<li>مراجعة Overview.</li>
+<li>تحديث Rankings عند الحاجة.</li>
+</ul>
+<h2>أسبوعيًا</h2>
+<ul>
+<li>تشغيل Audit.</li>
+<li>مراجعة Critical Issues.</li>
+<li>تحديث حالة المحتوى والروابط الخارجية.</li>
+</ul>
+<h2>شهريًا</h2>
+<ul>
+<li>Generate Report.</li>
+<li>تصدير PDF/HTML ومشاركته مع الإدارة.</li>
+</ul>
+<hr>
+<h2>8) النسخ الاحتياطي والاسترجاع</h2>
+<p>يوصى قبل أي تعديل كبير بـ:</p>
+<ul>
+<li>أخذ Snapshot من البيانات المحلية.</li>
+<li>حفظ نسخة خارجية.</li>
+<li>اختبار الاسترجاع على بيئة تجريبية قبل التطبيق الفعلي.</li>
+</ul>
+<hr>
+<h2>9) ملاحظات تشغيل مهمة</h2>
+<ul>
+<li>لا يوجد Database خارجي حاليًا؛ التخزين محلي.</li>
+<li>وحدة SEO مبنية على Data Abstraction Layer لتسهيل النقل لاحقًا إلى Supabase بدون تعديل الصفحات.</li>
+<li>البيانات الحالية في SEO (Mock + LocalStorage) مناسبة للتشغيل التجريبي/العرض، وليست بديلًا عن تكامل أدوات SEO الفعلية.</li>
+</ul>
+<hr>
+<h2>10) خارطة تطوير مقترحة</h2>
+<ul>
+<li>ربط API فعلي مع GSC / GA4 / أدوات تتبع ترتيب.</li>
+<li>ربط مزود مكالمات/واتساب للتوثيق الآلي.</li>
+<li>تحسينات code-splitting للأداء.</li>
+<li>أتمتة إرسال التقارير الدورية بالبريد.</li>
+</ul>
+<hr>
+<h2>11) تعريفات سريعة</h2>
+<ul>
+<li><strong>Lead</strong>: عميل محتمل قبل التحويل المالي الكامل.</li>
+<li><strong>SLA</strong>: مؤشر زمن الاستجابة والمتابعة.</li>
+<li><strong>Quote</strong>: عرض سعر مالي مبدئي.</li>
+<li><strong>Client 360</strong>: بطاقة موحدة لعرض حالة العميل الكاملة.</li>
+<li><strong>Custody</strong>: عهدة إنتاج تمر بسير اعتماد وتسوية.</li>
+<li><strong>SEO Health Score</strong>: مؤشر تقني عام لصحة الموقع.</li>
+</ul>
+<hr>
+<h2>12) مسؤولية كل دور في جملة واحدة</h2>
+<ul>
+<li><strong>المالك</strong>: الحوكمة والاعتماد النهائي.</li>
+<li><strong>مدير المبيعات</strong>: قيادة التوزيع والأداء.</li>
+<li><strong>المندوب</strong>: تنفيذ المتابعة وتوثيقها.</li>
+<li><strong>المحاسب</strong>: ضبط الدورة المالية والتقارير.</li>
+<li><strong>مدير الإنتاج</strong>: تنفيذ وتسوية العمليات التشغيلية.</li>
+</ul>
+<hr>
+</main>
+</body>
+</html>

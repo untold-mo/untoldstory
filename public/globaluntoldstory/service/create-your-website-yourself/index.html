@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>انشئ موقعك بنفسك - مولد مواقع</title>
+  <style>
+    :root {
+      --bg: #050505;
+      --glass: rgba(148, 163, 184, 0.14);
+      --glass-strong: rgba(148, 163, 184, 0.22);
+      --border: rgba(255, 255, 255, 0.16);
+      --text: #ffffff;
+      --muted: #a9adb8;
+      --accent: #7c6bff;
+      --accent-2: #a99fff;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Cairo", "Segoe UI", Tahoma, Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(1100px 500px at 100% -10%, rgba(255,255,255,.05), transparent 60%),
+        radial-gradient(900px 400px at -10% 0%, rgba(255,255,255,.04), transparent 65%),
+        var(--bg);
+      min-height: 100vh;
+    }
+
+    .container { width: min(1300px, 100%); margin: 0 auto; padding: 20px; }
+    .top {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      background: var(--glass); border: 1px solid var(--border); border-radius: 16px; padding: 12px 16px;
+      backdrop-filter: blur(14px); position: sticky; top: 12px; z-index: 10;
+    }
+    .brand { display: flex; gap: 8px; align-items: center; font-weight: 800; }
+    .dot { width: 9px; height: 9px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 16px rgba(124,107,255,.8); }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .btn {
+      border: 1px solid var(--border); background: var(--glass); color: #fff; border-radius: 12px;
+      padding: 10px 14px; font-size: 13px; font-weight: 700; cursor: pointer; text-decoration: none;
+    }
+    .btn.primary { background: var(--accent); border-color: transparent; }
+
+    .hero {
+      margin-top: 14px; background: var(--glass); border: 1px solid var(--border); border-radius: 20px;
+      padding: 22px; backdrop-filter: blur(14px);
+    }
+    .hero h1 { margin: 0 0 10px; font-size: clamp(24px, 3.5vw, 44px); line-height: 1.2; }
+    .hero p { margin: 0; color: var(--muted); line-height: 1.9; }
+
+    .layout { display: grid; grid-template-columns: 430px 1fr; gap: 14px; margin-top: 14px; }
+    .panel, .preview {
+      background: var(--glass); border: 1px solid var(--border); border-radius: 20px; padding: 16px; backdrop-filter: blur(14px);
+    }
+    .panel h2, .preview h2 { margin: 0 0 12px; font-size: 20px; }
+
+    .field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+    .field label { font-size: 13px; color: #fff; font-weight: 700; }
+    .field input, .field textarea, .field select {
+      width: 100%; border: 1px solid var(--border); background: var(--glass-strong); color: #fff;
+      border-radius: 12px; padding: 11px 12px; font-size: 14px; outline: none;
+    }
+    .field textarea { min-height: 120px; resize: vertical; }
+
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border);
+      background: var(--glass-strong); border-radius: 999px; padding: 7px 10px; font-size: 12px; font-weight: 700;
+    }
+    .chip input { accent-color: var(--accent); margin: 0; }
+
+    .preview-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+    .preview-box { background: #0a0a0a; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; min-height: 560px; }
+    iframe { width: 100%; height: 560px; border: 0; display: block; background: #0a0a0a; }
+    .hint { margin-top: 8px; color: var(--muted); font-size: 12px; }
+
+    @media (max-width: 1080px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="top">
+      <div class="brand"><span class="dot"></span> Website Builder - انشئ موقعك بنفسك</div>
+      <div class="actions">
+        <a class="btn" href="/globaluntoldstory/">العودة للرئيسية</a>
+        <button class="btn primary" id="enter-system">تسجيل الدخول للنظام</button>
+      </div>
+    </div>
+
+    <section class="hero">
+      <h1>اكتب تخيل العميل... والنظام يبني موقع فعلي جاهز</h1>
+      <p>
+        هذه أداة بناء مواقع تعمل محليًا: تكتب الوصف، تختار الصفحات والمميزات، ثم يتم إنشاء صفحة HTML احترافية
+        فعليًا مع معاينة مباشرة وإمكانية تنزيل الملف واستخدامه فورًا.
+      </p>
+    </section>
+
+    <section class="layout">
+      <aside class="panel">
+        <h2>وصف الموقع</h2>
+        <div class="field">
+          <label for="siteName">اسم الموقع</label>
+          <input id="siteName" value="موقعي الجديد" />
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="businessType">نوع النشاط</label>
+            <input id="businessType" placeholder="شركة إنتاج / عيادة / متجر..." />
+          </div>
+          <div class="field">
+            <label for="tone">الطابع</label>
+            <select id="tone">
+              <option value="احترافي">احترافي</option>
+              <option value="فاخر">فاخر</option>
+              <option value="عصري">عصري</option>
+              <option value="إبداعي">إبداعي</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="prompt">اكتب تخيل العميل للموقع</label>
+          <textarea id="prompt" placeholder="مثال: أريد موقع داكن، عنوان قوي في البداية، عرض خدماتنا وبورتفوليو، شهادات عملاء، وزر واتساب واضح."></textarea>
+        </div>
+        <div class="field">
+          <label>الصفحات المطلوبة</label>
+          <div class="chips" id="pages-chips">
+            <label class="chip"><input type="checkbox" value="Home" checked> الرئيسية</label>
+            <label class="chip"><input type="checkbox" value="About" checked> من نحن</label>
+            <label class="chip"><input type="checkbox" value="Services" checked> الخدمات</label>
+            <label class="chip"><input type="checkbox" value="Portfolio" checked> الأعمال</label>
+            <label class="chip"><input type="checkbox" value="Contact" checked> تواصل</label>
+          </div>
+        </div>
+        <div class="field">
+          <label>مميزات إضافية</label>
+          <div class="chips" id="features-chips">
+            <label class="chip"><input type="checkbox" value="WhatsApp" checked> واتساب</label>
+            <label class="chip"><input type="checkbox" value="Form" checked> نموذج تواصل</label>
+            <label class="chip"><input type="checkbox" value="Testimonials"> شهادات عملاء</label>
+            <label class="chip"><input type="checkbox" value="FAQ"> FAQ</label>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn primary" id="build-site">بناء موقع الآن</button>
+          <button class="btn" id="download-site">تنزيل الموقع (HTML)</button>
+        </div>
+      </aside>
+
+      <main class="preview">
+        <div class="preview-head">
+          <h2>المعاينة الفعلية للموقع</h2>
+          <button class="btn" id="open-preview">فتح في تبويب جديد</button>
+        </div>
+        <div class="preview-box">
+          <iframe id="site-preview" title="preview"></iframe>
+        </div>
+        <p class="hint">النتيجة هنا موقع فعلي جاهز (HTML/CSS/JS) وليس مجرد نص أو ملخص.</p>
+      </main>
+    </section>
+  </div>
+
+  <script>
+    const preview = document.getElementById("site-preview");
+    let generatedHtml = "";
+
+    function getChecked(containerId) {
+      return Array.from(document.querySelectorAll(`#${containerId} input[type="checkbox"]`))
+        .filter((el) => el.checked)
+        .map((el) => el.value);
+    }
+
+    function esc(text) {
+      return String(text || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+    }
+
+    function buildWebsiteHtml() {
+      const siteName = document.getElementById("siteName").value.trim() || "موقعي";
+      const businessType = document.getElementById("businessType").value.trim() || "نشاطك التجاري";
+      const tone = document.getElementById("tone").value;
+      const prompt = document.getElementById("prompt").value.trim() || "موقع احترافي سريع يركز على عرض الخدمات والتحويل.";
+      const pages = getChecked("pages-chips");
+      const features = getChecked("features-chips");
+
+      const nav = pages.map((p) => `<a href="#${p.toLowerCase()}">${p}</a>`).join("");
+      const serviceCards = [
+        "خدمة أساسية 1", "خدمة أساسية 2", "خدمة أساسية 3"
+      ].map((s) => `<div class="card">${s}</div>`).join("");
+      const portfolioCards = [1,2,3,4].map((n) => `<div class="card">مشروع #${n}</div>`).join("");
+
+      const featuresList = features.length
+        ? features.map((f) => `<li>${f}</li>`).join("")
+        : "<li>تصميم متجاوب</li><li>سرعة تحميل عالية</li>";
+
+      return `<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>${esc(siteName)}</title>
+  <style>
+    :root{--bg:#050505;--glass:rgba(148,163,184,.14);--border:rgba(255,255,255,.16);--accent:#7c6bff;--muted:#b1b5c4}
+    *{box-sizing:border-box}body{margin:0;font-family:Arial,"Segoe UI",sans-serif;color:#fff;background:
+      radial-gradient(1000px 400px at 100% 0%,rgba(255,255,255,.06),transparent 60%),var(--bg)}
+    .wrap{width:min(1150px,100%);margin:auto;padding:20px}
+    .glass{background:var(--glass);border:1px solid var(--border);backdrop-filter:blur(12px);border-radius:16px}
+    nav{position:sticky;top:10px;z-index:5;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+    .links{display:flex;gap:12px;flex-wrap:wrap}.links a{color:#fff;text-decoration:none;font-size:13px;font-weight:700}
+    .btn{background:var(--accent);color:#fff;padding:9px 12px;border-radius:10px;border:0;font-weight:700}
+    .hero{margin-top:14px;padding:28px}.hero h1{margin:0 0 8px;font-size:42px}.hero p{color:var(--muted);line-height:1.9}
+    section{margin-top:14px;padding:18px}
+    h2{margin:0 0 10px;font-size:24px}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    .card{padding:14px;border-radius:12px;border:1px solid var(--border);background:rgba(148,163,184,.12)}
+    ul{margin:0;padding-right:20px;color:var(--muted)}
+    form{display:grid;gap:10px}input,textarea{background:rgba(148,163,184,.12);border:1px solid var(--border);border-radius:10px;padding:10px;color:#fff}
+    .foot{margin-top:14px;padding:12px;text-align:center;color:var(--muted);font-size:12px}
+    @media(max-width:900px){.grid{grid-template-columns:1fr 1fr}.hero h1{font-size:32px}}
+    @media(max-width:640px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <nav class="glass">
+      <strong>${esc(siteName)}</strong>
+      <div class="links">${nav}</div>
+      <button class="btn">ابدأ الآن</button>
+    </nav>
+
+    <header class="hero glass" id="home">
+      <h1>${esc(siteName)}</h1>
+      <p><strong>النوع:</strong> ${esc(businessType)} | <strong>الطابع:</strong> ${esc(tone)}</p>
+      <p>${esc(prompt)}</p>
+    </header>
+
+    <section class="glass" id="about">
+      <h2>من نحن</h2>
+      <p style="color:var(--muted);line-height:1.9">نقدم حلول ${esc(businessType)} بأسلوب ${esc(tone)} مع تجربة مستخدم واضحة وسريعة.</p>
+    </section>
+
+    <section class="glass" id="services">
+      <h2>خدماتنا</h2>
+      <div class="grid">${serviceCards}</div>
+    </section>
+
+    <section class="glass" id="portfolio">
+      <h2>أعمالنا</h2>
+      <div class="grid">${portfolioCards}</div>
+    </section>
+
+    <section class="glass" id="contact">
+      <h2>تواصل معنا</h2>
+      <ul>${featuresList}</ul>
+      <form>
+        <input placeholder="الاسم" />
+        <input placeholder="البريد الإلكتروني" />
+        <textarea placeholder="اكتب رسالتك"></textarea>
+        <button class="btn" type="button">إرسال</button>
+      </form>
+    </section>
+
+    <div class="foot glass">Generated by local website builder</div>
+  </div>
+</body>
+</html>`;
+    }
+
+    function renderPreview() {
+      generatedHtml = buildWebsiteHtml();
+      preview.srcdoc = generatedHtml;
+    }
+
+    function downloadHtml() {
+      if (!generatedHtml) renderPreview();
+      const blob = new Blob([generatedHtml], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "generated-website.html";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function openPreviewTab() {
+      if (!generatedHtml) renderPreview();
+      const blob = new Blob([generatedHtml], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 8000);
+    }
+
+    document.getElementById("build-site").addEventListener("click", renderPreview);
+    document.getElementById("download-site").addEventListener("click", downloadHtml);
+    document.getElementById("open-preview").addEventListener("click", openPreviewTab);
+
+    document.getElementById("enter-system").addEventListener("click", function () {
+      if (window.parent) window.parent.postMessage({ type: "ENTER_SYSTEM" }, "*");
+    });
+
+    renderPreview();
+  </script>
+</body>
+</html>

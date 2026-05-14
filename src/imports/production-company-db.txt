@@ -1,0 +1,716 @@
+# 🏗️ CURSOR PROMPT — نظام إدارة شركة إنتاج متكامل
+
+-----
+
+## 🎯 نظرة عامة على المشروع
+
+أنت مطلوب منك تبني نظام إدارة متكامل لشركة إنتاج (Production Company).
+النظام يضم: إدارة ليدز، نظام محاسبي، إدارة معدات، جدول إنتاج، وتحليلات.
+
+-----
+
+## 🛠️ Tech Stack المطلوب
+
+```
+Frontend:     Next.js 14 (App Router) + TypeScript
+Styling:      Tailwind CSS + shadcn/ui
+Database:     Supabase (PostgreSQL + Auth + Storage + Realtime)
+Automation:   n8n (self-hosted) — للـ webhooks والـ workflows
+AI:           OpenAI API (gpt-4o-mini للملخصات، Whisper للمكالمات)
+Ads APIs:     Meta Marketing API + Google Ads API (Leads)
+Mobile App:   React Native (Expo) — Android only — لتسجيل المكالمات
+Deployment:   Vercel (frontend) + Railway أو VPS (n8n)
+Direction:    RTL — عربي بالكامل
+```
+
+-----
+
+## 👥 أدوار المستخدمين والصلاحيات
+
+```typescript
+enum UserRole {
+  OWNER        // صاحب الشركة — كل الصلاحيات
+  ACCOUNTANT   // المحاسب — مالي فقط
+  SALES_MANAGER // مدير السيلز — ليدز وفريق
+  SALES_REP    // موظف سيلز — ليدزه هو فقط
+}
+```
+
+كل مستخدم يدخل بـ email/password عبر Supabase Auth.
+بعد تسجيل الدخول يتوجه لـ dashboard مخصص بدوره.
+
+-----
+
+## 🗄️ Database Schema (Supabase)
+
+```sql
+-- المستخدمين
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT UNIQUE NOT NULL,
+  full_name TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('owner','accountant','sales_manager','sales_rep')),
+  is_online BOOLEAN DEFAULT false,
+  last_seen TIMESTAMPTZ,
+  skills TEXT[], -- ['english','large_companies','real_estate']
+  languages TEXT[], -- ['arabic','english','french']
+  performance_score DECIMAL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- الليدز
+CREATE TABLE leads (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  source TEXT NOT NULL CHECK (source IN ('facebook','google','manual')),
+  ad_name TEXT,
+  campaign_id TEXT,
+  full_name TEXT,
+  phone TEXT,
+  email TEXT,
+  company_name TEXT,
+  company_size TEXT CHECK (company_size IN ('small','medium','large','enterprise')),
+  language TEXT DEFAULT 'arabic',
+  message TEXT,
+  score INTEGER DEFAULT 0, -- Lead Score من 0-100
+  status TEXT DEFAULT 'new' CHECK (status IN ('new','assigned','contacted','interested','proposal','won','lost')),
+  assigned_to UUID REFERENCES users(id),
+  assigned_at TIMESTAMPTZ,
+  first_contact_deadline TIMESTAMPTZ,
+  first_contacted_at TIMESTAMPTZ,
+  notes TEXT,
+  lost_reason TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- سجل نقل الليدز
+CREATE TABLE lead_transfers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  lead_id UUID REFERENCES leads(id),
+  from_user UUID REFERENCES users(id),
+  to_user UUID REFERENCES users(id),
+  reason TEXT, -- 'timeout','manual','reassign'
+  transferred_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- المحادثات والتفاعلات
+CREATE TABLE lead_interactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  lead_id UUID REFERENCES leads(id),
+  user_id UUID REFERENCES users(id),
+  type TEXT CHECK (type IN ('call','whatsapp','email','note','meeting')),
+  duration_seconds INTEGER,
+  recording_url TEXT, -- رابط التسجيل في Supabase Storage
+  transcript TEXT,    -- النص بعد Whisper
+  ai_summary TEXT,    -- ملخص GPT
+  sentiment TEXT CHECK (sentiment IN ('positive','neutral','negative')),
+  next_action TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- الصفقات والمشاريع
+CREATE TABLE deals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  lead_id UUID REFERENCES leads(id),
+  title TEXT NOT NULL,
+  value DECIMAL NOT NULL,
+  status TEXT DEFAULT 'open' CHECK (status IN ('open','won','lost')),
+  expected_close_date DATE,
+  actual_close_date DATE,
+  created_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- الفواتير
+CREATE TABLE invoices (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  deal_id UUID REFERENCES deals(id),
+  invoice_number TEXT UNIQUE NOT NULL,
+  type TEXT CHECK (type IN ('income','expense')),
+  amount DECIMAL NOT NULL,
+  tax_amount DECIMAL DEFAULT 0,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending','paid','overdue','cancelled')),
+  due_date DATE,
+  paid_date DATE,
+  category TEXT, -- 'production','ads','salaries','equipment','other'
+  description TEXT,
+  file_url TEXT, -- PDF مرفق
+  created_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- المصروفات
+CREATE TABLE expenses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  category TEXT NOT NULL,
+  amount DECIMAL NOT NULL,
+  description TEXT,
+  date DATE NOT NULL,
+  receipt_url TEXT,
+  created_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- المعدات
+CREATE TABLE equipment (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  category TEXT, -- 'camera','lighting','audio','lens','other'
+  serial_number TEXT,
+  status TEXT DEFAULT 'available' CHECK (status IN ('available','booked','maintenance','out')),
+  purchase_date DATE,
+  purchase_price DECIMAL,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- حجز المعدات
+CREATE TABLE equipment_bookings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  equipment_id UUID REFERENCES equipment(id),
+  production_session_id UUID REFERENCES production_sessions(id),
+  booked_by UUID REFERENCES users(id),
+  date DATE NOT NULL,
+  start_time TIME NOT NULL,
+  end_time TIME NOT NULL,
+  returned_at TIMESTAMPTZ,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- جلسات الإنتاج
+CREATE TABLE production_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  client_name TEXT,
+  deal_id UUID REFERENCES deals(id),
+  date DATE NOT NULL,
+  start_time TIME NOT NULL,
+  end_time TIME NOT NULL,
+  location TEXT,
+  team_members UUID[], -- array of user IDs
+  status TEXT DEFAULT 'scheduled' CHECK (status IN ('scheduled','in_progress','completed','cancelled')),
+  notes TEXT,
+  created_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  CONSTRAINT no_overlap UNIQUE(date, start_time) -- منع التعارض
+);
+
+-- إعدادات النظام
+CREATE TABLE system_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  key TEXT UNIQUE NOT NULL,
+  value JSONB,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+-- مثال: lead_response_time_minutes = 30
+-- مثال: lead_distribution_rules = {...}
+
+-- إعدادات الإعلانات
+CREATE TABLE ad_integrations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  platform TEXT CHECK (platform IN ('facebook','google')),
+  access_token TEXT,
+  account_id TEXT,
+  page_id TEXT,
+  form_ids TEXT[],
+  is_active BOOLEAN DEFAULT true,
+  last_sync TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- سجل نقاط الموظفين (Gamification)
+CREATE TABLE performance_points (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id),
+  points INTEGER NOT NULL,
+  reason TEXT, -- 'lead_won','fast_response','lead_lost','late_response'
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+-----
+
+## 📁 هيكل المشروع (Next.js)
+
+```
+/app
+  /auth
+    /login
+    /logout
+  /(dashboard)
+    /layout.tsx          ← Sidebar + Header حسب الدور
+    /owner               ← صاحب الشركة
+      /page.tsx          ← Main Dashboard
+      /analytics
+      /team
+      /production
+      /equipment
+    /accountant          ← المحاسب
+      /page.tsx
+      /invoices
+      /expenses
+      /reports
+    /sales-manager       ← مدير السيلز
+      /page.tsx
+      /leads
+      /pipeline
+      /team
+      /settings          ← قواعد التوزيع + وقت الرد
+    /sales-rep           ← موظف السيلز
+      /page.tsx          ← الليدز المخصصة
+      /lead/[id]
+      /calls
+      /performance
+/components
+  /ui                    ← shadcn components
+  /charts                ← Recharts components
+  /leads                 ← Lead cards, pipeline, etc.
+  /notifications         ← Real-time alerts
+/lib
+  /supabase.ts
+  /openai.ts
+  /meta-api.ts
+  /google-api.ts
+  /lead-scoring.ts
+  /lead-distributor.ts
+/hooks
+  /useLeads.ts
+  /useRealtime.ts
+  /useTimer.ts           ← countdown للرد
+/types
+  /index.ts
+```
+
+-----
+
+## 🎨 UI/UX المطلوب
+
+- **Dark theme** بالكامل كـ default
+- **RTL** — كل الـ layout من اليمين لليسار
+- **الخط**: Tajawal أو Cairo من Google Fonts
+- **الألوان الأساسية**:
+  - خلفية: `#09090B`
+  - Accent: `#6366F1` (بنفسجي)
+  - Success: `#10B981`
+  - Warning: `#F59E0B`
+  - Danger: `#EF4444`
+- كل dashboard مختلف بصرياً حسب الدور
+- **Responsive** — يشتغل على موبايل وديسكتوب
+
+-----
+
+## 📄 الصفحات التفصيلية
+
+### 1️⃣ Owner Dashboard (`/owner`)
+
+```
+┌─────────────────────────────────────────────────────┐
+│ KPI Cards (4 cards في صف):                          │
+│  💰 إجمالي الدخل هذا الشهر                         │
+│  📉 إجمالي المصروفات                               │
+│  📈 صافي الربح                                     │
+│  🎯 معدل تحويل الليدز                              │
+├─────────────────────────────────────────────────────┤
+│ Revenue Chart (Line) │ Lead Sources (Pie)           │
+├─────────────────────────────────────────────────────┤
+│ Team Performance Table:                              │
+│  الموظف | ليدز اليوم | اتصل | معدل التحويل | نقاط │
+├─────────────────────────────────────────────────────┤
+│ Production Schedule (هذا الأسبوع)                   │
+│ Equipment Status (متاح / محجوز)                     │
+└─────────────────────────────────────────────────────┘
+```
+
+### 2️⃣ Sales Manager Dashboard (`/sales-manager`)
+
+```
+┌─────────────────────────────────────────────────────┐
+│ Live Team Status:                                    │
+│  🟢 محمد — أونلاين — 3 ليدز نشطة                  │
+│  🔴 أحمد — أوفلاين منذ 2 ساعة                     │
+│  🟡 سارة — أونلاين — انتهت مهلة ليد               │
+├─────────────────────────────────────────────────────┤
+│ Incoming Leads (Real-time feed):                     │
+│  ليد جديد من Facebook | شركة كبيرة | إنجليزي       │
+│  → يوزع تلقائياً لـ: محمد (خبرة + إنجليزي)        │
+├─────────────────────────────────────────────────────┤
+│ Pipeline Kanban:                                     │
+│ جديد | تم التواصل | مهتم | عرض سعر | اتفاق | خسر  │
+├─────────────────────────────────────────────────────┤
+│ Alerts Panel:                                        │
+│  ⚠️ أحمد لم يرد على ليد منذ 25 دقيقة             │
+│  🔴 ليد X انتهت مهلته — تم النقل لسارة            │
+└─────────────────────────────────────────────────────┘
+```
+
+**صفحة إعدادات التوزيع** (`/sales-manager/settings`):
+
+- وقت الرد المسموح (مثلاً 30 دقيقة)
+- قواعد التوزيع (UI بسيط — Drag & Drop Rules Builder):
+  - لو اللغة إنجليزي → اختار من: [قائمة الموظفين]
+  - لو الشركة enterprise → اختار: أكبر موظف خبرة
+  - لو المصدر Google → وزع بالـ Round Robin
+
+### 3️⃣ Sales Rep Dashboard (`/sales-rep`)
+
+```
+┌─────────────────────────────────────────────────────┐
+│ Header: 🟢 أنا أونلاين | [زر: أوقف استقبال الليدز] │
+├─────────────────────────────────────────────────────┤
+│ ليداتي الحالية (3 cards):                           │
+│ ┌──────────────────────────────┐                    │
+│ │ 🔴 متبقي: 5 دقائق للرد      │  ← Countdown       │
+│ │ محمد علي — شركة XYZ         │                    │
+│ │ 📱 Facebook | شركة كبيرة    │                    │
+│ │ [اتصل] [واتساب] [تسجيل ملاحظة] │               │
+│ └──────────────────────────────┘                    │
+├─────────────────────────────────────────────────────┤
+│ إحصائياتي اليوم:                                    │
+│  📥 استقبلت: 8 ليدز                               │
+│  📞 اتصلت: 5                                       │
+│  ✅ مهتمين: 2                                      │
+│  🏆 نقاطي: 450 | الترتيب: #2                      │
+└─────────────────────────────────────────────────────┘
+```
+
+### 4️⃣ Accountant Dashboard (`/accountant`)
+
+```
+┌─────────────────────────────────────────────────────┐
+│ ملخص مالي: دخل | مصروفات | مصاريف إعلانات | صافي  │
+├─────────────────────────────────────────────────────┤
+│ فواتير معلقة الدفع (مرتبة بالتاريخ)               │
+├─────────────────────────────────────────────────────┤
+│ [+ فاتورة جديدة] [+ مصروف] [تصدير Excel] [تصدير PDF]│
+├─────────────────────────────────────────────────────┤
+│ جدول الفواتير مع فلتر (شهر / نوع / حالة)          │
+└─────────────────────────────────────────────────────┘
+```
+
+-----
+
+## ⚡ الـ Features التفصيلية
+
+### Lead Scoring Algorithm
+
+```typescript
+// lib/lead-scoring.ts
+function calculateLeadScore(lead: Lead): number {
+  let score = 0;
+  
+  // المصدر
+  if (lead.source === 'google') score += 20;
+  if (lead.source === 'facebook') score += 15;
+  
+  // حجم الشركة
+  if (lead.company_size === 'enterprise') score += 30;
+  if (lead.company_size === 'large') score += 20;
+  if (lead.company_size === 'medium') score += 10;
+  
+  // اللغة (إنجليزي = أجنبي = أعلى قيمة)
+  if (lead.language === 'english') score += 15;
+  
+  // وقت التقديم (أوقات العمل أفضل)
+  const hour = new Date(lead.created_at).getHours();
+  if (hour >= 9 && hour <= 17) score += 10;
+  
+  // وجود رقم تليفون
+  if (lead.phone) score += 10;
+  
+  // وجود اسم شركة
+  if (lead.company_name) score += 5;
+  
+  return Math.min(score, 100);
+}
+```
+
+### Lead Distribution Engine
+
+```typescript
+// lib/lead-distributor.ts
+async function distributeLead(lead: Lead): Promise<string> {
+  const rules = await getDistributionRules(); // من system_settings
+  const onlineReps = await getOnlineReps();   // is_online = true
+  
+  // تطبيق القواعد بالترتيب
+  for (const rule of rules) {
+    if (rule.condition === 'language' && lead.language === rule.value) {
+      const match = onlineReps.find(r => r.languages.includes(rule.value));
+      if (match) return match.id;
+    }
+    if (rule.condition === 'company_size' && lead.company_size === rule.value) {
+      // أعطيه لأعلى موظف performance_score
+      const best = onlineReps.sort((a,b) => b.performance_score - a.performance_score)[0];
+      if (best) return best.id;
+    }
+  }
+  
+  // لو مفيش rule — Round Robin
+  return roundRobin(onlineReps);
+}
+```
+
+### Real-time Lead Timer (في Sales Rep Dashboard)
+
+```typescript
+// hooks/useTimer.ts
+// كل ليد عنده countdown من وقت التعيين
+// لو وصل صفر → تنبيه أحمر + إشعار للمدير
+// لو الموظف مارد → n8n يعيد التوزيع تلقائياً
+```
+
+### Call Recording Flow (n8n Workflow)
+
+```
+Trigger: HTTP Webhook (بيجي من Mobile App)
+  ↓
+Download audio file من Supabase Storage URL
+  ↓
+OpenAI Whisper API → transcript
+  ↓
+GPT-4o-mini prompt:
+  "أنت مساعد لشركة إنتاج. اقرأ المحادثة دي وطلع:
+   1. ملخص في 3 جمل
+   2. مستوى اهتمام العميل (مهتم جداً/مهتم/غير مهتم)
+   3. المشاكل أو الاعتراضات
+   4. الخطوة القادمة المقترحة
+   رد بـ JSON فقط"
+  ↓
+Update lead_interactions في Supabase
+  ↓
+Update lead status لو لزم
+  ↓
+إشعار للمدير لو العميل "غير مهتم"
+```
+
+### ROI Tracking (ربط الإعلانات بالصفقات)
+
+```typescript
+// لكل صفقة مكسوبة:
+// - فين جاء الليد (campaign_id)
+// - كلفة الإعلان من Meta/Google API
+// - قيمة الصفقة
+
+// ROI = ((deal_value - ad_cost) / ad_cost) * 100
+// يظهر في Owner Dashboard لكل campaign
+```
+
+-----
+
+## 🔌 الـ Integrations
+
+### Meta Leads API
+
+```typescript
+// lib/meta-api.ts
+// 1. Webhook يستقبل ليدز جديدة من Facebook Lead Ads
+// 2. Endpoint: POST /api/webhooks/meta
+// 3. يتحقق من x-hub-signature-256
+// 4. يحفظ الليد في Supabase
+// 5. يطلق Lead Scoring + Distribution
+```
+
+### Google Leads API
+
+```typescript
+// lib/google-api.ts
+// Google Ads Lead Form Extensions
+// Webhook أو Polling كل 5 دقائق عبر n8n
+// POST /api/webhooks/google
+```
+
+### Supabase Realtime
+
+```typescript
+// hooks/useRealtime.ts
+// Subscribe على جدول leads
+// لما ييجي ليد جديد → تنبيه فوري في الـ UI
+// لما يتغير status → يتحدث الـ Kanban تلقائياً
+
+const subscription = supabase
+  .channel('leads-channel')
+  .on('postgres_changes', 
+    { event: 'INSERT', schema: 'public', table: 'leads' },
+    (payload) => handleNewLead(payload.new)
+  )
+  .subscribe();
+```
+
+-----
+
+## 📱 React Native App (تسجيل المكالمات)
+
+```
+/mobile-app (Expo project)
+  /app
+    /index.tsx          ← شاشة تسجيل الدخول
+    /dashboard.tsx      ← الشاشة الرئيسية
+  /services
+    /call-recorder.ts   ← تسجيل المكالمات (Android only)
+    /uploader.ts        ← رفع الملفات لـ Supabase Storage
+    /api.ts             ← التواصل مع النظام
+```
+
+**شاشات التطبيق:**
+
+1. تسجيل دخول بنفس credentials النظام
+1. شاشة رئيسية: `🔴 تسجيل المكالمات: شغال` زر تشغيل/إيقاف
+1. قائمة المكالمات المرفوعة مع حالة كل واحدة (جارية المعالجة / تمت)
+1. إشعار بعد كل مكالمة: “✅ تم الرفع والمعالجة”
+
+**الـ Permissions المطلوبة (Android):**
+
+```xml
+<uses-permission android:name="android.permission.RECORD_AUDIO"/>
+<uses-permission android:name="android.permission.READ_CALL_LOG"/>
+<uses-permission android:name="android.permission.PROCESS_OUTGOING_CALLS"/>
+```
+
+**flow التسجيل:**
+
+```typescript
+// عند بدء مكالمة → يبدأ التسجيل تلقائياً (background service)
+// عند انتهاء المكالمة → يوقف التسجيل
+// يرفع الملف لـ Supabase Storage: calls/{user_id}/{timestamp}.m4a
+// يبعت webhook لـ n8n بالـ file URL + lead_id + user_id
+// n8n يعمل: Whisper → GPT → يحدث الداتابيز
+```
+
+-----
+
+## 🎮 Gamification System
+
+```typescript
+// نقاط تتضاف تلقائياً:
+const POINTS = {
+  lead_won:          100,
+  fast_response:      20,  // رد في أقل من 5 دقائق
+  contact_made:       10,  // تواصل مع الليد
+  lead_lost:         -10,
+  late_response:     -20,  // تجاوز وقت الرد
+  call_recorded:       5,  // سجل مكالمة
+}
+
+// Leaderboard يتحدث كل ساعة
+// يظهر في صفحة الموظف + صفحة المدير
+// آخر الأسبوع: الأول بياخد badge "🏆 موظف الأسبوع"
+```
+
+-----
+
+## 🔔 نظام الإشعارات
+
+```typescript
+// Real-time notifications بـ Supabase Realtime
+// أنواع الإشعارات:
+{
+  'new_lead':          'ليد جديد وصلك',
+  'lead_timeout_warn': 'تبقى 5 دقائق للرد على ليد X',
+  'lead_transferred':  'الليد X اتنقل لموظف آخر',
+  'lead_won':          '🎉 صفقة جديدة!',
+  'session_reminder':  'جلسة تصوير بعد ساعة',
+  'equipment_due':     'معدة X لسه مش راجعت',
+  'invoice_due':       'فاتورة X موعدها اليوم',
+}
+// Toast notifications في الـ UI
+// بعدين تقدر تضيف Push notifications
+```
+
+-----
+
+## 📊 Client Portal (صفحة العميل)
+
+```
+/client/[token]    ← رابط فريد لكل عميل (لا يحتاج login)
+  - حالة المشروع
+  - الجدول الزمني
+  - الفواتير (ادفع أونلاين — اختياري)
+  - الملفات والتسليمات
+```
+
+-----
+
+## 🚀 ترتيب البناء (Build Order)
+
+```
+المرحلة 1 — الأساس (ابدأ هنا):
+  ✅ Supabase setup + Schema كامل
+  ✅ Next.js project + Auth (login/logout/roles)
+  ✅ Layout مع Sidebar حسب الدور
+  ✅ Middleware للحماية
+
+المرحلة 2 — نظام الليدز:
+  ✅ Meta + Google webhooks
+  ✅ Lead Scoring
+  ✅ Lead Distribution Engine
+  ✅ Sales Rep Dashboard + Countdown Timer
+  ✅ Sales Manager Dashboard + Kanban
+
+المرحلة 3 — المحاسبة:
+  ✅ فواتير + مصروفات
+  ✅ تقارير PDF/Excel
+  ✅ Accountant Dashboard
+
+المرحلة 4 — الإنتاج:
+  ✅ Production Sessions Calendar
+  ✅ Equipment Management
+  ✅ منع تعارض المواعيد
+
+المرحلة 5 — الذكاء:
+  ✅ ROI Analytics
+  ✅ Forecasting
+  ✅ AI Call Summaries (n8n workflow)
+  ✅ Gamification
+
+المرحلة 6 — Mobile App:
+  ✅ Expo React Native
+  ✅ Call Recording
+  ✅ Upload to Supabase
+```
+
+-----
+
+## ⚠️ ملاحظات مهمة لـ Cursor
+
+1. **ابدأ دايماً بـ Supabase Schema** — اعمله أول حاجة وتأكد إنه شغال
+1. **استخدم Supabase RLS** — Row Level Security — كل user يشوف بياناته بس
+1. **الـ Realtime** مهم جداً في صفحة مدير السيلز — استخدم Supabase Realtime مش Polling
+1. **وقت الرد** — خزّنه في `system_settings` مش hardcoded
+1. **كل الـ API keys** في `.env.local` — ما تحطهاش في الكود
+1. **الـ n8n workflows** — وثّقها في `/docs/n8n-flows.md`
+1. **Mobile App** — حطه في `/mobile` folder منفصل داخل نفس الـ repo
+1. **Tailwind RTL** — ضيف `dir="rtl"` في `html` tag و `@tailwindcss/forms`
+1. **Error Handling** — كل API call لازم عنده try/catch وrسالة خطأ واضحة بالعربي
+1. **Types** — عرّف كل الـ types في `/types/index.ts` من الأول
+
+-----
+
+## 🔑 Environment Variables المطلوبة
+
+```env
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+
+# OpenAI
+OPENAI_API_KEY=
+
+# Meta
+META_APP_ID=
+META_APP_SECRET=
+META_VERIFY_TOKEN=
+
+# Google
+GOOGLE_ADS_DEVELOPER_TOKEN=
+GOOGLE_ADS_CLIENT_ID=
+GOOGLE_ADS_CLIENT_SECRET=
+
+# n8n
+N8N_WEBHOOK_URL=
+N8N_API_KEY=
+```
+
+-----
+
+**ابدأ بالمرحلة الأولى وأكد إن Auth + Roles شغالين صح قبل ما تكمل.**

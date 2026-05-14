@@ -1,0 +1,30 @@
+{
+  "name": "untold-production-api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "postinstall": "node scripts/postinstall-prisma.mjs",
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "check:env": "node scripts/check-database-env.mjs",
+    "db:sync-env": "node scripts/sync-direct-url.mjs",
+    "db:generate": "node scripts/sync-direct-url.mjs && node scripts/check-database-env.mjs && prisma generate",
+    "db:migrate": "node scripts/sync-direct-url.mjs && node scripts/check-database-env.mjs && prisma migrate deploy",
+    "db:push": "node scripts/sync-direct-url.mjs && node scripts/check-database-env.mjs && prisma db push",
+    "db:baseline": "node scripts/sync-direct-url.mjs && node scripts/check-database-env.mjs && prisma migrate resolve --applied 20260509120000_init && prisma migrate resolve --applied 20260509190000_add_leads && prisma migrate resolve --applied 20260509230000_integration_profiles_customers_accounting && prisma migrate resolve --applied 20260510000000_quotes_journals_policy && prisma migrate resolve --applied 20260510120000_closed_targets_audit_custody_bookings && prisma migrate resolve --applied 20260510140000_workspace_state_attendance",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "prisma": "6.18.0",
+    "@prisma/client": "6.18.0",
+    "bcryptjs": "3.0.2",
+    "cors": "2.8.5",
+    "dotenv": "16.6.1",
+    "express": "4.21.2",
+    "jsonwebtoken": "9.0.2"
+  },
+  "engines": {
+    "node": ">=18.18.0"
+  }
+}

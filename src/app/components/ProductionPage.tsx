@@ -1,0 +1,224 @@
+import {
+  Calendar,
+  Clock,
+  MapPin,
+  Users,
+  Camera,
+  Play,
+  MoreVertical,
+  Plus,
+  Filter,
+} from 'lucide-react';
+import { motion as Motion } from 'motion/react';
+import { useMemo, useState } from 'react';
+import { useData } from '../context/DataContext';
+
+type ProdFilter = 'الكل' | 'جاري' | 'مجدول' | 'مكتمل' | 'معلق';
+
+type ProdCard = {
+  id: string;
+  title: string;
+  client: string;
+  statusKey: ProdFilter;
+  date: string;
+  time: string;
+  location: string;
+  team: string;
+  type: string;
+};
+
+function statusToFilter(status: string | undefined): ProdFilter {
+  const s = status || '';
+  if (s === 'مكتمل' || s === 'تم التسليم') return 'مكتمل';
+  if (s === 'مرفوض') return 'معلق';
+  if (s === 'معتمد') return 'مجدول';
+  if (s === 'قيد المراجعة') return 'جاري';
+  return 'جاري';
+}
+
+function formatArDate(iso: string) {
+  try {
+    return new Date(iso).toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' });
+  } catch {
+    return iso;
+  }
+}
+
+export default function ProductionPage() {
+  const { shootBookings, equipmentBookings, meetingBookings } = useData();
+  const [filter, setFilter] = useState<ProdFilter>('الكل');
+
+  const cards = useMemo<ProdCard[]>(() => {
+    const out: ProdCard[] = [];
+    for (const b of shootBookings) {
+      out.push({
+        id: `sh-${b.id}`,
+        title: `تصوير — ${b.customerName}`,
+        client: b.customerName,
+        statusKey: statusToFilter(b.status),
+        date: formatArDate(b.date),
+        time: b.time,
+        location: b.location,
+        team: b.repName,
+        type: 'تصوير',
+      });
+    }
+    for (const b of equipmentBookings) {
+      out.push({
+        id: `eq-${b.id}`,
+        title: `${b.equipmentName} ×${b.quantity}`,
+        client: b.customerName,
+        statusKey: statusToFilter(b.status),
+        date: `${formatArDate(b.fromDate)} – ${formatArDate(b.toDate)}`,
+        time: '—',
+        location: b.notes || '—',
+        team: b.repName,
+        type: 'معدات',
+      });
+    }
+    for (const b of meetingBookings) {
+      out.push({
+        id: `mt-${b.id}`,
+        title: b.title,
+        client: b.leadId ? `ليد ${b.leadId.slice(0, 6)}…` : '—',
+        statusKey: statusToFilter(b.status),
+        date: formatArDate(b.date),
+        time: b.startTime,
+        location: b.location || (b.venueType === 'داخل_المقر' ? 'داخل المقر' : 'خارج المقر'),
+        team: b.repName,
+        type: 'اجتماع',
+      });
+    }
+    return out.sort((a, b) => b.id.localeCompare(a.id));
+  }, [shootBookings, equipmentBookings, meetingBookings]);
+
+  const visible = useMemo(() => {
+    if (filter === 'الكل') return cards;
+    return cards.filter((c) => c.statusKey === filter);
+  }, [cards, filter]);
+
+  const visualStatus = (c: ProdCard): 'in_progress' | 'completed' | 'scheduled' => {
+    if (c.statusKey === 'مكتمل') return 'completed';
+    if (c.statusKey === 'معلق') return 'scheduled';
+    return 'in_progress';
+  };
+
+  return (
+    <div className="space-y-8 pb-12">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold text-white mb-2">جدول الإنتاج</h2>
+          <p className="text-zinc-400">حجوزات التصوير والمعدات والاجتماعات من الباك اند</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button type="button" className="p-2.5 bg-[#18181B] border border-zinc-800 rounded-xl text-zinc-400 hover:text-white transition-all">
+            <Calendar className="h-5 w-5" />
+          </button>
+          <button type="button" className="flex items-center justify-center gap-2 bg-[#6366F1] text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-[#5254E2] transition-all shadow-lg shadow-[#6366F1]/20">
+            <Plus className="h-5 w-5" />
+            <span>جلسة جديدة</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-4 overflow-x-auto pb-2">
+        {(['الكل', 'جاري', 'مجدول', 'مكتمل', 'معلق'] as ProdFilter[]).map((status) => (
+          <button
+            key={status}
+            type="button"
+            onClick={() => setFilter(status)}
+            className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all border ${
+              filter === status ? 'bg-[#6366F1] text-white border-[#6366F1]' : 'bg-[#18181B] text-zinc-400 border-zinc-800 hover:border-zinc-700'
+            }`}
+          >
+            {status}
+          </button>
+        ))}
+      </div>
+
+      {visible.length === 0 ? (
+        <div className="bg-[#18181B] border border-zinc-800 rounded-2xl p-12 text-center text-zinc-500 text-sm">لا توجد عناصر مطابقة للتصفية.</div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {visible.map((prod) => {
+            const vs = visualStatus(prod);
+            return (
+              <Motion.div
+                key={prod.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-[#18181B] border border-zinc-800 rounded-2xl p-6 shadow-xl hover:border-zinc-700 transition-all group"
+              >
+                <div className="flex items-start justify-between mb-6">
+                  <div className="flex gap-4">
+                    <div
+                      className={`h-12 w-12 rounded-xl flex items-center justify-center shadow-lg ${
+                        vs === 'in_progress' ? 'bg-[#10B981]/10 text-[#10B981]' : vs === 'completed' ? 'bg-zinc-800 text-zinc-500' : 'bg-[#6366F1]/10 text-[#6366F1]'
+                      }`}
+                    >
+                      {vs === 'in_progress' ? <Play className="h-6 w-6" /> : <Camera className="h-6 w-6" />}
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-white mb-1">{prod.title}</h3>
+                      <p className="text-xs text-zinc-500 font-medium">{prod.client}</p>
+                    </div>
+                  </div>
+                  <div
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider ${
+                      vs === 'in_progress' ? 'bg-[#10B981]/10 text-[#10B981] animate-pulse' : vs === 'completed' ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-800 text-[#6366F1]'
+                    }`}
+                  >
+                    {prod.statusKey}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-[#09090B] border border-zinc-800/50">
+                    <Calendar className="h-4 w-4 text-zinc-500 shrink-0" />
+                    <div>
+                      <p className="text-[10px] text-zinc-500 font-bold uppercase">التاريخ</p>
+                      <p className="text-sm text-white font-bold">{prod.date}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-[#09090B] border border-zinc-800/50">
+                    <Clock className="h-4 w-4 text-zinc-500 shrink-0" />
+                    <div>
+                      <p className="text-[10px] text-zinc-500 font-bold uppercase">الوقت</p>
+                      <p className="text-sm text-white font-bold">{prod.time}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-[#09090B] border border-zinc-800/50">
+                    <MapPin className="h-4 w-4 text-zinc-500 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-zinc-500 font-bold uppercase">الموقع</p>
+                      <p className="text-sm text-white font-bold truncate">{prod.location}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-[#09090B] border border-zinc-800/50">
+                    <Users className="h-4 w-4 text-zinc-500 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-zinc-500 font-bold uppercase">المسؤول</p>
+                      <p className="text-sm text-white font-bold truncate">{prod.team}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-4 border-t border-zinc-800">
+                  <span className="text-[11px] font-bold text-zinc-500 bg-zinc-800/50 px-2 py-0.5 rounded-lg">{prod.type}</span>
+                  <div className="flex gap-2">
+                    <button type="button" className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-all">
+                      <Filter className="h-4 w-4" />
+                    </button>
+                    <button type="button" className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-all">
+                      <MoreVertical className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </Motion.div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

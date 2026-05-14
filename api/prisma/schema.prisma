@@ -1,0 +1,280 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  /// يُستخدم لتحديث هيكل الجداول؛ يجب أن يكون «اتصال مباشر» وليس الـ pooler (انظر دليل-ربط-قاعدة-البيانات.md)
+  directUrl = env("DIRECT_URL")
+}
+
+/// جدول المستخدمين — حقول ملف الواجهة (مهارات، صورة، راتب، إحصاءات)
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  role         String
+  avatar       String?
+  baseSalary   Int?     @map("base_salary")
+  skillsJson   Json     @default("[]") @map("skills_json")
+  statsJson    Json     @default("{}") @map("stats_json")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  leads        Lead[]   @relation("UserLeads")
+  manualCustomersCreated ManualCustomer[] @relation("ManualCustomerCreatedBy")
+  monthlyTargets         MonthlyTarget[]
+  attendanceRecords      AttendanceRecord[]
+
+  @@map("users")
+}
+
+model ManualCustomer {
+  id             String   @id @default(cuid())
+  customerCode   String?  @map("customer_code")
+  name           String
+  company        String?
+  phone          String?
+  email          String?
+  sourceLabel    String?  @map("source_label")
+  createdAt      DateTime @default(now()) @map("created_at")
+  createdById    String   @map("created_by_id")
+  createdByName  String   @map("created_by_name")
+  createdByRole  String   @map("created_by_role")
+  createdBy      User     @relation("ManualCustomerCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([createdById])
+  @@map("manual_customers")
+}
+
+model Invoice {
+  id               String    @id @default(cuid())
+  customerCode     String?   @map("customer_code")
+  leadId           String?   @map("lead_id")
+  customerName     String    @map("customer_name")
+  amount           Int       @default(0)
+  vatRate          Float?    @map("vat_rate")
+  vatAmount        Int?      @map("vat_amount")
+  totalAmount      Int?      @map("total_amount")
+  costCenter       String?   @map("cost_center")
+  status           String
+  date             DateTime
+  recordOrigin     String?   @map("record_origin")
+  priceQuoteId     String?   @map("price_quote_id")
+  paidAmount       Int?      @map("paid_amount")
+  remainingAmount  Int?      @map("remaining_amount")
+  nextDueDate      DateTime? @map("next_due_date")
+  collectionsJson  Json      @default("[]") @map("collections_json")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  lead             Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  sourcePriceQuote PriceQuote? @relation("InvoiceSourcePriceQuote", fields: [priceQuoteId], references: [id], onDelete: SetNull)
+  priceQuotesLinked PriceQuote[] @relation("QuoteInvoiceLink")
+
+  @@index([date])
+  @@index([leadId])
+  @@index([priceQuoteId])
+  @@map("invoices")
+}
+
+model Expense {
+  id               String   @id @default(cuid())
+  title            String
+  category         String
+  amount           Int      @default(0)
+  vatRate          Float?   @map("vat_rate")
+  vatAmount        Int?     @map("vat_amount")
+  totalAmount      Int?     @map("total_amount")
+  costCenter       String?  @map("cost_center")
+  status           String
+  approvalStatus   String   @map("approval_status")
+  approvedBy       String?  @map("approved_by")
+  vendor           String?
+  note             String?
+  /** من أنشأ سجل المصروف (للعرض عند المالك والمحاسب) */
+  submittedById    String?  @map("submitted_by_id")
+  submittedByName  String?  @map("submitted_by_name")
+  /** طريقة التحصيل عند «مدفوع»: كاش أو بنك (للدفاتر) */
+  paymentMethod    String?  @map("payment_method")
+  date             DateTime
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@index([date])
+  @@map("expenses")
+}
+
+model PriceQuote {
+  id              String    @id
+  leadId          String    @map("lead_id")
+  customerName    String    @map("customer_name")
+  title           String
+  amount          Int       @default(0)
+  vatRate         Float?    @map("vat_rate")
+  vatAmount       Int?      @map("vat_amount")
+  totalAmount     Int?      @map("total_amount")
+  costCenter      String?   @map("cost_center")
+  note            String?
+  createdById     String    @map("created_by_id")
+  createdByName   String    @map("created_by_name")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  status          String
+  approvedBy      String?   @map("approved_by")
+  approvedAt      DateTime? @map("approved_at")
+  invoiceId       String?   @map("invoice_id")
+  lead            Lead      @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  invoice         Invoice?  @relation("QuoteInvoiceLink", fields: [invoiceId], references: [id], onDelete: SetNull)
+  invoicesSourcingThis Invoice[] @relation("InvoiceSourcePriceQuote")
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([leadId])
+  @@index([invoiceId])
+  @@map("price_quotes")
+}
+
+model ManualJournalEntry {
+  id          String   @id
+  date        DateTime
+  description String
+  linesJson   Json     @map("lines_json")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([date])
+  @@map("manual_journal_entries")
+}
+
+model AccountingPolicy {
+  id                     String   @id
+  policyNotes            String   @default("") @map("policy_notes")
+  allowedCostCentersJson Json     @default("[]") @map("allowed_cost_centers_json")
+  minAmountHighlight     Int      @default(0) @map("min_amount_highlight")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  @@map("accounting_policy")
+}
+
+model ClosedMonth {
+  monthKey String @id @map("month_key")
+
+  @@map("closed_months")
+}
+
+model MonthlyTarget {
+  repId             String @id @map("rep_id")
+  leadsTarget       Int    @default(0) @map("leads_target")
+  revenueTarget     Int    @default(0) @map("revenue_target")
+  callsTarget       Int    @default(0) @map("calls_target")
+  dailyCallsTarget  Int    @default(0) @map("daily_calls_target")
+  weeklyCallsTarget Int    @default(0) @map("weekly_calls_target")
+  user              User   @relation(fields: [repId], references: [id], onDelete: Cascade)
+
+  @@map("monthly_targets")
+}
+
+model CustodySettings {
+  id                     String   @id
+  custodyAccountMapJson  Json     @default("{}") @map("custody_account_map_json")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  @@map("custody_settings")
+}
+
+model AuditEvent {
+  id         String   @id
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id")
+  actorId    String   @map("actor_id")
+  actorName  String   @map("actor_name")
+  details    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("audit_events")
+}
+
+model CustodyFundDoc {
+  id        String   @id
+  docJson   Json     @map("doc_json")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("custody_funds")
+}
+
+model ShootBookingDoc {
+  id        String   @id
+  docJson   Json     @map("doc_json")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("shoot_bookings")
+}
+
+model EquipmentBookingDoc {
+  id        String   @id
+  docJson   Json     @map("doc_json")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("equipment_bookings")
+}
+
+model MeetingBookingDoc {
+  id        String   @id
+  docJson   Json     @map("doc_json")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("meeting_bookings")
+}
+
+model WorkspaceState {
+  id        String   @id @default("default")
+  docJson   Json     @default("{}") @map("doc_json")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("workspace_state")
+}
+
+model AttendanceRecord {
+  id        String   @id
+  repId     String   @map("rep_id")
+  type      String
+  source    String
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [repId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([repId])
+  @@map("attendance_records")
+}
+
+model Lead {
+  id             String    @id @default(cuid())
+  customerCode   String?   @map("customer_code")
+  name           String
+  company        String
+  phone          String
+  email          String
+  status         String
+  assignedToId   String?   @map("assigned_to_id")
+  budget         Int       @default(0)
+  companySize    String    @map("company_size")
+  source         String
+  category       String
+  score          Int       @default(0)
+  followUpAt     DateTime? @map("follow_up_at")
+  lossReasonCode String?   @map("loss_reason_code")
+  slaStatus      String    @default("مستقر") @map("sla_status")
+  timelineJson   Json      @default("[]") @map("timeline_json")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  assignee User? @relation("UserLeads", fields: [assignedToId], references: [id], onDelete: SetNull)
+  invoices Invoice[]
+  priceQuotes PriceQuote[]
+
+  @@index([status])
+  @@index([assignedToId])
+  @@map("leads")
+}
