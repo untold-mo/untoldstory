@@ -1912,7 +1912,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             : (raw?.avatar || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop'),
       skills: Array.isArray(raw?.skills) ? raw.skills : [],
       baseSalary: (() => {
-        const v = raw?.baseSalary;
+        const v = raw?.baseSalary ?? raw?.base_salary;
         if (v != null && v !== '') {
           const n = Number(v);
           if (Number.isFinite(n)) return Math.round(n);

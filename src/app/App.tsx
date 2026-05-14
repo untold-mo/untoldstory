@@ -4557,6 +4557,14 @@ const SalesManagerSettings = ({
   const [employeeEdits, setEmployeeEdits] = useState<
     Record<string, { name: string; role: User['role']; avatar: string; email: string; baseSalary: string }>
   >({});
+  /** مسودة الصف من بيانات الموظف — تُستخدم داخل setEmployeeEdits(prev) حتى لا يُستبدل الراتب بمسودة قديمة من إغلاق سابق */
+  const buildEmployeeRowDraft = (u: User) => ({
+    name: u.name,
+    role: u.role,
+    avatar: u.avatar || '',
+    email: (u.email || '').trim(),
+    baseSalary: String(u.baseSalary ?? 0),
+  });
   const [employeePwDraft, setEmployeePwDraft] = useState<Record<string, { pw: string; pw2: string }>>({});
   const [ownerPwdCurrent, setOwnerPwdCurrent] = useState('');
   const [ownerPwdNew, setOwnerPwdNew] = useState('');
@@ -4758,15 +4766,10 @@ const SalesManagerSettings = ({
       if (userId) {
         const user = users.find((u) => u.id === userId);
         if (!user) return;
-        const draft =
-          employeeEdits[userId] || {
-            name: user.name,
-            role: user.role,
-            avatar: user.avatar || '',
-            email: (user.email || '').trim(),
-            baseSalary: String(user.baseSalary ?? 0),
-          };
-        setEmployeeEdits((prev) => ({ ...prev, [userId]: { ...draft, avatar: avatarDataUrl } }));
+        setEmployeeEdits((prev) => {
+          const d = prev[userId] ?? buildEmployeeRowDraft(user);
+          return { ...prev, [userId]: { ...d, avatar: avatarDataUrl } };
+        });
       } else {
         setNewEmployee((prev) => ({ ...prev, avatar: avatarDataUrl }));
       }
@@ -4831,13 +4834,7 @@ const SalesManagerSettings = ({
       if (prev[u.id]) return prev;
       return {
         ...prev,
-        [u.id]: {
-          name: u.name,
-          role: u.role,
-          avatar: u.avatar || '',
-          email: (u.email || '').trim(),
-          baseSalary: String(u.baseSalary ?? 0),
-        },
+        [u.id]: buildEmployeeRowDraft(u),
       };
     });
   };
@@ -4874,8 +4871,9 @@ const SalesManagerSettings = ({
   };
 
   const handleSaveEmployee = async (userId: string) => {
-    const draft = employeeEdits[userId];
-    if (!draft) return;
+    const employee = users.find((u) => u.id === userId);
+    if (!employee) return;
+    const draft = employeeEdits[userId] ?? buildEmployeeRowDraft(employee);
     const emailTrim = (draft.email || '').trim().toLowerCase();
     if (canEditBranding && emailTrim && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) {
       toast.error('صيغة البريد غير صالحة');
@@ -5350,14 +5348,7 @@ const SalesManagerSettings = ({
             </thead>
             <tbody className="divide-y divide-white/10">
               {users.map((employee) => {
-                const draft =
-                  employeeEdits[employee.id] || {
-                    name: employee.name,
-                    role: employee.role,
-                    avatar: employee.avatar || '',
-                    email: (employee.email || '').trim(),
-                    baseSalary: String(employee.baseSalary ?? 0),
-                  };
+                const draft = employeeEdits[employee.id] ?? buildEmployeeRowDraft(employee);
                 return (
                   <tr key={employee.id} className={trafficRowClass(employee.role === 'مندوب' ? (employee.skills.length > 0 ? 'safe' : 'warn') : 'neutral')}>
                     <td className="p-3 font-bold">
@@ -5365,7 +5356,12 @@ const SalesManagerSettings = ({
                         <input
                           value={draft.name}
                           onFocus={() => ensureEdit(employee)}
-                          onChange={(e) => setEmployeeEdits((prev) => ({ ...prev, [employee.id]: { ...draft, name: e.target.value } }))}
+                          onChange={(e) =>
+                            setEmployeeEdits((prev) => {
+                              const d = prev[employee.id] ?? buildEmployeeRowDraft(employee);
+                              return { ...prev, [employee.id]: { ...d, name: e.target.value } };
+                            })
+                          }
                           className="bg-[#0F1528] border border-white/10 rounded-lg px-2 py-1 text-xs w-full"
                         />
                       ) : (
@@ -5381,7 +5377,10 @@ const SalesManagerSettings = ({
                           value={draft.email}
                           onFocus={() => ensureEdit(employee)}
                           onChange={(e) =>
-                            setEmployeeEdits((prev) => ({ ...prev, [employee.id]: { ...draft, email: e.target.value } }))
+                            setEmployeeEdits((prev) => {
+                              const d = prev[employee.id] ?? buildEmployeeRowDraft(employee);
+                              return { ...prev, [employee.id]: { ...d, email: e.target.value } };
+                            })
                           }
                           className="bg-[#0F1528] border border-white/10 rounded-lg px-2 py-1.5 text-[11px] font-mono w-full"
                           placeholder="email@example.com"
@@ -5402,7 +5401,7 @@ const SalesManagerSettings = ({
                           onChange={(e) => {
                             const role = e.target.value as User['role'];
                             setEmployeeEdits((prev) => {
-                              const d = prev[employee.id] || draft;
+                              const d = prev[employee.id] ?? buildEmployeeRowDraft(employee);
                               const nextBase =
                                 d.baseSalary && d.baseSalary.trim() !== ''
                                   ? d.baseSalary
@@ -5455,10 +5454,13 @@ const SalesManagerSettings = ({
                             value={draft.baseSalary}
                             onFocus={() => ensureEdit(employee)}
                             onChange={(e) =>
-                              setEmployeeEdits((prev) => ({
-                                ...prev,
-                                [employee.id]: { ...draft, baseSalary: e.target.value.replace(/[^\d]/g, '') },
-                              }))
+                              setEmployeeEdits((prev) => {
+                                const d = prev[employee.id] ?? buildEmployeeRowDraft(employee);
+                                return {
+                                  ...prev,
+                                  [employee.id]: { ...d, baseSalary: e.target.value.replace(/[^\d]/g, '') },
+                                };
+                              })
                             }
                             className="bg-[#0F1528] border border-white/10 rounded-lg px-2 py-1.5 text-[11px] font-mono w-full min-w-0"
                             placeholder="0"
@@ -10272,7 +10274,12 @@ function normalizeUserFromApi(raw: Record<string, unknown>): User {
         ? raw.avatar
         : 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop',
     skills,
-    baseSalary: typeof raw?.baseSalary === 'number' ? raw.baseSalary : undefined,
+    baseSalary: (() => {
+      const v = raw.baseSalary ?? raw['base_salary'];
+      if (v == null || v === '') return undefined;
+      const n = Number(v);
+      return Number.isFinite(n) ? Math.round(n) : undefined;
+    })(),
     stats: {
       dealsWon: Number(statsRaw.dealsWon) || 0,
       points: Number(statsRaw.points) || 0,
