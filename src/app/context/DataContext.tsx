@@ -1096,7 +1096,10 @@ interface DataContextType {
   manualCustomers: ManualCustomer[];
   addManualCustomer: (payload: { name: string; company?: string; phone?: string; email?: string; sourceLabel?: string }) => Promise<boolean>;
   updateEmployeeSalary: (userId: string, baseSalary: number) => Promise<boolean>;
-  updateEmployeeProfile: (userId: string, patch: { name?: string; avatar?: string; role?: User['role']; email?: string }) => Promise<boolean>;
+  updateEmployeeProfile: (
+    userId: string,
+    patch: { name?: string; avatar?: string; role?: User['role']; email?: string; baseSalary?: number },
+  ) => Promise<boolean>;
   /** المالك يعيّن كلمة مرور جديدة لموظف (خادم Prisma). في وضع Supabase المباشر استخدم لوحة Supabase → Authentication. */
   ownerSetEmployeePassword: (userId: string, newPassword: string) => Promise<boolean>;
   removeEmployee: (userId: string) => Promise<boolean>;
@@ -5395,7 +5398,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateEmployeeProfile = async (
     userId: string,
-    patch: { name?: string; avatar?: string; role?: User['role']; email?: string }
+    patch: { name?: string; avatar?: string; role?: User['role']; email?: string; baseSalary?: number }
   ): Promise<boolean> => {
     if (!currentUser) return false;
     const target = users.find((u) => u.id === userId);
@@ -5417,6 +5420,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const em = patch.email.trim().toLowerCase();
           if (em && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) p.email = em;
         }
+        const effectiveRole = patch.role ?? target.role;
+        if (patch.baseSalary != null && effectiveRole === 'مندوب') {
+          p.baseSalary = Math.max(0, Math.round(Number(patch.baseSalary) || 0));
+        }
         return Object.keys(p).length > 0 ? p : null;
       }
       const p: Parameters<typeof patchUserApi>[1] = {};
@@ -5427,7 +5434,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const auditDetails = `${patch.name ? `name=${patch.name};` : ''}${patch.role ? `role=${patch.role};` : ''}${
       patch.avatar !== undefined ? 'avatar=updated;' : ''
-    }${typeof patch.email === 'string' ? `email=${patch.email.trim()};` : ''}`;
+    }${typeof patch.email === 'string' ? `email=${patch.email.trim()};` : ''}${
+      patch.baseSalary != null ? `baseSalary=${patch.baseSalary};` : ''
+    }`;
 
     if (isServerDataMode()) {
       const apiPatch = buildApiPatch();
@@ -5480,7 +5489,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             avatar: nextAvatar || u.avatar,
             role: nextRole,
             skills: nextRole === 'مندوب' ? (u.skills || []) : [],
-            baseSalary: nextRole === 'مندوب' ? (u.baseSalary ?? 0) : undefined,
+            baseSalary:
+              nextRole === 'مندوب'
+                ? patch.baseSalary != null
+                  ? Math.max(0, Math.round(Number(patch.baseSalary) || 0))
+                  : (u.baseSalary ?? 0)
+                : undefined,
           };
         }),
       );
@@ -5508,7 +5522,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           avatar: nextAvatar || cu.avatar,
           role: nextRole,
           skills: nextRole === 'مندوب' ? (cu.skills || []) : [],
-          baseSalary: nextRole === 'مندوب' ? (cu.baseSalary ?? 0) : undefined,
+          baseSalary:
+            nextRole === 'مندوب'
+              ? patch.baseSalary != null
+                ? Math.max(0, Math.round(Number(patch.baseSalary) || 0))
+                : (cu.baseSalary ?? 0)
+              : undefined,
         };
       });
       addAuditEvent({

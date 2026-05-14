@@ -4541,9 +4541,10 @@ const SalesManagerSettings = ({
     avatar: '',
     loginEmail: '',
     password: '',
+    baseSalary: '10000',
   });
   const [employeeEdits, setEmployeeEdits] = useState<
-    Record<string, { name: string; role: User['role']; avatar: string; email: string }>
+    Record<string, { name: string; role: User['role']; avatar: string; email: string; baseSalary: string }>
   >({});
   const [employeePwDraft, setEmployeePwDraft] = useState<Record<string, { pw: string; pw2: string }>>({});
   const [ownerPwdCurrent, setOwnerPwdCurrent] = useState('');
@@ -4747,8 +4748,13 @@ const SalesManagerSettings = ({
         const user = users.find((u) => u.id === userId);
         if (!user) return;
         const draft =
-          employeeEdits[userId] ||
-          { name: user.name, role: user.role, avatar: user.avatar || '', email: (user.email || '').trim() };
+          employeeEdits[userId] || {
+            name: user.name,
+            role: user.role,
+            avatar: user.avatar || '',
+            email: (user.email || '').trim(),
+            baseSalary: user.role === 'مندوب' ? String(user.baseSalary ?? 0) : '',
+          };
         setEmployeeEdits((prev) => ({ ...prev, [userId]: { ...draft, avatar: avatarDataUrl } }));
       } else {
         setNewEmployee((prev) => ({ ...prev, avatar: avatarDataUrl }));
@@ -4814,7 +4820,13 @@ const SalesManagerSettings = ({
       if (prev[u.id]) return prev;
       return {
         ...prev,
-        [u.id]: { name: u.name, role: u.role, avatar: u.avatar || '', email: (u.email || '').trim() },
+        [u.id]: {
+          name: u.name,
+          role: u.role,
+          avatar: u.avatar || '',
+          email: (u.email || '').trim(),
+          baseSalary: u.role === 'مندوب' ? String(u.baseSalary ?? 0) : '',
+        },
       };
     });
   };
@@ -4845,8 +4857,12 @@ const SalesManagerSettings = ({
       avatar: newEmployee.avatar.trim() || undefined,
       email: emailTrim,
       password: pwd.length >= 8 ? pwd : undefined,
+      baseSalary:
+        newEmployee.role === 'مندوب'
+          ? Math.max(0, Math.round(Number(String(newEmployee.baseSalary).replace(/,/g, '')) || 0))
+          : undefined,
     });
-    if (ok) setNewEmployee({ name: '', role: 'مندوب', avatar: '', loginEmail: '', password: '' });
+    if (ok) setNewEmployee({ name: '', role: 'مندوب', avatar: '', loginEmail: '', password: '', baseSalary: '10000' });
   };
 
   const handleSaveEmployee = async (userId: string) => {
@@ -4857,11 +4873,14 @@ const SalesManagerSettings = ({
       toast.error('صيغة البريد غير صالحة');
       return;
     }
+    const salaryParsed =
+      draft.role === 'مندوب' ? Math.max(0, Math.round(Number(String(draft.baseSalary).replace(/,/g, '')) || 0)) : undefined;
     const ok = await updateEmployeeProfile(userId, {
       name: draft.name,
       role: draft.role,
       avatar: draft.avatar,
       ...(canEditBranding ? { email: draft.email } : {}),
+      ...(draft.role === 'مندوب' && salaryParsed !== undefined ? { baseSalary: salaryParsed } : {}),
     });
     if (!ok) {
       return;
@@ -5225,7 +5244,7 @@ const SalesManagerSettings = ({
         </div>
         {canEditBranding && (
           <div className="mb-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-2">
               <input
                 value={newEmployee.name}
                 onChange={(e) => setNewEmployee((p) => ({ ...p, name: e.target.value }))}
@@ -5234,13 +5253,32 @@ const SalesManagerSettings = ({
               />
               <select
                 value={newEmployee.role}
-                onChange={(e) => setNewEmployee((p) => ({ ...p, role: e.target.value as User['role'] }))}
+                onChange={(e) => {
+                  const role = e.target.value as User['role'];
+                  setNewEmployee((p) => ({
+                    ...p,
+                    role,
+                    baseSalary: role === 'مندوب' && (!p.baseSalary || p.baseSalary.trim() === '') ? '10000' : p.baseSalary,
+                  }));
+                }}
                 className="bg-[#0F1528] border border-white/10 rounded-xl px-3 py-2 text-sm"
               >
                 {roleOptions.map((r) => (
                   <option key={r} value={r}>{r}</option>
                 ))}
               </select>
+              <input
+                type="text"
+                inputMode="numeric"
+                dir="ltr"
+                disabled={newEmployee.role !== 'مندوب'}
+                value={newEmployee.baseSalary}
+                onChange={(e) =>
+                  setNewEmployee((p) => ({ ...p, baseSalary: e.target.value.replace(/[^\d]/g, '') }))
+                }
+                className="bg-[#0F1528] border border-white/10 rounded-xl px-3 py-2 text-sm disabled:opacity-45"
+                placeholder="راتب أساسي (مندوب)"
+              />
               <input
                 type="email"
                 autoComplete="off"
@@ -5311,6 +5349,7 @@ const SalesManagerSettings = ({
                     role: employee.role,
                     avatar: employee.avatar || '',
                     email: (employee.email || '').trim(),
+                    baseSalary: employee.role === 'مندوب' ? String(employee.baseSalary ?? 0) : '',
                   };
                 return (
                   <tr key={employee.id} className={trafficRowClass(employee.role === 'مندوب' ? (employee.skills.length > 0 ? 'safe' : 'warn') : 'neutral')}>
@@ -5353,7 +5392,19 @@ const SalesManagerSettings = ({
                         <select
                           value={draft.role}
                           onFocus={() => ensureEdit(employee)}
-                          onChange={(e) => setEmployeeEdits((prev) => ({ ...prev, [employee.id]: { ...draft, role: e.target.value as User['role'] } }))}
+                          onChange={(e) => {
+                            const role = e.target.value as User['role'];
+                            setEmployeeEdits((prev) => {
+                              const d = prev[employee.id] || draft;
+                              const nextBase =
+                                role === 'مندوب'
+                                  ? d.baseSalary && d.baseSalary.trim() !== ''
+                                    ? d.baseSalary
+                                    : String(employee.baseSalary ?? 10000)
+                                  : '';
+                              return { ...prev, [employee.id]: { ...d, role, baseSalary: nextBase } };
+                            });
+                          }}
                           className="bg-[#0F1528] border border-white/10 rounded-lg px-2 py-1 text-xs"
                         >
                           {roleOptions.map((r) => (
@@ -5389,7 +5440,32 @@ const SalesManagerSettings = ({
                         <img src={employee.avatar} alt="" className="w-9 h-9 rounded-lg object-cover border border-white/15" />
                       )}
                     </td>
-                    <td className="p-3">{employee.role === 'مندوب' ? `${(employee.baseSalary || 0).toLocaleString()} ج.م` : '—'}</td>
+                    <td className="p-3 min-w-[120px]">
+                      {canOwnerEditEmployeeRow(employee) && draft.role === 'مندوب' ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            dir="ltr"
+                            value={draft.baseSalary}
+                            onFocus={() => ensureEdit(employee)}
+                            onChange={(e) =>
+                              setEmployeeEdits((prev) => ({
+                                ...prev,
+                                [employee.id]: { ...draft, baseSalary: e.target.value.replace(/[^\d]/g, '') },
+                              }))
+                            }
+                            className="bg-[#0F1528] border border-white/10 rounded-lg px-2 py-1.5 text-[11px] font-mono w-full min-w-0"
+                            placeholder="0"
+                          />
+                          <span className="text-[10px] text-zinc-500 shrink-0">ج.م</span>
+                        </div>
+                      ) : employee.role === 'مندوب' ? (
+                        `${(employee.baseSalary || 0).toLocaleString('ar-EG')} ج.م`
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td className="p-3 text-xs text-zinc-300">
                       {employee.role === 'مندوب'
                         ? (employee.skills.length > 0 ? `جاهز (${employee.skills.length} مهارة)` : 'يحتاج تحديد مهارات')
