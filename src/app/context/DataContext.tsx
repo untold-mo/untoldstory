@@ -5,6 +5,7 @@ import { isServerDataMode } from '@/config/dataSource';
 import { isSupabaseDirectMode } from '@/config/supabaseMode';
 import { fetchSupabaseWorkspaceSnapshot } from '@/lib/supabase/loadWorkspaceSnapshot';
 import { supabaseCreateLead, supabaseDeleteLead, supabasePatchLead } from '@/lib/supabase/leadsRepo';
+import type { Session } from '@supabase/supabase-js';
 import { getSupabase } from '@/lib/supabase/client';
 import { mapUserFromRow } from '@/lib/supabase/postgrestMappers';
 import {
@@ -1766,6 +1767,11 @@ function hasServerAuthToken(): boolean {
   }
 }
 
+/** أثناء hydrate من localStorage: لا تفرّغ المستخدم لو جلسة Supabase قادمة من onAuthStateChange */
+function shouldPreserveUserForPendingSupabaseSession(): boolean {
+  return isSupabaseDirectMode() && hasSupabasePersistedSessionInLocalStorage();
+}
+
 /** مفاتيح supabase-js في localStorage (مثل sb-xxx-auth-token) — لازم تمسح مع الخروج وإلا الجلسة ترجع بعد الريفريش */
 function clearSupabasePersistedAuthFromLocalStorage() {
   if (typeof window === 'undefined') return;
@@ -1939,6 +1945,80 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setCurrentUserState(next);
   }, []);
+
+  /** مزامنة مستخدم التطبيق مع جلسة Supabase — يمنع «دخول ثم خروج فوري» بسبب سباق bootstrap أو تبويب آخر يمسح prod_system_current_user */
+  useEffect(() => {
+    if (!isSupabaseDirectMode()) return;
+    let cancelled = false;
+    const syncFromSession = async (session: Session | null) => {
+      if (cancelled) return;
+      if (!session?.user?.email) {
+        rehydrateUser(null);
+        try {
+          localStorage.removeItem('prod_system_supabase');
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
+      const em = session.user.email.trim().toLowerCase();
+      try {
+        const sb = getSupabase();
+        const { data: profile, error } = await sb
+          .from('users')
+          .select('id,email,name,role,avatar,base_salary,skills_json,stats_json,created_at,updated_at')
+          .eq('email', em)
+          .maybeSingle();
+        if (cancelled) return;
+        if (error || !profile) {
+          await sb.auth.signOut();
+          try {
+            localStorage.removeItem('prod_system_supabase');
+          } catch {
+            /* ignore */
+          }
+          rehydrateUser(null);
+          return;
+        }
+        try {
+          localStorage.setItem('prod_system_supabase', '1');
+        } catch {
+          /* ignore */
+        }
+        try {
+          window.sessionStorage.removeItem(SESSION_SIGNED_OUT_KEY);
+        } catch {
+          /* ignore */
+        }
+        rehydrateUser(mapUserFromRow(profile as Record<string, unknown>));
+      } catch {
+        try {
+          localStorage.removeItem('prod_system_supabase');
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+
+    const sb = getSupabase();
+    const {
+      data: { subscription },
+    } = sb.auth.onAuthStateChange((event, session) => {
+      if (event === 'TOKEN_REFRESHED') return;
+      void syncFromSession(session);
+    });
+    void (async () => {
+      const {
+        data: { session },
+      } = await sb.auth.getSession();
+      if (!cancelled) void syncFromSession(session);
+    })();
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, [rehydrateUser]);
+
   const [monthlyTargets, setMonthlyTargets] = useState<MonthlyTarget[]>(DEFAULT_TARGETS);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [closedMonths, setClosedMonths] = useState<string[]>([]);
@@ -2548,8 +2628,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const nu = normalizeUser(parsedUser);
           const serverAuth = hasServerAuthToken();
           if (!serverAuth && (isServerDataMode() || nu.authSource === 'database')) {
-            localStorage.removeItem('prod_system_current_user');
-            rehydrateUser(null);
+            if (!shouldPreserveUserForPendingSupabaseSession()) {
+              localStorage.removeItem('prod_system_current_user');
+              rehydrateUser(null);
+            }
           } else if (!serverAuth) {
             rehydrateUser(nu);
           } else {
@@ -2560,8 +2642,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 : nu,
             );
           }
-        } else rehydrateUser(null);
-      } else rehydrateUser(null);
+        } else if (!shouldPreserveUserForPendingSupabaseSession()) rehydrateUser(null);
+      } else if (!shouldPreserveUserForPendingSupabaseSession()) rehydrateUser(null);
     } else if (isServerDataMode()) {
       setLeads([]);
       setUsers([]);
@@ -2594,7 +2676,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCustodyFunds([]);
       setCustodyAccountByCategory(DEFAULT_CUSTODY_ACCOUNT_BY_CATEGORY);
       setAttendanceRecords([]);
-      rehydrateUser(null);
+      if (!shouldPreserveUserForPendingSupabaseSession()) rehydrateUser(null);
     } else {
       const initialLeads: Lead[] = [
         {
@@ -2695,7 +2777,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setManualCustomers([]);
       setInvoices(seededInvoices);
       setExpenses(seededExpenses);
-      rehydrateUser(null);
+      if (!shouldPreserveUserForPendingSupabaseSession()) rehydrateUser(null);
       setMonthlyTargets(DEFAULT_TARGETS);
       setAuditEvents(DEMO_AUDIT_EVENTS);
       setClosedMonths([]);
@@ -2725,7 +2807,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('prod_system_invoices', JSON.stringify(seededInvoices));
       localStorage.setItem('prod_system_expenses', JSON.stringify(seededExpenses));
       localStorage.setItem('prod_system_closed_months', JSON.stringify([]));
-      localStorage.removeItem('prod_system_current_user');
+      if (!shouldPreserveUserForPendingSupabaseSession()) localStorage.removeItem('prod_system_current_user');
       localStorage.setItem('prod_system_targets', JSON.stringify(DEFAULT_TARGETS));
       localStorage.setItem('prod_system_audit', JSON.stringify(DEMO_AUDIT_EVENTS));
       localStorage.setItem('prod_system_chart_of_accounts', JSON.stringify(DEFAULT_CHART_OF_ACCOUNTS));
@@ -2778,34 +2860,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     if (isSupabaseDirectMode()) {
-      let cancelled = false;
-      const epochAtStart = authBootstrapEpochRef.current;
-      void (async () => {
-        try {
-          const sb = getSupabase();
-          const { data: { session } } = await sb.auth.getSession();
-          if (cancelled || epochAtStart !== authBootstrapEpochRef.current) return;
-          if (!session?.user?.email) return;
-          const { data: profile, error } = await sb
-            .from('users')
-            .select('id,email,name,role,avatar,base_salary,skills_json,stats_json,created_at,updated_at')
-            .eq('email', session.user.email.trim().toLowerCase())
-            .maybeSingle();
-          if (cancelled || epochAtStart !== authBootstrapEpochRef.current) return;
-          if (error || !profile) {
-            await sb.auth.signOut();
-            localStorage.removeItem('prod_system_supabase');
-            return;
-          }
-          localStorage.setItem('prod_system_supabase', '1');
-          rehydrateUser(mapUserFromRow(profile as Record<string, unknown>));
-        } catch {
-          if (!cancelled) localStorage.removeItem('prod_system_supabase');
-        }
-      })();
-      return () => {
-        cancelled = true;
-      };
+      return;
     }
 
     const token = localStorage.getItem('prod_system_jwt');
@@ -3690,6 +3745,31 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 /* ignore */
               }
             } else {
+              if (isSupabaseDirectMode() && hasSupabasePersistedSessionInLocalStorage()) {
+                void (async () => {
+                  try {
+                    const sb = getSupabase();
+                    const { data: { session } } = await sb.auth.getSession();
+                    const em = session?.user?.email?.trim().toLowerCase();
+                    if (!em) return;
+                    const { data: profile, error } = await sb
+                      .from('users')
+                      .select('id,email,name,role,avatar,base_salary,skills_json,stats_json,created_at,updated_at')
+                      .eq('email', em)
+                      .maybeSingle();
+                    if (error || !profile) return;
+                    try {
+                      localStorage.setItem('prod_system_supabase', '1');
+                    } catch {
+                      /* ignore */
+                    }
+                    rehydrateUser(mapUserFromRow(profile as Record<string, unknown>));
+                  } catch {
+                    /* ignore */
+                  }
+                })();
+                break;
+              }
               authBootstrapEpochRef.current += 1;
               rehydrateUser(null);
             }
