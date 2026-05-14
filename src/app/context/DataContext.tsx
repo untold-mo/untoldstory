@@ -1737,11 +1737,29 @@ function clearSessionBookingBackups() {
   }
 }
 
+/** جلسة مكتوبة من supabase-js قبل/بدون prod_system_supabase — بدونها يُمسح prod_system_current_user ويُعاد المستخدم لصفحة الدخول فوراً */
+function hasSupabasePersistedSessionInLocalStorage(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i);
+      if (k && k.startsWith('sb-') && k.includes('auth-token')) return true;
+    }
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
 /** جلسة REST (JWT) أو وضع Supabase المباشر بعد تسجيل الدخول */
 function hasServerAuthToken(): boolean {
   if (typeof window === 'undefined') return false;
   try {
-    if (isSupabaseDirectMode() && localStorage.getItem('prod_system_supabase') === '1') return true;
+    if (isSupabaseDirectMode()) {
+      if (localStorage.getItem('prod_system_supabase') === '1') return true;
+      if (hasSupabasePersistedSessionInLocalStorage()) return true;
+      return false;
+    }
     return Boolean(localStorage.getItem('prod_system_jwt'));
   } catch {
     return false;
