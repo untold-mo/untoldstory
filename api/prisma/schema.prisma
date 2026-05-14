@@ -124,6 +124,8 @@ model PriceQuote {
   approvedBy      String?   @map("approved_by")
   approvedAt      DateTime? @map("approved_at")
   invoiceId       String?   @map("invoice_id")
+  companyMarginPercent Float? @map("company_margin_percent")
+  productionCostAmount Int?   @map("production_cost_amount")
   lead            Lead      @relation(fields: [leadId], references: [id], onDelete: Restrict)
   invoice         Invoice?  @relation("QuoteInvoiceLink", fields: [invoiceId], references: [id], onDelete: SetNull)
   invoicesSourcingThis Invoice[] @relation("InvoiceSourcePriceQuote")

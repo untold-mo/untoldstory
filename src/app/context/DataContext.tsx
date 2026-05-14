@@ -218,6 +218,10 @@ export interface PriceQuote {
   clientAcceptedAt?: string;
   clientRejectedAt?: string;
   clientRejectionNote?: string;
+  /** نسبة هامش الشركة على أساس بنود التكلفة (يحددها مدير الإنتاج عند التسعير) */
+  companyMarginPercent?: number;
+  /** مجموع بنود التكلفة قبل تطبيق نسبة الشركة */
+  productionCostAmount?: number;
 }
 
 export interface ClientPayment {
@@ -1110,7 +1114,14 @@ interface DataContextType {
   updateInvoiceStatus: (invoiceId: string, status: Invoice['status']) => Promise<boolean>;
   recordInvoiceCollection: (invoiceId: string, payload: { amount: number; method: 'كاش' | 'تحويل'; nextDueDate?: string; note?: string }) => Promise<boolean>;
   addPriceQuote: (data: Omit<PriceQuote, 'id' | 'createdAt' | 'status' | 'createdById' | 'createdByName' | 'approvedBy' | 'approvedAt' | 'invoiceId' | 'pricedById' | 'pricedByName' | 'pricedAt'>) => Promise<boolean>;
-  productionPriceQuote: (quoteId: string, amount: number, vatRate: number, pricingNote?: string) => Promise<boolean>;
+  productionPriceQuote: (
+    quoteId: string,
+    amount: number,
+    vatRate: number,
+    pricingNote?: string,
+    companyMarginPercent?: number,
+    productionCostAmount?: number,
+  ) => Promise<boolean>;
   reassignPricingRequest: (quoteId: string, toUserId: string, toUserName: string) => Promise<boolean>;
   approvePriceQuote: (quoteId: string, paymentSchedule?: PaymentInstallment[], initialPayment?: number) => Promise<boolean>;
   rejectPriceQuote: (quoteId: string) => Promise<boolean>;
@@ -6449,6 +6460,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     amount: number,
     vatRate: number,
     pricingNote?: string,
+    companyMarginPercent?: number,
+    productionCostAmount?: number,
   ): Promise<boolean> => {
     if (!currentUser) return false;
     if (!(currentUser.role === 'مدير إنتاج' || currentUser.role === 'مالك' || currentUser.role === 'مدير مبيعات')) return false;
@@ -6460,6 +6473,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const vatAmount = Math.round(amt * (vr / 100));
     const totalAmount = amt + vatAmount;
     const nowIso = new Date().toISOString();
+    const cmpRaw = typeof companyMarginPercent === 'number' ? companyMarginPercent : 0;
+    const cmp = Math.min(100, Math.max(0, cmpRaw));
+    const costStored =
+      typeof productionCostAmount === 'number' && productionCostAmount >= 0
+        ? Math.round(productionCostAmount)
+        : undefined;
     const patch: Partial<PriceQuote> = {
       status: 'قيد اعتماد المالك',
       amount: amt,
@@ -6470,6 +6489,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       pricedByName: currentUser.name,
       pricedAt: nowIso,
       pricingNote: pricingNote?.trim() || undefined,
+      companyMarginPercent: cmp,
+      ...(costStored !== undefined ? { productionCostAmount: costStored } : {}),
     };
     if (isServerDataMode()) {
       try {
@@ -6485,7 +6506,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       action: 'تسعير عرض سعر من الإنتاج',
       entityType: 'system',
       entityId: quoteId,
-      details: `${quote.title} — ${amt.toLocaleString()} ج.م — بانتظار اعتماد المالك`,
+      details: `${quote.title} — قبل ضريبة ${amt.toLocaleString()} ج.م${cmp > 0 ? ` — هامش شركة ${cmp}%` : ''}${costStored !== undefined ? ` — تكلفة بنود ${costStored.toLocaleString()} ج.م` : ''} — بانتظار اعتماد المالك`,
     });
     return true;
   };

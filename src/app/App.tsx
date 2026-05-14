@@ -8455,7 +8455,16 @@ const ApprovalCenter = ({
               ) : (
                 <p className="text-xs text-zinc-400 mt-1">{q.customerName}</p>
               )}
-              <p className="text-xs text-zinc-300 mt-1">{q.amount.toLocaleString()} ج.م {q.vatRate ? `+ ضريبة ${q.vatRate}%` : ''} — {q.costCenter || 'عام'}</p>
+              <p className="text-xs text-zinc-300 mt-1">
+                {typeof q.productionCostAmount === 'number' && q.productionCostAmount > 0 && (q.companyMarginPercent ?? 0) > 0 && (
+                  <span className="block text-teal-300/90">
+                    بنود تكلفة: {q.productionCostAmount.toLocaleString('ar-EG')} ج.م — هامش شركة {q.companyMarginPercent}%
+                  </span>
+                )}
+                {q.amount.toLocaleString('ar-EG')} ج.م قبل الضريبة
+                {q.vatRate != null ? ` — ضريبة ${q.vatRate}%` : ''}
+                {typeof q.totalAmount === 'number' ? ` — إجمالي ${q.totalAmount.toLocaleString('ar-EG')} ج.م` : ''} — {q.costCenter || 'عام'}
+              </p>
               {q.pricedByName && <p className="text-[10px] text-teal-300/80 mt-0.5">سُعِّر بواسطة: {q.pricedByName}</p>}
               <p className="text-[10px] text-zinc-500 mt-1">من: {q.createdByName} {q.note && `— ${q.note}`}</p>
               {ownerOnly ? (
@@ -8735,9 +8744,9 @@ const ProductionCustodyDashboard = () => {
   } = useData();
   type PricingLine = { id: string; desc: string; amount: string };
   const newLine = (): PricingLine => ({ id: `pl-${Date.now()}-${Math.random().toString(36).slice(2,6)}`, desc: '', amount: '' });
-  type PricingDraft = { lines: PricingLine[]; vatRate: string; note: string };
+  type PricingDraft = { lines: PricingLine[]; vatRate: string; note: string; companyMarginPercent: string };
   const [pricingForm, setPricingForm] = useState<Record<string, PricingDraft>>({});
-  const getPF = (id: string): PricingDraft => pricingForm[id] || { lines: [newLine()], vatRate: '14', note: '' };
+  const getPF = (id: string): PricingDraft => pricingForm[id] || { lines: [newLine()], vatRate: '14', note: '', companyMarginPercent: '0' };
   const setPF = (id: string, patch: Partial<PricingDraft>) =>
     setPricingForm((prev) => ({ ...prev, [id]: { ...getPF(id), ...patch } }));
   const setPFLine = (qid: string, lineId: string, patch: Partial<PricingLine>) =>
@@ -9078,9 +9087,12 @@ const ProductionCustodyDashboard = () => {
           ) : (
             myPricingQueue.map((q: PriceQuote) => {
               const draft = getPF(q.id);
-              const subtotal = calcPFTotal(q.id);
-              const vatAmt = Math.round(subtotal * (Number(draft.vatRate) || 0) / 100);
-              const total = subtotal + vatAmt;
+              const costSubtotal = calcPFTotal(q.id);
+              const companyPct = Math.min(100, Math.max(0, Number(draft.companyMarginPercent) || 0));
+              const preVatAmount = Math.round(costSubtotal * (1 + companyPct / 100));
+              const companyMarginAmt = preVatAmount - costSubtotal;
+              const vatAmt = Math.round(preVatAmount * (Number(draft.vatRate) || 0) / 100);
+              const total = preVatAmount + vatAmt;
               return (
                 <div key={q.id} className="bg-[#0F1528]/80 border border-amber-400/25 rounded-3xl p-6 space-y-5">
                   <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -9179,15 +9191,45 @@ const ProductionCustodyDashboard = () => {
                     ))}
                     <div className="bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 space-y-1.5 mt-1">
                       <div className="flex items-center justify-between text-sm text-zinc-400">
-                        <span>إجمالي قبل الضريبة</span>
-                        <span className="font-black text-white">{subtotal.toLocaleString('ar-EG')} ج.م</span>
+                        <span>مجموع بنود التكلفة</span>
+                        <span className="font-black text-white">{costSubtotal.toLocaleString('ar-EG')} ج.م</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-zinc-400">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="shrink-0">نسبة الشركة (هامش)</span>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              step={0.5}
+                              value={draft.companyMarginPercent}
+                              onChange={(e) => setPF(q.id, { companyMarginPercent: e.target.value })}
+                              className="w-16 bg-[#0B1020] border border-white/15 rounded-lg px-2 py-0.5 text-xs text-center"
+                            />
+                            <span>%</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="shrink-0">ضريبة القيمة المضافة</span>
+                          <div className="flex items-center gap-1">
+                            <input type="number" min={0} max={100} value={draft.vatRate} onChange={(e) => setPF(q.id, { vatRate: e.target.value })} className="w-16 bg-[#0B1020] border border-white/15 rounded-lg px-2 py-0.5 text-xs text-center" />
+                            <span>%</span>
+                          </div>
+                        </div>
+                      </div>
+                      {companyPct > 0 && (
+                        <div className="flex items-center justify-between text-xs text-teal-300/90">
+                          <span>مبلغ هامش الشركة</span>
+                          <span className="font-bold">{companyMarginAmt.toLocaleString('ar-EG')} ج.م</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between text-sm text-zinc-400 border-t border-white/5 pt-1.5">
+                        <span>المبلغ قبل الضريبة (للعميل)</span>
+                        <span className="font-black text-white">{preVatAmount.toLocaleString('ar-EG')} ج.م</span>
                       </div>
                       <div className="flex items-center justify-between text-sm text-zinc-400">
-                        <div className="flex items-center gap-2">
-                          <span>ضريبة</span>
-                          <input type="number" min={0} max={100} value={draft.vatRate} onChange={(e) => setPF(q.id, { vatRate: e.target.value })} className="w-16 bg-[#0B1020] border border-white/15 rounded-lg px-2 py-0.5 text-xs text-center" />
-                          <span>%</span>
-                        </div>
+                        <span>قيمة الضريبة</span>
                         <span className="font-black text-amber-300">{vatAmt.toLocaleString('ar-EG')} ج.م</span>
                       </div>
                       <div className="border-t border-white/10 pt-1.5 flex items-center justify-between">
@@ -9205,8 +9247,15 @@ const ProductionCustodyDashboard = () => {
                   <button
                     type="button"
                     onClick={async () => {
-                      if (subtotal <= 0) { toast.error('أضف بند واحد على الأقل بسعر'); return; }
-                      const ok = await productionPriceQuote(q.id, subtotal, Number(draft.vatRate) || 14, draft.note || undefined);
+                      if (costSubtotal <= 0) { toast.error('أضف بند واحد على الأقل بسعر'); return; }
+                      const ok = await productionPriceQuote(
+                        q.id,
+                        preVatAmount,
+                        Number(draft.vatRate) || 14,
+                        draft.note || undefined,
+                        companyPct,
+                        costSubtotal,
+                      );
                       if (ok) { toast.success('تم إرسال السعر للمالك للاعتماد'); setPricingForm((p) => { const n = { ...p }; delete n[q.id]; return n; }); }
                       else toast.error('تعذر التسعير');
                     }}

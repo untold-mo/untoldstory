@@ -17,5 +17,7 @@ export function priceQuoteToJson(row) {
     approvedBy: row.approvedBy ?? undefined,
     approvedAt: row.approvedAt ? row.approvedAt.toISOString() : undefined,
     invoiceId: row.invoiceId ?? undefined,
+    companyMarginPercent: typeof row.companyMarginPercent === 'number' ? row.companyMarginPercent : undefined,
+    productionCostAmount: typeof row.productionCostAmount === 'number' ? row.productionCostAmount : undefined,
   };
 }

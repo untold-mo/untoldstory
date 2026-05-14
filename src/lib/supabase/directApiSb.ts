@@ -729,7 +729,7 @@ export async function patchExpenseSb(id: string, patch: Partial<Expense>): Promi
 /* ---------- price quotes ---------- */
 export async function fetchPriceQuotesSb(): Promise<PriceQuote[]> {
   const actor = await getSupabaseActor();
-  if (!['مالك', 'مدير مبيعات', 'محاسب', 'مندوب'].includes(actor.role)) throw new Error('غير مصرح');
+  if (!['مالك', 'مدير مبيعات', 'محاسب', 'مندوب', 'مدير إنتاج'].includes(actor.role)) throw new Error('غير مصرح');
   const sb = getSupabase();
   let q = sb.from('price_quotes').select('*').order('created_at', { ascending: false });
   if (actor.role === 'مندوب') q = q.eq('created_by_id', actor.id);
@@ -817,6 +817,12 @@ export async function patchPriceQuoteSb(
   if (patch.clientAcceptedAt != null) rowUp.client_accepted_at = String(patch.clientAcceptedAt);
   if (patch.clientRejectedAt != null) rowUp.client_rejected_at = String(patch.clientRejectedAt);
   if (patch.clientRejectionNote != null) rowUp.client_rejection_note = String(patch.clientRejectionNote);
+  if (patch.companyMarginPercent !== undefined) {
+    rowUp.company_margin_percent = Math.min(100, Math.max(0, Number(patch.companyMarginPercent) || 0));
+  }
+  if (patch.productionCostAmount !== undefined) {
+    rowUp.production_cost_amount = Math.round(Number(patch.productionCostAmount) || 0);
+  }
 
   const { data, error } = await sb.from('price_quotes').update(rowUp).eq('id', id).select('*').single();
   if (error || !data) throw new Error(error?.message || 'فشل التحديث');

@@ -325,6 +325,18 @@ export function mapPriceQuoteFromRow(r: Record<string, unknown>): PriceQuote {
     clientAcceptedAt: r.client_accepted_at ? iso(r.client_accepted_at) : undefined,
     clientRejectedAt: r.client_rejected_at ? iso(r.client_rejected_at) : undefined,
     clientRejectionNote: r.client_rejection_note ? String(r.client_rejection_note) : undefined,
+    companyMarginPercent: (() => {
+      const v = r.company_margin_percent;
+      if (v == null || v === '') return undefined;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : undefined;
+    })(),
+    productionCostAmount: (() => {
+      const v = r.production_cost_amount;
+      if (v == null || v === '') return undefined;
+      const n = Number(v);
+      return Number.isFinite(n) ? Math.round(n) : undefined;
+    })(),
   };
 }
 
