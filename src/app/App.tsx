@@ -26,6 +26,7 @@ import {
   ChartOfAccount,
   ManualJournalLine,
   PriceQuote,
+  PaymentInstallment,
   ClientPayment,
   CustodyFund,
   CustodySpendLine,
@@ -3550,7 +3551,7 @@ const PriceQuoteSubmitModal = ({
 // --- Leads Workspace ---
 
 const LeadsWorkspace = () => {
-  const { leads, users, invoices, expenses, shootBookings, equipmentBookings, meetingBookings, manualCustomers, currentUser, addLead, addManualCustomer, assignLead, updateLeadStatus, deleteLead } = useData();
+  const { leads, users, invoices, expenses, priceQuotes, shootBookings, equipmentBookings, meetingBookings, manualCustomers, currentUser, addLead, addManualCustomer, assignLead, updateLeadStatus, deleteLead } = useData();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'الكل' | LeadStatus>('الكل');
   const [sourceFilter, setSourceFilter] = useState<LeadSourceFilter>('all');
@@ -3683,6 +3684,21 @@ const LeadsWorkspace = () => {
       result = result.filter(l => l.assignedTo === currentUser.id);
     }
 
+    if (currentUser.role === 'مدير إنتاج') {
+      const uid = String(currentUser.id).trim();
+      const linkedLeadIds = new Set(
+        priceQuotes
+          .filter(
+            (q) =>
+              String(q.productionAssignedId || '').trim() === uid ||
+              String(q.pricedById || '').trim() === uid,
+          )
+          .map((q) => q.leadId)
+          .filter(Boolean),
+      );
+      result = result.filter((l) => linkedLeadIds.has(l.id));
+    }
+
     if (currentUser.role !== 'محاسب' && assignedFilter === 'mine') {
       result = result.filter(l => l.assignedTo === currentUser.id);
     }
@@ -3721,7 +3737,7 @@ const LeadsWorkspace = () => {
     }
 
     return result;
-  }, [leads, invoices, currentUser, assignedFilter, statusFilter, sourceFilter, overdueOnly, repUserFilterId, search]);
+  }, [leads, invoices, priceQuotes, currentUser, assignedFilter, statusFilter, sourceFilter, overdueOnly, repUserFilterId, search]);
 
   const inboundHubStats = useMemo(() => {
     if (!isLeadsDistributionHub) return null;
@@ -4621,6 +4637,7 @@ const LeadsWorkspace = () => {
               <div className="bg-[#0F1528] border border-white/10 rounded-xl p-3"><p className="text-[11px] text-zinc-400">مرفقات موثقة</p><p className="text-lg font-black text-cyan-300">{client360Data.evidenceItems.length}</p></div>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {currentUser?.role !== 'محاسب' && (
               <div className="bg-[#0F1528]/70 border border-white/10 rounded-xl p-4">
                 <h4 className="font-black mb-3">آخر التواصلات</h4>
                 <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar pr-1">
@@ -4632,6 +4649,8 @@ const LeadsWorkspace = () => {
                   ))}
                 </div>
               </div>
+              )}
+              {currentUser?.role !== 'محاسب' && (
               <div className="bg-[#0F1528]/70 border border-white/10 rounded-xl p-4">
                 <h4 className="font-black mb-3">أرشيف الأدلة</h4>
                 <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar pr-1">
@@ -4644,6 +4663,7 @@ const LeadsWorkspace = () => {
                   {client360Data.evidenceItems.length === 0 && <p className="text-sm text-zinc-500">لا توجد أدلة مرفقة حتى الآن.</p>}
                 </div>
               </div>
+              )}
               <div className="bg-[#0F1528]/70 border border-white/10 rounded-xl p-4">
                 <h4 className="font-black mb-3">ملخص فواتير العميل</h4>
                 <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar pr-1">
@@ -10951,8 +10971,12 @@ const Root = () => {
     return () => window.removeEventListener('prod-system-nav-intent', onNavIntent);
   }, [allowedTabs, handleTabChange]);
 
-  const resolveNotificationTab = (n: { navigateTab?: string; entityType?: string; title?: string; message?: string }) =>
-    resolveNotificationTabForRole(n, allowedTabs);
+  const resolveNotificationTab = (n: {
+    navigateTab?: string;
+    entityType?: SystemNotification['entityType'];
+    title?: string;
+    message?: string;
+  }) => resolveNotificationTabForRole(n, allowedTabs);
   const resolveFinanceSubTab = (n: { entityType?: string; title?: string; message?: string }) => {
     const text = `${n.title || ''} ${n.message || ''}`;
     if (/مرتبات|حضور|انصراف|موظفين/i.test(text)) return 'reps' as const;
@@ -10962,7 +10986,7 @@ const Root = () => {
     if (n.entityType === 'invoice' || /فاتور|قسط|أقساط|تحصيل|ذمم/i.test(text)) return 'invoices' as const;
     return 'invoices' as const;
   };
-  const handleNotificationClick = (n: { navigateTab?: string; entityType?: string; title?: string; message?: string }) => {
+  const handleNotificationClick = (n: Pick<SystemNotification, 'navigateTab' | 'entityType' | 'title' | 'message'>) => {
     const tab = resolveNotificationTab(n);
     if (!tab) {
       toast.info('لا يوجد تبويب متاح لهذا التنبيه ضمن صلاحياتك');
@@ -12021,8 +12045,11 @@ const Root = () => {
         {activeTab === 'accountant' && <AccountantView onGoToTab={handleTabChange} />}
         {activeTab === 'settings' && <SalesManagerSettings visualMode={uiVisualMode} onVisualModeChange={setUiVisualMode} />}
         
-        {activeTab === 'dashboard' && currentUser.role !== 'مالك' && currentUser.role !== 'محاسب' && currentUser.role !== 'مدير إنتاج' && (
+        {activeTab === 'dashboard' && currentUser.role === 'مندوب' && (
           <RepProfessionalDashboard currentUser={currentUser} onGoToTab={handleTabChange} />
+        )}
+        {activeTab === 'dashboard' && currentUser.role === 'مدير مبيعات' && (
+          <TeamPerformanceHub onGoToTab={handleTabChange} />
         )}
         {activeTab === 'production' && currentUser.role === 'مدير إنتاج' && <ProductionCustodyDashboard />}
         {activeTab === 'performance' && currentUser.role === 'مندوب' && (

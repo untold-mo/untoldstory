@@ -60,8 +60,8 @@ BEGIN
 END $$;
 
 -- -----------------------------------------------------------------------------
--- 3) Row Level Security — أي مستخدم مسجّل (authenticated) يصل لكل الجداول
--- مناسب لفريق داخلي. للإنترنت العام: استبدل USING (true) بسياسات أضيق.
+-- 3) Row Level Security — سياسات مؤقتة مفتوحة (للتطوير السريع)
+-- ⚠️ للإنتاج: شغّل بعد هذا الملف → supabase/sql/role_based_rls_policies.sql
 -- -----------------------------------------------------------------------------
 ALTER TABLE IF EXISTS public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.leads ENABLE ROW LEVEL SECURITY;

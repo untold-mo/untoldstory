@@ -46,8 +46,10 @@ function formatArDate(iso: string) {
   }
 }
 
+const NAV_INTENT_KEY = 'prod_system_nav_intent';
+
 export default function ProductionPage() {
-  const { shootBookings, equipmentBookings, meetingBookings, removeShootBooking, removeEquipmentBooking, removeMeetingBooking } = useData();
+  const { currentUser, shootBookings, equipmentBookings, meetingBookings, removeShootBooking, removeEquipmentBooking, removeMeetingBooking } = useData();
   const [filter, setFilter] = useState<ProdFilter>('الكل');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -63,9 +65,25 @@ export default function ProductionPage() {
     return () => document.removeEventListener('mousedown', handler);
   }, [openMenuId]);
 
+  const scopedShoot = useMemo(() => {
+    if (currentUser?.role !== 'مدير إنتاج') return shootBookings;
+    const uid = String(currentUser.id).trim();
+    return shootBookings.filter(
+      (b) =>
+        String(b.productionAssignedId || '').trim() === uid ||
+        b.repId === uid,
+    );
+  }, [shootBookings, currentUser?.id, currentUser?.role]);
+
+  const goBookingsTab = () => {
+    localStorage.setItem(NAV_INTENT_KEY, JSON.stringify({ tab: 'bookings' }));
+    window.dispatchEvent(new CustomEvent('prod-system-nav-intent'));
+    toast.info('انتقل إلى تبويب «الحجوزات» لإضافة جلسة تصوير');
+  };
+
   const cards = useMemo<ProdCard[]>(() => {
     const out: ProdCard[] = [];
-    for (const b of shootBookings) {
+    for (const b of scopedShoot) {
       out.push({
         id: `sh-${b.id}`,
         title: `تصوير — ${b.customerName}`,
@@ -105,7 +123,7 @@ export default function ProductionPage() {
       });
     }
     return out.sort((a, b) => b.id.localeCompare(a.id));
-  }, [shootBookings, equipmentBookings, meetingBookings]);
+  }, [scopedShoot, equipmentBookings, meetingBookings]);
 
   const visible = useMemo(() => {
     if (filter === 'الكل') return cards;
@@ -129,7 +147,11 @@ export default function ProductionPage() {
           <button type="button" className="p-2.5 bg-[#18181B] border border-zinc-800 rounded-xl text-zinc-400 hover:text-white transition-all">
             <Calendar className="h-5 w-5" />
           </button>
-          <button type="button" className="flex items-center justify-center gap-2 bg-[#6366F1] text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-[#5254E2] transition-all shadow-lg shadow-[#6366F1]/20">
+          <button
+            type="button"
+            onClick={goBookingsTab}
+            className="flex items-center justify-center gap-2 bg-[#6366F1] text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-[#5254E2] transition-all shadow-lg shadow-[#6366F1]/20"
+          >
             <Plus className="h-5 w-5" />
             <span>جلسة جديدة</span>
           </button>

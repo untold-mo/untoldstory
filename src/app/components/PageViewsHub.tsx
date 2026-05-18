@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Users,
   Briefcase,
@@ -10,6 +10,7 @@ import {
   Settings,
   UserCircle2,
 } from 'lucide-react';
+import { useData, type User } from '../context/DataContext';
 import TeamPage from './TeamPage';
 import ProductionPage from './ProductionPage';
 import EquipmentPage from './EquipmentPage';
@@ -31,28 +32,44 @@ type LinkedViewId =
   | 'settings'
   | 'leads';
 
-const TABS: { id: LinkedViewId; label: string; icon: typeof Users }[] = [
-  { id: 'team', label: 'الفريق', icon: Users },
-  { id: 'production', label: 'الإنتاج', icon: Briefcase },
-  { id: 'equipment', label: 'المعدات', icon: Wrench },
-  { id: 'analytics', label: 'التحليلات', icon: BarChart3 },
-  { id: 'calls', label: 'المكالمات', icon: Phone },
-  { id: 'invoices', label: 'الفواتير', icon: Receipt },
-  { id: 'expenses', label: 'المصروفات', icon: Wallet },
-  { id: 'settings', label: 'الإعدادات', icon: Settings },
-  { id: 'leads', label: 'الليدز', icon: UserCircle2 },
+const ALL_TABS: { id: LinkedViewId; label: string; icon: typeof Users; roles: User['role'][] }[] = [
+  { id: 'team', label: 'الفريق', icon: Users, roles: ['مالك', 'مدير مبيعات'] },
+  { id: 'production', label: 'الإنتاج', icon: Briefcase, roles: ['مالك', 'مدير إنتاج'] },
+  { id: 'equipment', label: 'المعدات', icon: Wrench, roles: ['مالك', 'مدير إنتاج'] },
+  { id: 'analytics', label: 'التحليلات', icon: BarChart3, roles: ['مالك', 'مدير مبيعات'] },
+  { id: 'calls', label: 'المكالمات', icon: Phone, roles: ['مالك', 'مدير مبيعات', 'مندوب'] },
+  { id: 'invoices', label: 'الفواتير', icon: Receipt, roles: ['مالك', 'محاسب'] },
+  { id: 'expenses', label: 'المصروفات', icon: Wallet, roles: ['مالك', 'محاسب', 'مدير إنتاج'] },
+  { id: 'settings', label: 'الإعدادات', icon: Settings, roles: ['مالك'] },
+  { id: 'leads', label: 'الليدز', icon: UserCircle2, roles: ['مالك', 'مدير مبيعات', 'مندوب'] },
 ];
 
 export default function PageViewsHub() {
-  const [view, setView] = useState<LinkedViewId>('team');
+  const { currentUser } = useData();
+  const tabs = useMemo(
+    () => (currentUser ? ALL_TABS.filter((t) => t.roles.includes(currentUser.role)) : []),
+    [currentUser],
+  );
+  const [view, setView] = useState<LinkedViewId>(() => tabs[0]?.id ?? 'team');
+
+  if (!currentUser) return null;
+  if (tabs.length === 0) {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-[#080B13] p-8 text-center text-zinc-500 text-sm">
+        لا توجد عروض إضافية متاحة لصلاحيتك.
+      </div>
+    );
+  }
+
+  const safeView = tabs.some((t) => t.id === view) ? view : tabs[0].id;
 
   return (
     <div className="flex flex-col gap-4 min-h-0 font-['Cairo']" dir="rtl">
       <div className="shrink-0 rounded-2xl border border-white/10 bg-[#0c101a] p-2 overflow-x-auto">
         <div className="flex gap-1 min-w-max">
-          {TABS.map((t) => {
+          {tabs.map((t) => {
             const Icon = t.icon;
-            const on = view === t.id;
+            const on = safeView === t.id;
             return (
               <button
                 key={t.id}
@@ -72,15 +89,15 @@ export default function PageViewsHub() {
         </div>
       </div>
       <div className="min-h-[60vh] rounded-2xl border border-white/10 bg-[#080B13] overflow-auto">
-        {view === 'team' && <TeamPage />}
-        {view === 'production' && <ProductionPage />}
-        {view === 'equipment' && <EquipmentPage />}
-        {view === 'analytics' && <AnalyticsPage />}
-        {view === 'calls' && <CallsPage />}
-        {view === 'invoices' && <InvoicesPage />}
-        {view === 'expenses' && <ExpensesPage />}
-        {view === 'settings' && <SettingsPage />}
-        {view === 'leads' && <LeadsPage />}
+        {safeView === 'team' && <TeamPage />}
+        {safeView === 'production' && <ProductionPage />}
+        {safeView === 'equipment' && <EquipmentPage />}
+        {safeView === 'analytics' && <AnalyticsPage />}
+        {safeView === 'calls' && <CallsPage />}
+        {safeView === 'invoices' && <InvoicesPage />}
+        {safeView === 'expenses' && <ExpensesPage />}
+        {safeView === 'settings' && <SettingsPage />}
+        {safeView === 'leads' && <LeadsPage />}
       </div>
     </div>
   );

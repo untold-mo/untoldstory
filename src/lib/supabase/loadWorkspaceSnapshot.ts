@@ -202,4 +202,55 @@ export async function fetchSupabaseWorkspaceSnapshot(): Promise<SupabaseWorkspac
   };
 }
 
+/** تصفية البيانات المحمّلة حسب الدور — يقلّل تسريب CRM في وضع Supabase المباشر */
+export function filterWorkspaceSnapshotForViewer(
+  snap: SupabaseWorkspaceSnapshot,
+  viewer: { id: string; role: User['role'] },
+): SupabaseWorkspaceSnapshot {
+  const uid = String(viewer.id).trim();
+  if (viewer.role === 'مندوب') {
+    const myLeadIds = new Set(
+      snap.leadsList.filter((l) => String(l.assignedTo || '').trim() === uid).map((l) => l.id),
+    );
+    return {
+      ...snap,
+      leadsList: snap.leadsList.filter((l) => String(l.assignedTo || '').trim() === uid),
+      quotes: snap.quotes.filter((q) => String(q.createdById || '').trim() === uid),
+      invsRaw: snap.invsRaw.filter((raw) => myLeadIds.has(String((raw as { lead_id?: string }).lead_id || ''))),
+      rawUsers: snap.rawUsers.map((u) =>
+        u.id === uid ? u : { ...u, email: undefined, baseSalary: undefined },
+      ),
+    };
+  }
+  if (viewer.role === 'مدير إنتاج') {
+    return {
+      ...snap,
+      quotes: snap.quotes.filter(
+        (q) =>
+          String(q.productionAssignedId || '').trim() === uid ||
+          String(q.pricedById || '').trim() === uid,
+      ),
+      shootList: snap.shootList.filter(
+        (b) => String(b.productionAssignedId || '').trim() === uid,
+      ),
+      invsRaw: [],
+    };
+  }
+  if (viewer.role === 'محاسب') {
+    const approvedLeadIds = new Set(
+      snap.invsRaw
+        .filter((raw) => String((raw as { record_origin?: string }).record_origin || '') === 'عرض_سعر_معتمد')
+        .map((raw) => String((raw as { lead_id?: string }).lead_id || ''))
+        .filter((id) => id && id !== 'manual'),
+    );
+    return {
+      ...snap,
+      leadsList: snap.leadsList.filter((l) => approvedLeadIds.has(l.id)),
+      quotes: snap.quotes.filter((q) => q.status === 'مكتمل' || Boolean(q.invoiceId)),
+      rawUsers: snap.rawUsers.map((u) => ({ ...u, baseSalary: undefined })),
+    };
+  }
+  return snap;
+}
+
 export { mapInvoiceRowRaw };

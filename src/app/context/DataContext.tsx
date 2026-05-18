@@ -3,7 +3,10 @@ import { getAppPublicOrigin, getOAuthApiOrigin } from '@/config/site';
 import { getApiBaseUrl } from '@/config/api';
 import { isServerDataMode } from '@/config/dataSource';
 import { isSupabaseDirectMode } from '@/config/supabaseMode';
-import { fetchSupabaseWorkspaceSnapshot } from '@/lib/supabase/loadWorkspaceSnapshot';
+import {
+  fetchSupabaseWorkspaceSnapshot,
+  filterWorkspaceSnapshotForViewer,
+} from '@/lib/supabase/loadWorkspaceSnapshot';
 import { supabaseCreateLead, supabaseDeleteLead, supabasePatchLead } from '@/lib/supabase/leadsRepo';
 import type { Session } from '@supabase/supabase-js';
 import { getSupabase } from '@/lib/supabase/client';
@@ -62,6 +65,7 @@ import { buildSystemNotifications } from './buildSystemNotifications';
 import { clearLegacyOnboardingStorageKeys } from './legacyStorageCleanup';
 import { getMonthKey } from './dateMonthKey';
 import { notifyNewInboundLeads, resetInboundLeadToastState } from '@/lib/inboundLeadToasts';
+import { notifyClientChannel } from '@/lib/clientChannelNotify';
 import { fetchLeadsSb } from '@/lib/supabase/directApiSb';
 import { toast } from 'sonner';
 import { syncWorkspacePatch, type WorkspaceStatePatch } from './workspaceSync';
@@ -2998,7 +3002,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         let attendanceRec: AttendanceRecord[];
 
         if (isSupabaseDirectMode()) {
-          const snap = await fetchSupabaseWorkspaceSnapshot();
+          const snapRaw = await fetchSupabaseWorkspaceSnapshot();
+          const snap = currentUser
+            ? filterWorkspaceSnapshotForViewer(snapRaw, {
+                id: currentUser.id,
+                role: currentUser.role,
+              })
+            : snapRaw;
           leadsList = snap.leadsList;
           rawUsers = snap.rawUsers;
           customers = snap.customers;
@@ -6638,6 +6648,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       entityId: quoteId,
       details: `${quote.customerName} — سيُرسَل للمندوب لتقديمه للعميل`,
     });
+    void notifyClientChannel({
+      type: 'quote_approved',
+      quoteId,
+      customerName: quote.customerName,
+      title: quote.title,
+      totalAmount: quote.totalAmount ?? quote.amount,
+    });
     return true;
   };
 
@@ -6798,6 +6815,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!workOrderId) {
       toast.warning('تمت الفاتورة لكن تعذر إنشاء أمر الشغل لمدير الإنتاج — راجع الحجوزات');
     }
+    void notifyClientChannel({
+      type: 'quote_won',
+      quoteId: quote.id,
+      customerName: quote.customerName,
+      title: quote.title,
+      workOrderId: workOrderId ?? undefined,
+    });
     return true;
   };
 

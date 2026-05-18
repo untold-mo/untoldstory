@@ -439,16 +439,39 @@ export async function processIntegrationsOAuthRequest(ctx) {
     }
   }
 
+  const webhookSecret = String(process.env.INTEGRATION_WEBHOOK_SECRET || '').trim();
+  const verifyIntegrationWebhook = () => {
+    if (!webhookSecret) {
+      return process.env.NODE_ENV !== 'production';
+    }
+    const hdr =
+      String(req.headers['x-webhook-secret'] || req.headers['x-integration-secret'] || '').trim() ||
+      String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+    return hdr === webhookSecret;
+  };
+
   if (methodU === 'POST' && pathname === '/api/integrations/webhooks/meta') {
+    if (!verifyIntegrationWebhook()) {
+      return { kind: 'json', status: 401, body: { ok: false, error: 'unauthorized_webhook' } };
+    }
     return { kind: 'json', status: 200, body: { ok: true, message: 'Meta webhook received' } };
   }
   if (methodU === 'POST' && pathname === '/api/integrations/webhooks/google-ads') {
+    if (!verifyIntegrationWebhook()) {
+      return { kind: 'json', status: 401, body: { ok: false, error: 'unauthorized_webhook' } };
+    }
     return { kind: 'json', status: 200, body: { ok: true, message: 'Google Ads webhook received' } };
   }
   if (methodU === 'POST' && pathname === '/api/integrations/webhooks/linkedin') {
+    if (!verifyIntegrationWebhook()) {
+      return { kind: 'json', status: 401, body: { ok: false, error: 'unauthorized_webhook' } };
+    }
     return { kind: 'json', status: 200, body: { ok: true, message: 'LinkedIn webhook received' } };
   }
   if (methodU === 'POST' && pathname === '/api/integrations/webhooks/whatsapp') {
+    if (!verifyIntegrationWebhook()) {
+      return { kind: 'json', status: 401, body: { ok: false, error: 'unauthorized_webhook' } };
+    }
     return { kind: 'json', status: 200, body: { ok: true, message: 'WhatsApp webhook received' } };
   }
 

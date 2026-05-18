@@ -808,13 +808,27 @@ export async function createPriceQuoteSb(
   return mapPriceQuoteFromRow(data as Record<string, unknown>);
 }
 
+function canPatchQuoteSb(
+  actor: { id: string; role: string },
+  existing: { created_by_id?: string | null; production_assigned_id?: string | null },
+): boolean {
+  if (actor.role === 'مالك' || actor.role === 'مدير مبيعات') return true;
+  if (actor.role === 'مندوب' && String(existing.created_by_id || '') === actor.id) return true;
+  if (actor.role === 'مدير إنتاج' && String(existing.production_assigned_id || '') === actor.id) return true;
+  return false;
+}
+
 export async function patchPriceQuoteSb(
   id: string,
   patch: Partial<PriceQuote>,
 ): Promise<PriceQuote> {
+  const actor = await getSupabaseActor();
   const sb = getSupabase();
   const { data: exRow, error: exErr } = await sb.from('price_quotes').select('*').eq('id', id).maybeSingle();
   if (exErr || !exRow) throw new Error('غير موجود');
+  if (!canPatchQuoteSb(actor, exRow as { created_by_id?: string; production_assigned_id?: string })) {
+    throw new Error('غير مصرح بتعديل عرض السعر');
+  }
 
   const rowUp: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (patch.status != null) rowUp.status = String(patch.status).trim();
