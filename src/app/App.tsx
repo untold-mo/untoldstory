@@ -8562,26 +8562,82 @@ const ApprovalCenter = ({
               {ownerOnly ? (
                 <div className="mt-3 space-y-2">
                   {/* Payment schedule builder */}
-                  <div className="bg-black/20 rounded-xl p-3 space-y-2 border border-white/10">
+                  <div className="bg-black/20 rounded-xl p-3 space-y-3 border border-white/10 min-w-0 overflow-visible">
                     <p className="text-[11px] font-black text-zinc-300">شروط الدفع عند الاعتماد</p>
-                    <div className="flex items-center gap-2">
-                      <label className="text-[11px] text-zinc-400 whitespace-nowrap">دفعة أولى (ج.م)</label>
+                    <div className="space-y-1.5 min-w-0">
+                      <label className="text-[10px] text-zinc-500 block">دفعة أولى (ج.م) — 0 = لا يوجد دفعة الآن</label>
                       <input
-                        type="number" min={0}
+                        type="number"
+                        min={0}
                         value={getQPF(q.id).initPayment}
                         onChange={(e) => setQPF(q.id, { initPayment: e.target.value })}
-                        className="flex-1 bg-[#0B1020] border border-white/10 rounded-lg px-2 py-1 text-xs"
-                        placeholder="0 = لا يوجد دفعة الآن"
+                        className="w-full min-w-0 bg-[#0B1020] border border-white/10 rounded-lg px-2 py-1.5 text-xs"
+                        placeholder="0"
                       />
                     </div>
-                    {getQPF(q.id).lines.map((ln, li) => (
-                      <div key={ln.id} className="grid grid-cols-[1fr_1fr_auto] gap-1">
-                        <input type="date" value={ln.dueDate} onChange={(e) => setQPF(q.id, { lines: getQPF(q.id).lines.map((l, i) => i === li ? { ...l, dueDate: e.target.value } : l) })} className="bg-[#0B1020] border border-white/10 rounded-lg px-2 py-1 text-xs" />
-                        <input type="number" min={0} placeholder="المبلغ" value={ln.amount || ''} onChange={(e) => setQPF(q.id, { lines: getQPF(q.id).lines.map((l, i) => i === li ? { ...l, amount: Number(e.target.value) } : l) })} className="bg-[#0B1020] border border-white/10 rounded-lg px-2 py-1 text-xs" />
-                        <button type="button" onClick={() => setQPF(q.id, { lines: getQPF(q.id).lines.filter((_, i) => i !== li) })} className="rounded-lg bg-rose-500/20 text-rose-300 px-2 py-1 text-xs">×</button>
-                      </div>
-                    ))}
-                    <button type="button" onClick={() => setQPF(q.id, { lines: [...getQPF(q.id).lines, { id: `inst-${Date.now()}`, dueDate: '', amount: 0 }] })} className="text-[11px] text-indigo-300 hover:underline">+ إضافة دفعة مجدولة</button>
+                    {getQPF(q.id).lines.length > 0 && (
+                      <p className="text-[10px] text-zinc-500 font-bold">دفعات مجدولة</p>
+                    )}
+                    <div className="space-y-2 min-w-0">
+                      {getQPF(q.id).lines.map((ln, li) => (
+                        <div key={ln.id} className="rounded-lg border border-white/10 bg-[#0B1020]/50 p-2.5 space-y-2 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-black text-zinc-400">دفعة {li + 1}</span>
+                            <button
+                              type="button"
+                              onClick={() => setQPF(q.id, { lines: getQPF(q.id).lines.filter((_, i) => i !== li) })}
+                              className="shrink-0 rounded-lg bg-rose-500/20 text-rose-300 px-2 py-0.5 text-[10px] font-black"
+                              aria-label="حذف الدفعة"
+                            >
+                              حذف
+                            </button>
+                          </div>
+                          <div className="space-y-1 min-w-0">
+                            <label className="text-[10px] text-zinc-500 block">تاريخ الاستحقاق</label>
+                            <input
+                              type="date"
+                              value={ln.dueDate}
+                              onChange={(e) =>
+                                setQPF(q.id, {
+                                  lines: getQPF(q.id).lines.map((l, i) =>
+                                    i === li ? { ...l, dueDate: e.target.value } : l,
+                                  ),
+                                })
+                              }
+                              className="w-full min-w-0 bg-[#0B1020] border border-white/10 rounded-lg px-2 py-1.5 text-xs"
+                            />
+                          </div>
+                          <div className="space-y-1 min-w-0">
+                            <label className="text-[10px] text-zinc-500 block">المبلغ (ج.م)</label>
+                            <input
+                              type="number"
+                              min={0}
+                              placeholder="0"
+                              value={ln.amount || ''}
+                              onChange={(e) =>
+                                setQPF(q.id, {
+                                  lines: getQPF(q.id).lines.map((l, i) =>
+                                    i === li ? { ...l, amount: Number(e.target.value) } : l,
+                                  ),
+                                })
+                              }
+                              className="w-full min-w-0 bg-[#0B1020] border border-white/10 rounded-lg px-2 py-1.5 text-xs"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setQPF(q.id, {
+                          lines: [...getQPF(q.id).lines, { id: `inst-${Date.now()}`, dueDate: '', amount: 0 }],
+                        })
+                      }
+                      className="w-full text-center py-2 rounded-lg border border-dashed border-indigo-400/35 text-[11px] font-black text-indigo-300 hover:bg-indigo-500/10 transition-colors"
+                    >
+                      + إضافة دفعة مجدولة
+                    </button>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <button
