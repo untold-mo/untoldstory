@@ -85,6 +85,7 @@ import { REP_SKILL_PRESETS } from '@/lib/repSkills';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { useAppDirection } from './hooks/useAppDirection';
 import { getNavLabel } from '@/lib/navLabels';
+import { getLeadStatusLabel } from '@/lib/i18nLabels';
 import { useTranslation } from 'react-i18next';
 
 // --- Shared Components ---
@@ -269,6 +270,7 @@ const SectionTitle = ({ title, subtitle, icon: Icon }: any) => (
 
 const OwnerDashboard = ({ onGoToTab, openAccountantSubTab, openBookingsWithIntent }: any) => {
   const { leads, invoices, expenses, shootBookings, equipmentBookings, meetingBookings, getRepSnapshots, printBrandingSettings } = useData();
+  const { t } = useTranslation();
   const [conversionMode, setConversionMode] = useState<'all' | 'closed'>('all');
   
   const funnelData = useMemo(() => {
@@ -436,7 +438,7 @@ const OwnerDashboard = ({ onGoToTab, openAccountantSubTab, openBookingsWithInten
 
   return (
     <div className="animate-in fade-in duration-500 space-y-8">
-      <SectionTitle title="نظرة عامة للمالك" subtitle="متابعة الأداء المالي والبيعي للشركة بالكامل" icon={LayoutDashboard} />
+      <SectionTitle title={t('screens.ownerOverview.title')} subtitle={t('screens.ownerOverview.subtitle')} icon={LayoutDashboard} />
       <div className="flex items-center gap-3">
         <button onClick={printOwnerPdf} className="px-4 py-2 rounded-xl text-sm font-black bg-[#0F1528] border border-white/10 text-zinc-200">تقرير المالك PDF</button>
       </div>
@@ -581,6 +583,7 @@ const OwnerDashboard = ({ onGoToTab, openAccountantSubTab, openBookingsWithInten
 
 const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) => {
   type ExpenseCategory = Expense['category'];
+  const { t } = useTranslation();
   const { currentUser, invoices, expenses, leads, users, addInvoice, updateInvoiceStatus, recordInvoiceCollection, addExpense, updateExpenseStatus, approveExpense, rejectExpense, closedMonths, closeMonth, reopenMonth, isMonthClosed, chartOfAccounts, addChartAccount, removeChartAccount, manualJournalEntries, addManualJournalEntry, removeManualJournalEntry, journalCodingRules, setJournalCodingRules, expenseCodingRules, setExpenseCodingRules, customerCodePrefix, setCustomerCodePrefix, expenseSavedViews, setExpenseSavedViews, payrollAutoSendDay, setPayrollAutoSendDay, closedFiscalYears, closeFiscalYear, reopenFiscalYear, getOpeningBalances, getRepSnapshots, attendanceRecords, logAttendance, payrollApprovals, payrollApprovalRequests, financialReopenRequests, approvePayroll, reopenPayroll, isPayrollApproved, requestPayrollApproval, ownerApprovePayrollRequest, ownerRejectPayrollRequest, requestMonthReopen, ownerApproveMonthReopenRequest, ownerRejectMonthReopenRequest, printBrandingSettings, addEmployee, updateEmployeeSalary, accountingPolicy, updateAccountingPolicy, priceQuotes, custodyFunds, custodyAccountByCategory, updateCustodyAccountByCategory, createCustodyFund, submitCustodyDraftToOwner, ownerApproveCustodyRequest, ownerRejectCustodyRequest, accountantRecordCustodyPayment, accountantApproveCustodySettlement, accountantRejectCustodySettlement } = useData();
   const [activeFinanceTab, setActiveFinanceTab] = useState<'invoices' | 'expenses' | 'ledger' | 'reports' | 'coa' | 'journals' | 'reps' | 'codebook' | 'custody'>('invoices');
   const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
@@ -1525,7 +1528,7 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
   if (isOwnerView) {
     return (
       <div className="animate-in fade-in duration-500 space-y-6">
-        <SectionTitle title="اعتمادات مالية المالك" subtitle="عرض اعتماد فقط مع فصل المصدر: المحاسب vs مدير الإنتاج" icon={ShieldCheck} />
+        <SectionTitle title={t('screens.ownerApprovals.title')} subtitle={t('screens.ownerApprovals.subtitle')} icon={ShieldCheck} />
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
           <div className="bg-white/[0.04] border border-white/10 rounded-3xl p-5 space-y-4">
             <div className="flex items-center justify-between">
@@ -1645,7 +1648,7 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
 
   return (
     <div className="animate-in fade-in duration-500 space-y-8">
-      <SectionTitle title="نظام الإدارة المالية" subtitle="الفواتير، التدفقات النقدية، وتقارير التحصيل" icon={Receipt} />
+      <SectionTitle title={t('screens.finance.title')} subtitle={t('screens.finance.subtitle')} icon={Receipt} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <div className="bg-slate-900/40 border border-slate-800 p-6 rounded-[2.5rem]">
@@ -3565,6 +3568,8 @@ function readLeadsPageSize(): number {
 
 const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void }) => {
   const { leads, users, invoices, expenses, priceQuotes, shootBookings, equipmentBookings, meetingBookings, manualCustomers, currentUser, addLead, addManualCustomer, assignLead, assignLeadsBulk, updateLeadStatus, deleteLead, deleteLeadsBulk } = useData();
+  const { t } = useTranslation();
+  const { dir, dateLocale } = useAppDirection();
   const { openLeadUpdate, canUpdateLead, LeadRepUpdateModal } = useLeadRepUpdate();
   const [search, setSearch] = useState('');
   const [leadsPage, setLeadsPage] = useState(1);
@@ -3621,10 +3626,10 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
       (currentUser.role === 'مندوب' && lead.assignedTo === currentUser.id));
 
   const toastDeleteLeadResult = (r: DeleteLeadResult) => {
-    if (r === 'deleted') toast.success('تم حذف الليد');
-    else if (r === 'blocked') toast.error('لا يمكن الحذف: توجد فواتير أو عروض أسعار مرتبطة بهذا الليد');
-    else if (r === 'forbidden') toast.error('ليست لديك صلاحية حذف الليد');
-    else toast.error('تعذر حذف الليد');
+    if (r === 'deleted') toast.success(t('leads.deleted'));
+    else if (r === 'blocked') toast.error(t('leads.deleteBlocked'));
+    else if (r === 'forbidden') toast.error(t('leads.deleteForbidden'));
+    else toast.error(t('leads.deleteFailed'));
   };
 
   useEffect(() => {
@@ -3808,30 +3813,30 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
     if (ids.length === 0) return;
     const rep = userId ? reps.find((r) => r.id === userId) : undefined;
     if (userId && !rep) {
-      toast.error('المندوب غير موجود');
+      toast.error(t('leads.assignRepNotFound'));
       return;
     }
-    const assignLabel = userId ? `المندوب «${rep!.name}»` : 'بدون مندوب';
+    const assignLabel = userId ? t('leads.assignTargetRep', { name: rep!.name }) : t('common.unassigned');
     const yes = window.confirm(
       ids.length === 1
-        ? `تعيين ليد واحد إلى ${assignLabel}؟`
-        : `تعيين ${ids.length} ليد إلى ${assignLabel}؟`,
+        ? t('leads.assignConfirmOne', { target: assignLabel })
+        : t('leads.assignConfirmMany', { count: ids.length, target: assignLabel }),
     );
     if (!yes) return;
     setBulkAssigning(true);
     try {
       const ok = await assignLeadsBulk(ids, userId);
       if (ok === 0) {
-        toast.error('تعذر تعيين الليدز المحددة');
+        toast.error(t('leads.assignFailed'));
         return;
       }
       if (ok < ids.length) {
-        toast.warning(`تم تعيين ${ok} من ${ids.length} ليد`);
+        toast.warning(t('leads.assignPartial', { ok, total: ids.length }));
       } else {
         toast.success(
           ids.length === 1
-            ? `تم التعيين إلى ${assignLabel}`
-            : `تم تعيين ${ok} ليد إلى ${assignLabel}`,
+            ? t('leads.assignDoneOne', { target: assignLabel })
+            : t('leads.assignDoneMany', { count: ok, target: assignLabel }),
         );
       }
       clearLeadSelection();
@@ -3842,7 +3847,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
 
   const handleBulkAssign = async () => {
     if (!bulkAssignRepId) {
-      toast.error('اختر مندوباً أولاً');
+      toast.error(t('leads.assignPickRep'));
       return;
     }
     const ids = Array.from(selectedLeadIdsRef.current);
@@ -3866,8 +3871,8 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
     if (ids.length === 0) return;
     const yes = window.confirm(
       ids.length === 1
-        ? 'حذف الليد المحدد نهائياً؟ لا يمكن التراجع.'
-        : `حذف ${ids.length} ليد نهائياً؟ لا يمكن التراجع.`,
+        ? t('leads.deleteConfirmOne')
+        : t('leads.deleteConfirmMany', { count: ids.length }),
     );
     if (!yes) return;
     setBulkDeleting(true);
@@ -3878,20 +3883,22 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
       }
       if (result.deleted === 0) {
         if (result.blocked > 0) {
-          toast.error('لا يمكن الحذف: ليدز مرتبطة بفواتير أو عروض أسعار');
+          toast.error(t('leads.deleteBulkBlocked'));
         } else {
-          toast.error('تعذر حذف الليدز المحددة');
+          toast.error(t('leads.deleteBulkFailed'));
         }
         return;
       }
       if (result.blocked > 0 || result.failed > 0) {
         toast.warning(
-          `تم حذف ${result.deleted} ليد` +
-            (result.blocked ? ` — تخطي ${result.blocked} مرتبط` : '') +
-            (result.failed ? ` — فشل ${result.failed}` : ''),
+          t('leads.deleteBulkPartial', {
+            deleted: result.deleted,
+            blocked: result.blocked,
+            failed: result.failed,
+          }),
         );
       } else {
-        toast.success(`تم حذف ${result.deleted} ليد`);
+        toast.success(t('leads.deleteBulkDone', { count: result.deleted }));
       }
       clearLeadSelection();
     } finally {
@@ -3942,7 +3949,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
   const handleCreateLead = () => {
     const budget = Number(leadForm.budget);
     if (!leadForm.name.trim() || !leadForm.company.trim() || !leadForm.phone.trim() || !budget || budget <= 0) {
-      toast.error('يرجى استكمال البيانات الأساسية (الاسم - الشركة - الهاتف - الميزانية)');
+      toast.error(t('leadForm.completeRequired'));
       return;
     }
 
@@ -3976,7 +3983,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
     setOverdueOnly(false);
     setRepUserFilterId('');
     setSearch('');
-    toast.success('تمت إضافة ليد جديد بنجاح');
+    toast.success(t('leadForm.addSuccess'));
   };
 
   const customerRows = useMemo(() => {
@@ -4251,23 +4258,23 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
   };
 
   return (
-    <div className="animate-in fade-in duration-500">
+    <div className="animate-in fade-in duration-500" dir={dir}>
       <SectionTitle
         title={
           entityMode === 'customers'
-            ? 'إدارة العملاء الخارجيين'
+            ? t('leads.titleCustomers')
             : isLeadsDistributionHub
-              ? 'كافة الليدز'
-              : 'إدارة الليدز'
+              ? t('leads.titleAll')
+              : t('leads.titleManage')
         }
         subtitle={
           entityMode === 'customers'
-            ? 'العملاء الخارجيون فقط (خارج مسار الليدز) مع الأرصدة المدينة/الدائنة'
+            ? t('leads.subtitleCustomers')
             : currentUser?.role === 'محاسب'
-              ? 'يعرض للمحاسب الليدز المعتمدة من المالك فقط (تحولت فعلياً لتنفيذ مالي)'
+              ? t('leads.subtitleAccountant')
               : isLeadsDistributionHub
-                ? 'كل الليدز الواردة من فيسبوك وإنستجرام ولينكد إن والإيميل/جيميل وجوجل — ابدأ بتوزيع غير الموزّع على المناديب'
-                : 'بحث، تصفية، وتحديث الحالة والتعيين بشكل مباشر'
+                ? t('leads.subtitleHub')
+                : t('leads.subtitleDefault')
         }
         icon={Users}
       />
@@ -4276,13 +4283,13 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
         {entityMode === 'leads' && isLeadsDistributionHub && inboundHubStats && (
           <div className="mb-5 rounded-2xl border border-[#7C6BFF]/25 bg-[#7C6BFF]/10 p-4 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-black text-white">ليدز واردة من القنوات</p>
+              <p className="text-sm font-black text-white">{t('leads.inboundTitle')}</p>
               <div className="flex flex-wrap gap-2 text-[11px]">
                 <span className="px-2.5 py-1 rounded-lg bg-white/10 text-zinc-200 font-bold">
-                  غير موزّع: {inboundHubStats.unassignedTotal}
+                  {t('leads.unassignedCount', { count: inboundHubStats.unassignedTotal })}
                 </span>
                 <span className="px-2.5 py-1 rounded-lg bg-indigo-500/20 text-indigo-200 font-bold">
-                  وارد تلقائي غير موزّع: {inboundHubStats.inboundUnassignedTotal}
+                  {t('leads.autoUnassignedCount', { count: inboundHubStats.inboundUnassignedTotal })}
                 </span>
               </div>
             </div>
@@ -4301,7 +4308,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                     : 'bg-[#0F1528] text-zinc-300 border-white/15'
                 }`}
               >
-                كل الوارد (غير موزّع)
+                {t('leads.allInboundUnassigned')}
               </button>
               {INBOUND_CHANNEL_SOURCES.map((src) => {
                 const count = inboundHubStats.bySource[src];
@@ -4332,7 +4339,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                 }}
                 className="px-3 py-1.5 rounded-xl text-[11px] font-black bg-[#0F1528] text-zinc-400 border border-white/10"
               >
-                عرض الكل
+                {t('common.showAll')}
               </button>
             </div>
           </div>
@@ -4340,8 +4347,8 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
 
         {canUseCustomerMode && (
           <div className="mb-4 flex gap-2">
-            <button onClick={() => setEntityMode('leads')} className={`px-4 py-2 rounded-xl text-xs font-black ${entityMode === 'leads' ? 'bg-[#7C6BFF] text-white' : 'bg-[#0F1528] border border-white/10 text-zinc-300'}`}>الليدز</button>
-            <button onClick={() => setEntityMode('customers')} className={`px-4 py-2 rounded-xl text-xs font-black ${entityMode === 'customers' ? 'bg-[#7C6BFF] text-white' : 'bg-[#0F1528] border border-white/10 text-zinc-300'}`}>العملاء</button>
+            <button onClick={() => setEntityMode('leads')} className={`px-4 py-2 rounded-xl text-xs font-black ${entityMode === 'leads' ? 'bg-[#7C6BFF] text-white' : 'bg-[#0F1528] border border-white/10 text-zinc-300'}`}>{t('leads.tabLeads')}</button>
+            <button onClick={() => setEntityMode('customers')} className={`px-4 py-2 rounded-xl text-xs font-black ${entityMode === 'customers' ? 'bg-[#7C6BFF] text-white' : 'bg-[#0F1528] border border-white/10 text-zinc-300'}`}>{t('leads.tabCustomers')}</button>
           </div>
         )}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -4350,7 +4357,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder={entityMode === 'customers' ? 'بحث بالاسم أو الشركة أو المصدر أو الهاتف' : 'بحث بالاسم أو الشركة أو الهاتف'}
+              placeholder={entityMode === 'customers' ? t('leads.searchCustomers') : t('leads.searchLeads')}
               className="w-full bg-slate-800 border border-slate-700 rounded-2xl pr-11 pl-4 py-3 text-sm"
             />
           </div>
@@ -4360,9 +4367,9 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
             onChange={(e) => setStatusFilter(e.target.value as 'الكل' | LeadStatus)}
             className="bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-sm"
           >
-            <option value="الكل">كل الحالات</option>
+            <option value="الكل">{t('leads.allStatuses')}</option>
             {leadStatuses.map(status => (
-              <option key={status} value={status}>{status}</option>
+              <option key={status} value={status}>{getLeadStatusLabel(status, t)}</option>
             ))}
           </select>)}
 
@@ -4371,13 +4378,13 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
             onChange={(e) => setSourceFilter(e.target.value as LeadSourceFilter)}
             className="bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-sm"
           >
-            <option value="all">كل المصادر</option>
+            <option value="all">{t('leads.allSources')}</option>
             <option value="facebook">Facebook</option>
             <option value="instagram">Instagram</option>
             <option value="google">Google</option>
             <option value="linkedin">LinkedIn</option>
             <option value="email">Email / Gmail</option>
-            <option value="manual">يدوي</option>
+            <option value="manual">{t('leads.sourceManual')}</option>
           </select>)}
 
           {entityMode === 'leads' && currentUser?.role !== 'محاسب' && (<select
@@ -4385,25 +4392,25 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
             onChange={(e) => setAssignedFilter(e.target.value as 'all' | 'mine' | 'unassigned')}
             className="bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-sm"
           >
-            <option value="all">الكل</option>
-            <option value="mine">الخاص بي</option>
-            <option value="unassigned">غير موزع</option>
+            <option value="all">{t('common.all')}</option>
+            <option value="mine">{t('leads.filterMine')}</option>
+            <option value="unassigned">{t('leads.filterUnassigned')}</option>
           </select>)}
         </div>
 
         {entityMode === 'leads' && overdueOnly && (
           <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-2">
-            <span className="text-xs text-rose-200 font-bold">فلتر المتأخر مفعل الآن</span>
+            <span className="text-xs text-rose-200 font-bold">{t('leads.overdueFilterActive')}</span>
             <button onClick={() => { setOverdueOnly(false); setRepUserFilterId(''); }} className="px-3 py-1.5 rounded-lg text-xs font-black bg-rose-500 text-white">
-              عرض الكل
+              {t('common.showAll')}
             </button>
           </div>
         )}
         {entityMode === 'leads' && repUserFilterId && (
           <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-indigo-400/30 bg-indigo-500/10 px-4 py-2">
-            <span className="text-xs text-indigo-200 font-bold">فلتر المندوب مفعل: {users.find((u) => u.id === repUserFilterId)?.name || repUserFilterId}</span>
+            <span className="text-xs text-indigo-200 font-bold">{t('leads.repFilterActive', { name: users.find((u) => u.id === repUserFilterId)?.name || repUserFilterId })}</span>
             <button onClick={() => setRepUserFilterId('')} className="px-3 py-1.5 rounded-lg text-xs font-black bg-indigo-500 text-white">
-              إلغاء فلتر المندوب
+              {t('leads.clearRepFilter')}
             </button>
           </div>
         )}
@@ -4416,21 +4423,21 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
               className="bg-emerald-600 text-white px-6 py-3 rounded-2xl text-sm font-black inline-flex items-center gap-2 hover:bg-emerald-500 transition-colors"
             >
               <FileUp className="w-4 h-4" />
-              رفع Excel / CSV
+              {t('leads.uploadExcelCsv')}
             </button>
             <a
               href="/leads/import"
               className="bg-[#0A66C2] text-white px-6 py-3 rounded-2xl text-sm font-black inline-flex items-center gap-2 hover:bg-[#0958a8] transition-colors"
             >
               <FileUp className="w-4 h-4" />
-              استيراد LinkedIn CSV
+              {t('leads.importLinkedIn')}
             </a>
             <button
               onClick={() => setIsAddLeadOpen(true)}
             className="bg-[#7C6BFF] text-white px-6 py-3 rounded-2xl text-sm font-black inline-flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
-              إضافة ليد
+              {t('leads.addLead')}
             </button>
           </div>
         )}
@@ -4441,7 +4448,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
               className="bg-[#7C6BFF] text-white px-6 py-3 rounded-2xl text-sm font-black inline-flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
-              إضافة عميل
+              {t('leads.addCustomer')}
             </button>
           </div>
         )}
@@ -4450,14 +4457,14 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
       {entityMode === 'leads' && canManageAssignment && selectedLeadIds.size > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-[#7C6BFF]/35 bg-[#7C6BFF]/10 p-4">
           <span className="text-sm font-black text-white">
-            محدد: {selectedLeadIds.size} — التعيين والحذف يشملان كل الليدز المحددة
+            {t('leads.selectedCount', { count: selectedLeadIds.size })}
           </span>
           <button
             type="button"
             onClick={clearLeadSelection}
             className="px-3 py-1.5 rounded-xl text-xs font-black border border-white/20 text-zinc-200 hover:bg-white/10"
           >
-            إلغاء التحديد
+            {t('leads.clearSelection')}
           </button>
           {selectedLeadIds.size < visibleLeads.length && (
             <button
@@ -4465,7 +4472,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
               onClick={selectAllVisibleLeads}
               className="px-3 py-1.5 rounded-xl text-xs font-black border border-indigo-400/40 text-indigo-200 hover:bg-indigo-500/15"
             >
-              تحديد كل النتائج ({visibleLeads.length})
+              {t('leads.selectAllResults', { count: visibleLeads.length })}
             </button>
           )}
           <select
@@ -4473,7 +4480,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
             onChange={(e) => setBulkAssignRepId(e.target.value)}
             className="bg-[#0F1528] border border-white/15 rounded-xl px-3 py-2 text-xs min-w-[160px]"
           >
-            <option value="">اختر مندوباً…</option>
+            <option value="">{t('leads.chooseRep')}</option>
             {reps.map((rep) => (
               <option key={rep.id} value={rep.id}>
                 {rep.name}
@@ -4486,7 +4493,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
             onClick={() => void handleBulkAssign()}
             className="px-4 py-2 rounded-xl text-xs font-black bg-[#7C6BFF] text-white disabled:opacity-50"
           >
-            {bulkAssigning ? 'جاري التعيين…' : `تعيين ${selectedLeadIds.size} ليد`}
+            {bulkAssigning ? t('leads.assigning') : t('leads.assignCount', { count: selectedLeadIds.size })}
           </button>
           <button
             type="button"
@@ -4495,7 +4502,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
             className="px-4 py-2 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-500 text-white disabled:opacity-50 inline-flex items-center gap-1.5"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            {bulkDeleting ? 'جاري الحذف…' : `حذف ${selectedLeadIds.size} ليد`}
+            {bulkDeleting ? t('leads.deleting') : t('leads.deleteCount', { count: selectedLeadIds.size })}
           </button>
         </div>
       )}
@@ -4515,26 +4522,26 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                           if (el) el.indeterminate = somePageLeadsSelected;
                         }}
                         onChange={toggleSelectCurrentPage}
-                        aria-label="تحديد كل ليدز الصفحة"
+                        aria-label={t('leads.selectPageLeads')}
                         className="h-4 w-4 rounded border-white/30 bg-[#0F1528] accent-[#7C6BFF]"
                       />
                     </th>
                   )}
-                  <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">العميل</th>
-                  <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">التفاصيل</th>
-                  <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">التصنيف</th>
-                  <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">المندوب</th>
-                  {!isSalesManagerLeadDistribution && <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">الحالة</th>}
-                  {!isSalesManagerLeadDistribution && <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">الإجراءات</th>}
+                  <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">{t('leads.colClient')}</th>
+                  <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">{t('leads.colDetails')}</th>
+                  <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">{t('leads.colCategory')}</th>
+                  <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">{t('leads.colRep')}</th>
+                  {!isSalesManagerLeadDistribution && <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">{t('leads.colStatus')}</th>}
+                  {!isSalesManagerLeadDistribution && <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">{t('leads.colActions')}</th>}
                 </tr>
               ) : (
                 <tr className="bg-[#0B1020]/80">
-                  <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">العميل</th>
-                  <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">المصدر</th>
-                  <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">الرصيد المدين</th>
-                  <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">الرصيد الدائن</th>
-                  <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">حالة الحساب</th>
-                  <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">إجراءات</th>
+                  <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">{t('leads.colClient')}</th>
+                  <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">{t('leads.colSource')}</th>
+                  <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">{t('leads.colDebit')}</th>
+                  <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">{t('leads.colCredit')}</th>
+                  <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">{t('leads.colAccountStatus')}</th>
+                  <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">{t('leads.colActions')}</th>
                 </tr>
               )}
             </thead>
@@ -4552,7 +4559,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                           type="checkbox"
                           checked={selectedLeadIds.has(lead.id)}
                           onChange={() => toggleLeadSelection(lead.id)}
-                          aria-label={`تحديد ${lead.name}`}
+                          aria-label={t('leads.selectLead', { name: lead.name })}
                           className="h-4 w-4 rounded border-white/30 bg-[#0F1528] accent-[#7C6BFF]"
                         />
                       </td>
@@ -4563,7 +4570,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                     </td>
                     <td className="p-5 text-sm">
                       <p>{lead.phone}</p>
-                      <p className="text-xs text-zinc-400 mt-1">{lead.budget.toLocaleString()} ج.م</p>
+                      <p className="text-xs text-zinc-400 mt-1">{lead.budget.toLocaleString(dateLocale)} {t('common.currency')}</p>
                       <span
                         className={`inline-block mt-1.5 text-[10px] font-black px-2 py-0.5 rounded-lg border ${leadSourceBadgeClass(lead.source)}`}
                       >
@@ -4573,13 +4580,13 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                         <button
                           type="button"
                           onClick={async () => {
-                            if (!window.confirm(`حذف الليد «${lead.name}» نهائياً؟ لا يمكن التراجع.`)) return;
+                            if (!window.confirm(t('leads.deleteConfirmNamed', { name: lead.name }))) return;
                             toastDeleteLeadResult(await deleteLead(lead.id));
                           }}
                           className="mt-2 inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-black bg-rose-500/15 text-rose-200 border border-rose-500/35 hover:bg-rose-500/25"
                         >
                           <Trash2 className="w-3 h-3" />
-                          حذف الليد
+                          {t('leads.deleteLead')}
                         </button>
                       )}
                     </td>
@@ -4593,14 +4600,14 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                           onChange={(e) => handleLeadAssignChange(lead.id, e.target.value || undefined)}
                           className="bg-[#0F1528] border border-white/15 rounded-xl px-3 py-2 text-xs min-w-[150px]"
                         >
-                          <option value="">بدون تعيين</option>
-                          {salesManager && <option value={salesManager.id}>عند مدير المبيعات</option>}
+                          <option value="">{t('common.noAssignee')}</option>
+                          {salesManager && <option value={salesManager.id}>{t('common.atSalesManager')}</option>}
                           {reps.map(rep => (
                             <option key={rep.id} value={rep.id}>{rep.name}</option>
                           ))}
                         </select>
                       ) : (
-                        <span className="text-sm font-bold text-zinc-300">{assignedRep?.name || 'غير معيّن'}</span>
+                        <span className="text-sm font-bold text-zinc-300">{assignedRep?.name || t('common.unassigned')}</span>
                       )}
                     </td>
                     {!isSalesManagerLeadDistribution && (
@@ -4612,11 +4619,11 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                             className="bg-[#0F1528] border border-white/15 rounded-xl px-3 py-2 text-xs min-w-[140px]"
                           >
                             {leadStatuses.map(status => (
-                              <option key={status} value={status}>{status}</option>
+                              <option key={status} value={status}>{getLeadStatusLabel(status, t)}</option>
                             ))}
                           </select>
                         ) : (
-                          <span className="text-xs px-3 py-1 rounded-full bg-white/10 text-zinc-200 font-bold">{lead.status}</span>
+                          <span className="text-xs px-3 py-1 rounded-full bg-white/10 text-zinc-200 font-bold">{getLeadStatusLabel(lead.status, t)}</span>
                         )}
                       </td>
                     )}
@@ -4629,7 +4636,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                               onClick={() => setQuoteLead(lead)}
                               className="px-2 py-1.5 rounded-lg text-[10px] font-black bg-amber-500/20 text-amber-200 border border-amber-500/30"
                             >
-                              عرض سعر
+                              {t('leads.priceQuote')}
                             </button>
                           )}
                           {canUpdateLead(lead) && (
@@ -4638,7 +4645,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                               onClick={() => openLeadUpdate(lead)}
                               className="px-2 py-1.5 rounded-lg text-[10px] font-black bg-[#7C6BFF] text-white border border-violet-400/40"
                             >
-                              + تحديث
+                              {t('leads.addUpdate')}
                             </button>
                           )}
                           <button
@@ -4646,7 +4653,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                             onClick={() => setClient360Lead(lead)}
                             className="px-2 py-1.5 rounded-lg text-[10px] font-black bg-cyan-500/20 text-cyan-200 border border-cyan-500/30"
                           >
-                            Client 360
+                            {t('leads.client360')}
                           </button>
                           {currentUser?.role === 'محاسب' && lead.status === 'مغلق - فوز' && (
                             <button
@@ -4659,25 +4666,25 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                               })}
                               className="px-2 py-1.5 rounded-lg text-[10px] font-black bg-indigo-500/20 text-indigo-200 border border-indigo-500/30"
                             >
-                              كشف حساب
+                              {t('leads.statement')}
                             </button>
                           )}
                           {canManageAssignment && (
                             <button
                               type="button"
                               onClick={async () => {
-                                if (!window.confirm(`حذف الليد «${lead.name}» نهائياً؟ لا يمكن التراجع.`)) return;
+                                if (!window.confirm(t('leads.deleteConfirmNamed', { name: lead.name }))) return;
                                 toastDeleteLeadResult(await deleteLead(lead.id));
                               }}
                               className="px-2 py-1.5 rounded-lg text-[10px] font-black bg-rose-500/15 text-rose-200 border border-rose-500/35 hover:bg-rose-500/25 inline-flex items-center gap-1"
-                              title="حذف الليد"
+                              title={t('leads.deleteLead')}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
-                              حذف
+                              {t('leads.delete')}
                             </button>
                           )}
                           <button
-                            onClick={() => toast.info(`آخر تحديث: ${new Date(lead.updatedAt).toLocaleString('ar-EG')}`)}
+                            onClick={() => toast.info(new Date(lead.updatedAt).toLocaleString(dateLocale))}
                             data-tooltip="عرض آخر تحديث"
                             aria-label="عرض آخر تحديث"
                             className="icon-tooltip p-2.5 bg-[#0F1528] hover:bg-[#151E38] rounded-xl text-zinc-300 transition-colors"
@@ -4698,14 +4705,14 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                   </td>
                   <td className="p-5 text-sm">
                     <span className="px-2 py-1 rounded-lg text-[10px] font-black bg-amber-500/20 text-amber-300">
-                      خارجي ({c.sourceLabel})
+                      {t('leads.externalSource', { label: c.sourceLabel })}
                     </span>
                   </td>
-                  <td className="p-5 text-amber-300 font-black">{c.receivableDebit.toLocaleString()} ج.م</td>
-                  <td className="p-5 text-emerald-300 font-black">{c.payableCredit.toLocaleString()} ج.م</td>
+                  <td className="p-5 text-amber-300 font-black">{c.receivableDebit.toLocaleString(dateLocale)} {t('common.currency')}</td>
+                  <td className="p-5 text-emerald-300 font-black">{c.payableCredit.toLocaleString(dateLocale)} {t('common.currency')}</td>
                   <td className="p-5">
                     <span className={`text-xs px-3 py-1 rounded-full font-bold ${c.receivableDebit > 0 ? 'bg-amber-500/20 text-amber-300' : c.payableCredit > 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/10 text-zinc-200'}`}>
-                      {c.receivableDebit > 0 ? 'مدين' : c.payableCredit > 0 ? 'دائن' : 'متزن'}
+                      {c.receivableDebit > 0 ? t('leads.debit') : c.payableCredit > 0 ? t('leads.credit') : t('leads.balanced')}
                     </span>
                   </td>
                   <td className="p-5">
@@ -4713,7 +4720,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                       onClick={() => setStatementCustomer({ name: c.name, customerCode: c.customerCode, sourceLabel: c.sourceLabel, sourceType: c.sourceType })}
                       className="px-3 py-1.5 rounded-lg text-xs font-black bg-indigo-500/20 text-indigo-200 border border-indigo-400/30 hover:bg-indigo-500/30"
                     >
-                      كشف حساب
+                      {t('leads.statement')}
                     </button>
                   </td>
                 </tr>
@@ -4725,7 +4732,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
         {(entityMode === 'leads' ? visibleLeads.length === 0 : customerRows.length === 0) && (
           <div className="p-12 text-center text-zinc-400">
             <Users className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            لا توجد نتائج مطابقة للفلاتر الحالية
+            {t('leads.noResults')}
           </div>
         )}
 
@@ -4733,10 +4740,14 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
           <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-white/10 bg-[#0B1020]/50 flex-wrap">
             <div className="flex items-center gap-3 flex-wrap">
               <p className="text-xs text-zinc-400">
-                عرض {(leadsPage - 1) * leadsPageSize + 1}–{Math.min(leadsPage * leadsPageSize, visibleLeads.length)} من {visibleLeads.length}
+                {t('leads.showingRange', {
+                  from: (leadsPage - 1) * leadsPageSize + 1,
+                  to: Math.min(leadsPage * leadsPageSize, visibleLeads.length),
+                  total: visibleLeads.length,
+                })}
               </p>
               <label className="flex items-center gap-2 text-xs text-zinc-400">
-                <span className="font-bold">في الصفحة:</span>
+                <span className="font-bold">{t('leads.perPage')}</span>
                 <select
                   value={leadsPageSize}
                   onChange={(e) => handleLeadsPageSizeChange(Number(e.target.value))}
@@ -4758,7 +4769,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                   onClick={() => setLeadsPage((p) => Math.max(1, p - 1))}
                   className="px-3 py-1.5 rounded-xl text-xs font-black border border-white/15 bg-white/5 disabled:opacity-40"
                 >
-                  السابق
+                  {t('common.previous')}
                 </button>
                 <span className="text-xs text-zinc-300 font-bold px-2">
                   {leadsPage} / {leadsPageCount}
@@ -4769,7 +4780,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                   onClick={() => setLeadsPage((p) => Math.min(leadsPageCount, p + 1))}
                   className="px-3 py-1.5 rounded-xl text-xs font-black border border-white/15 bg-white/5 disabled:opacity-40"
                 >
-                  التالي
+                  {t('common.next')}
                 </button>
               </div>
             )}
@@ -4783,7 +4794,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[220] flex items-center justify-center p-6">
           <div className="bg-[#0E1426] border border-white/10 w-full max-w-2xl rounded-[3rem] p-8">
             <div className="flex items-center justify-between mb-8">
-              <h3 className="text-2xl font-black">{entityMode === 'customers' ? 'إضافة عميل جديد' : 'إضافة ليد جديد'}</h3>
+              <h3 className="text-2xl font-black">{entityMode === 'customers' ? t('leadForm.addCustomerTitle') : t('leadForm.addLeadTitle')}</h3>
               <button onClick={() => setIsAddLeadOpen(false)} className="p-2 hover:bg-white/10 rounded-xl">
                 <X className="w-6 h-6" />
               </button>
@@ -4791,21 +4802,21 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
 
             {entityMode === 'customers' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input value={customerForm.name} onChange={(e) => setCustomerForm(prev => ({ ...prev, name: e.target.value }))} placeholder="اسم العميل" className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
-                <input value={customerForm.company} onChange={(e) => setCustomerForm(prev => ({ ...prev, company: e.target.value }))} placeholder="اسم الشركة (اختياري)" className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
-                <input value={customerForm.phone} onChange={(e) => setCustomerForm(prev => ({ ...prev, phone: e.target.value }))} placeholder="رقم الهاتف" className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
-                <input value={customerForm.email} onChange={(e) => setCustomerForm(prev => ({ ...prev, email: e.target.value }))} placeholder="البريد الإلكتروني (اختياري)" className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
-                <input value={customerForm.sourceLabel} onChange={(e) => setCustomerForm(prev => ({ ...prev, sourceLabel: e.target.value }))} placeholder="المصدر (مثال: صيانة / زيارة مباشرة)" className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm md:col-span-2" />
+                <input value={customerForm.name} onChange={(e) => setCustomerForm(prev => ({ ...prev, name: e.target.value }))} placeholder={t('leadForm.customerName')} className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
+                <input value={customerForm.company} onChange={(e) => setCustomerForm(prev => ({ ...prev, company: e.target.value }))} placeholder={t('leadForm.companyOptional')} className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
+                <input value={customerForm.phone} onChange={(e) => setCustomerForm(prev => ({ ...prev, phone: e.target.value }))} placeholder={t('leadForm.phone')} className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
+                <input value={customerForm.email} onChange={(e) => setCustomerForm(prev => ({ ...prev, email: e.target.value }))} placeholder={t('leadForm.emailOptional')} className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
+                <input value={customerForm.sourceLabel} onChange={(e) => setCustomerForm(prev => ({ ...prev, sourceLabel: e.target.value }))} placeholder={t('leadForm.sourceExample')} className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm md:col-span-2" />
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input value={leadForm.name} onChange={(e) => setLeadForm(prev => ({ ...prev, name: e.target.value }))} placeholder="اسم العميل" className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
-                <input value={leadForm.company} onChange={(e) => setLeadForm(prev => ({ ...prev, company: e.target.value }))} placeholder="اسم الشركة" className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
-                <input value={leadForm.phone} onChange={(e) => setLeadForm(prev => ({ ...prev, phone: e.target.value }))} placeholder="رقم الهاتف" className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
-                <input value={leadForm.email} onChange={(e) => setLeadForm(prev => ({ ...prev, email: e.target.value }))} placeholder="البريد الإلكتروني (اختياري)" className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
-                <input type="number" min={1} value={leadForm.budget} onChange={(e) => setLeadForm(prev => ({ ...prev, budget: e.target.value }))} placeholder="الميزانية المتوقعة" className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
+                <input value={leadForm.name} onChange={(e) => setLeadForm(prev => ({ ...prev, name: e.target.value }))} placeholder={t('leadForm.customerName')} className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
+                <input value={leadForm.company} onChange={(e) => setLeadForm(prev => ({ ...prev, company: e.target.value }))} placeholder={t('leadForm.companyName')} className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
+                <input value={leadForm.phone} onChange={(e) => setLeadForm(prev => ({ ...prev, phone: e.target.value }))} placeholder={t('leadForm.phone')} className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
+                <input value={leadForm.email} onChange={(e) => setLeadForm(prev => ({ ...prev, email: e.target.value }))} placeholder={t('leadForm.emailOptional')} className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
+                <input type="number" min={1} value={leadForm.budget} onChange={(e) => setLeadForm(prev => ({ ...prev, budget: e.target.value }))} placeholder={t('leadForm.budget')} className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
                 <select value={leadForm.source} onChange={(e) => setLeadForm(prev => ({ ...prev, source: e.target.value }))} className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm">
-                  <option value="يدوي">يدوي</option>
+                  <option value="يدوي">{t('leads.sourceManual')}</option>
                   <option value="facebook">facebook</option>
                   <option value="instagram">instagram</option>
                   <option value="google">google</option>
@@ -4813,9 +4824,9 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                 </select>
 
                 <select value={leadForm.companySize} onChange={(e) => setLeadForm(prev => ({ ...prev, companySize: e.target.value as Lead['companySize'] }))} className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm">
-                  <option value="صغير">صغير</option>
-                  <option value="متوسط">متوسط</option>
-                  <option value="كبير">كبير</option>
+                  <option value="صغير">{t('leadForm.companySizeSmall')}</option>
+                  <option value="متوسط">{t('leadForm.companySizeMedium')}</option>
+                  <option value="كبير">{t('leadForm.companySizeLarge')}</option>
                 </select>
 
                 <select value={leadForm.category} onChange={(e) => setLeadForm(prev => ({ ...prev, category: e.target.value as LeadCategory }))} className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm">
@@ -4827,8 +4838,8 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
             )}
 
             <div className="flex gap-3 mt-8">
-              <button onClick={entityMode === 'customers' ? handleAddManualCustomer : handleCreateLead} className="flex-1 bg-[#7C6BFF] text-white py-3 rounded-2xl font-black">{entityMode === 'customers' ? 'حفظ العميل' : 'حفظ الليد'}</button>
-              <button onClick={() => setIsAddLeadOpen(false)} className="flex-1 bg-[#0F1528] border border-white/15 py-3 rounded-2xl font-black">إلغاء</button>
+              <button onClick={entityMode === 'customers' ? handleAddManualCustomer : handleCreateLead} className="flex-1 bg-[#7C6BFF] text-white py-3 rounded-2xl font-black">{entityMode === 'customers' ? t('leadForm.saveCustomer') : t('leadForm.saveLead')}</button>
+              <button onClick={() => setIsAddLeadOpen(false)} className="flex-1 bg-[#0F1528] border border-white/15 py-3 rounded-2xl font-black">{t('common.cancel')}</button>
             </div>
           </div>
         </div>
@@ -4838,12 +4849,12 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
           <div className="bg-[#0E1426] border border-white/10 w-full max-w-5xl rounded-[2.5rem] p-6">
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h3 className="text-xl font-black">كشف حساب العميل: {statementCustomer.name}</h3>
-                <p className="text-xs text-zinc-500 mt-1">كود العميل: {customerStatementCode} • المصدر: {statementCustomer.sourceLabel || 'غير محدد'} • عدد الفواتير: {customerStatementTotals.count}</p>
+                <h3 className="text-xl font-black">{t('statement.title', { name: statementCustomer.name })}</h3>
+                <p className="text-xs text-zinc-500 mt-1">{t('statement.meta', { code: customerStatementCode, source: statementCustomer.sourceLabel || t('statement.undefinedSource'), count: customerStatementTotals.count })}</p>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={exportCustomerStatementCsv} className="px-3 py-2 rounded-xl text-xs font-black bg-[#0F1528] border border-white/10 text-zinc-200">تصدير CSV</button>
-                <button onClick={printCustomerStatement} className="px-3 py-2 rounded-xl text-xs font-black bg-[#0F1528] border border-white/10 text-zinc-200">طباعة / PDF</button>
+                <button onClick={exportCustomerStatementCsv} className="px-3 py-2 rounded-xl text-xs font-black bg-[#0F1528] border border-white/10 text-zinc-200">{t('statement.exportCsv')}</button>
+                <button onClick={printCustomerStatement} className="px-3 py-2 rounded-xl text-xs font-black bg-[#0F1528] border border-white/10 text-zinc-200">{t('statement.printPdf')}</button>
                 <button onClick={() => setStatementCustomer(null)} className="p-2 hover:bg-white/10 rounded-xl">
                   <X className="w-5 h-5" />
                 </button>
@@ -4851,30 +4862,30 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
               <div className="bg-[#0F1528] border border-white/10 rounded-xl p-3">
-                <p className="text-[11px] text-zinc-400">إجمالي الفواتير</p>
-                <p className="text-lg font-black text-white">{customerStatementTotals.total.toLocaleString()} ج.م</p>
+                <p className="text-[11px] text-zinc-400">{t('statement.totalInvoices')}</p>
+                <p className="text-lg font-black text-white">{customerStatementTotals.total.toLocaleString(dateLocale)} {t('common.currency')}</p>
               </div>
               <div className="bg-[#0F1528] border border-white/10 rounded-xl p-3">
-                <p className="text-[11px] text-zinc-400">المحصل</p>
-                <p className="text-lg font-black text-emerald-300">{customerStatementTotals.paid.toLocaleString()} ج.م</p>
+                <p className="text-[11px] text-zinc-400">{t('statement.collected')}</p>
+                <p className="text-lg font-black text-emerald-300">{customerStatementTotals.paid.toLocaleString(dateLocale)} {t('common.currency')}</p>
               </div>
               <div className="bg-[#0F1528] border border-white/10 rounded-xl p-3">
-                <p className="text-[11px] text-zinc-400">المتبقي (أقساط/ذمم)</p>
-                <p className="text-lg font-black text-amber-300">{customerStatementTotals.remaining.toLocaleString()} ج.م</p>
+                <p className="text-[11px] text-zinc-400">{t('statement.remainingInstallments')}</p>
+                <p className="text-lg font-black text-amber-300">{customerStatementTotals.remaining.toLocaleString(dateLocale)} {t('common.currency')}</p>
               </div>
             </div>
             <div className="overflow-x-auto max-h-[420px]">
               <table className="w-full min-w-[980px] text-right">
                 <thead>
                   <tr className="bg-[#0B1020]/80">
-                    <th className="p-4 text-[10px] uppercase tracking-widest text-zinc-400">رقم الفاتورة</th>
-                    <th className="p-4 text-[10px] uppercase tracking-widest text-zinc-400">التاريخ</th>
-                    <th className="p-4 text-[10px] uppercase tracking-widest text-zinc-400">الإجمالي</th>
-                    <th className="p-4 text-[10px] uppercase tracking-widest text-zinc-400">المحصل</th>
-                    <th className="p-4 text-[10px] uppercase tracking-widest text-zinc-400">المتبقي</th>
-                    <th className="p-4 text-[10px] uppercase tracking-widest text-zinc-400">موعد القسط</th>
-                    <th className="p-4 text-[10px] uppercase tracking-widest text-zinc-400">الحالة</th>
-                    <th className="p-4 text-[10px] uppercase tracking-widest text-zinc-400">الدفعات</th>
+                    <th className="p-4 text-[10px] uppercase tracking-widest text-zinc-400">{t('statement.colInvoiceId')}</th>
+                    <th className="p-4 text-[10px] uppercase tracking-widest text-zinc-400">{t('statement.colDate')}</th>
+                    <th className="p-4 text-[10px] uppercase tracking-widest text-zinc-400">{t('statement.colTotal')}</th>
+                    <th className="p-4 text-[10px] uppercase tracking-widest text-zinc-400">{t('statement.colPaid')}</th>
+                    <th className="p-4 text-[10px] uppercase tracking-widest text-zinc-400">{t('statement.colRemaining')}</th>
+                    <th className="p-4 text-[10px] uppercase tracking-widest text-zinc-400">{t('statement.colDueDate')}</th>
+                    <th className="p-4 text-[10px] uppercase tracking-widest text-zinc-400">{t('statement.colStatus')}</th>
+                    <th className="p-4 text-[10px] uppercase tracking-widest text-zinc-400">{t('statement.colPayments')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
@@ -4885,54 +4896,54 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                     return (
                       <tr key={inv.id} className="hover:bg-white/[0.03]">
                         <td className="p-4 font-mono text-xs text-indigo-300">{inv.id}</td>
-                        <td className="p-4 text-xs text-zinc-300">{new Date(inv.date).toLocaleDateString('ar-EG')}</td>
-                        <td className="p-4 font-black text-white">{total.toLocaleString()} ج.م</td>
-                        <td className="p-4 font-black text-emerald-300">{paid.toLocaleString()} ج.م</td>
-                        <td className="p-4 font-black text-amber-300">{remaining.toLocaleString()} ج.م</td>
-                        <td className="p-4 text-xs text-zinc-300">{inv.nextDueDate ? new Date(inv.nextDueDate).toLocaleDateString('ar-EG') : '—'}</td>
+                        <td className="p-4 text-xs text-zinc-300">{new Date(inv.date).toLocaleDateString(dateLocale)}</td>
+                        <td className="p-4 font-black text-white">{total.toLocaleString(dateLocale)} {t('common.currency')}</td>
+                        <td className="p-4 font-black text-emerald-300">{paid.toLocaleString(dateLocale)} {t('common.currency')}</td>
+                        <td className="p-4 font-black text-amber-300">{remaining.toLocaleString(dateLocale)} {t('common.currency')}</td>
+                        <td className="p-4 text-xs text-zinc-300">{inv.nextDueDate ? new Date(inv.nextDueDate).toLocaleDateString(dateLocale) : '—'}</td>
                         <td className="p-4 text-xs">
                           <span className={`px-2 py-1 rounded-lg font-black ${inv.status === 'مدفوع' ? 'bg-emerald-500/20 text-emerald-300' : inv.status === 'متأخر' ? 'bg-rose-500/20 text-rose-300' : 'bg-amber-500/20 text-amber-300'}`}>{inv.status}</span>
                         </td>
-                        <td className="p-4 text-xs text-zinc-300">{(inv.collections || []).length} دفعة</td>
+                        <td className="p-4 text-xs text-zinc-300">{t('statement.paymentCount', { count: (inv.collections || []).length })}</td>
                       </tr>
                     );
                   })}
                   {customerStatementInvoices.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="p-6 text-center text-zinc-500">لا توجد فواتير لهذا العميل بعد.</td>
+                      <td colSpan={8} className="p-6 text-center text-zinc-500">{t('statement.noInvoices')}</td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
             <div className="mt-5 border-t border-white/10 pt-4">
-              <h4 className="font-black mb-3">حركة الدفعات (مجمعة)</h4>
+              <h4 className="font-black mb-3">{t('statement.paymentsSection')}</h4>
               <div className="overflow-x-auto max-h-[260px]">
                 <table className="w-full min-w-[900px] text-right">
                   <thead>
                     <tr className="bg-[#0B1020]/80">
-                      <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">التاريخ</th>
-                      <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">رقم الفاتورة</th>
-                      <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">طريقة الدفع</th>
-                      <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">القيمة</th>
-                      <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">رقم القيد</th>
-                      <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">ملاحظة</th>
+                      <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">{t('statement.colPayDate')}</th>
+                      <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">{t('statement.colInvoiceId')}</th>
+                      <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">{t('statement.colPayMethod')}</th>
+                      <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">{t('statement.colPayAmount')}</th>
+                      <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">{t('statement.colJournalId')}</th>
+                      <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">{t('statement.colNote')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/10">
                     {customerStatementCollections.map((col) => (
                       <tr key={col.id} className="hover:bg-white/[0.03]">
-                        <td className="p-3 text-xs text-zinc-300">{new Date(col.date).toLocaleString('ar-EG')}</td>
+                        <td className="p-3 text-xs text-zinc-300">{new Date(col.date).toLocaleString(dateLocale)}</td>
                         <td className="p-3 font-mono text-xs text-indigo-300">{col.invoiceId}</td>
                         <td className="p-3 text-xs text-cyan-300">{col.method}</td>
-                        <td className="p-3 font-black text-emerald-300">{col.amount.toLocaleString()} ج.م</td>
+                        <td className="p-3 font-black text-emerald-300">{col.amount.toLocaleString(dateLocale)} {t('common.currency')}</td>
                         <td className="p-3 font-mono text-[11px] text-zinc-400">{col.journalEntryId || '—'}</td>
                         <td className="p-3 text-xs text-zinc-400">{col.note || '—'}</td>
                       </tr>
                     ))}
                     {customerStatementCollections.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="p-5 text-center text-zinc-500">لا توجد دفعات مسجلة لهذا العميل حتى الآن.</td>
+                        <td colSpan={6} className="p-5 text-center text-zinc-500">{t('statement.noPayments')}</td>
                       </tr>
                     )}
                   </tbody>
@@ -4947,8 +4958,8 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
           <div className="bg-[#0E1426] border border-white/10 w-full max-w-6xl rounded-[2.5rem] p-6 max-h-[90vh] overflow-y-auto custom-scrollbar">
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h3 className="text-xl font-black">Client 360: {client360Lead.name}</h3>
-                <p className="text-xs text-zinc-500 mt-1">{client360Lead.company} • {client360Lead.phone} • الحالة: {client360Lead.status}</p>
+                <h3 className="text-xl font-black">{t('client360.title', { name: client360Lead.name })}</h3>
+                <p className="text-xs text-zinc-500 mt-1">{t('client360.subtitle', { company: client360Lead.company, phone: client360Lead.phone, statusLabel: t('leads.colStatus'), status: getLeadStatusLabel(client360Lead.status, t) })}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {canUpdateLead(client360Lead) && (
@@ -4957,7 +4968,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                     onClick={() => openLeadUpdate(client360Lead)}
                     className="px-4 py-2 rounded-xl text-xs font-black bg-[#7C6BFF] text-white"
                   >
-                    + إضافة تحديث
+                    {t('client360.addUpdate')}
                   </button>
                 )}
                 <button type="button" onClick={() => setClient360Lead(null)} className="p-2 hover:bg-white/10 rounded-xl">
@@ -4966,20 +4977,20 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-5">
-              <div className="bg-[#0F1528] border border-white/10 rounded-xl p-3"><p className="text-[11px] text-zinc-400">إجمالي الفواتير</p><p className="text-lg font-black text-white">{client360Data.totalRevenue.toLocaleString()} ج.م</p></div>
-              <div className="bg-[#0F1528] border border-white/10 rounded-xl p-3"><p className="text-[11px] text-zinc-400">المحصل</p><p className="text-lg font-black text-emerald-300">{client360Data.totalCollected.toLocaleString()} ج.م</p></div>
-              <div className="bg-[#0F1528] border border-white/10 rounded-xl p-3"><p className="text-[11px] text-zinc-400">المتبقي</p><p className="text-lg font-black text-amber-300">{client360Data.totalRemaining.toLocaleString()} ج.م</p></div>
-              <div className="bg-[#0F1528] border border-white/10 rounded-xl p-3"><p className="text-[11px] text-zinc-400">مرفقات موثقة</p><p className="text-lg font-black text-cyan-300">{client360Data.evidenceItems.length}</p></div>
+              <div className="bg-[#0F1528] border border-white/10 rounded-xl p-3"><p className="text-[11px] text-zinc-400">{t('client360.totalInvoices')}</p><p className="text-lg font-black text-white">{client360Data.totalRevenue.toLocaleString(dateLocale)} {t('common.currency')}</p></div>
+              <div className="bg-[#0F1528] border border-white/10 rounded-xl p-3"><p className="text-[11px] text-zinc-400">{t('client360.collected')}</p><p className="text-lg font-black text-emerald-300">{client360Data.totalCollected.toLocaleString(dateLocale)} {t('common.currency')}</p></div>
+              <div className="bg-[#0F1528] border border-white/10 rounded-xl p-3"><p className="text-[11px] text-zinc-400">{t('client360.remaining')}</p><p className="text-lg font-black text-amber-300">{client360Data.totalRemaining.toLocaleString(dateLocale)} {t('common.currency')}</p></div>
+              <div className="bg-[#0F1528] border border-white/10 rounded-xl p-3"><p className="text-[11px] text-zinc-400">{t('client360.evidenceCount')}</p><p className="text-lg font-black text-cyan-300">{client360Data.evidenceItems.length}</p></div>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {currentUser?.role !== 'محاسب' && (
               <div className="bg-[#0F1528]/70 border border-white/10 rounded-xl p-4">
-                <h4 className="font-black mb-3">آخر التواصلات</h4>
+                <h4 className="font-black mb-3">{t('client360.recentComms')}</h4>
                 <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar pr-1">
                   {client360Lead.timeline.slice(0, 10).map((a) => (
                     <div key={a.id} className="border border-white/10 rounded-lg p-2">
                       <p className="text-sm font-bold text-zinc-200">{a.action}</p>
-                      <p className="text-[11px] text-zinc-400 mt-1">{a.note || 'بدون ملاحظة'}</p>
+                      <p className="text-[11px] text-zinc-400 mt-1">{a.note || t('client360.noNote')}</p>
                     </div>
                   ))}
                 </div>
@@ -4987,38 +4998,38 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
               )}
               {currentUser?.role !== 'محاسب' && (
               <div className="bg-[#0F1528]/70 border border-white/10 rounded-xl p-4">
-                <h4 className="font-black mb-3">أرشيف الأدلة</h4>
+                <h4 className="font-black mb-3">{t('client360.evidenceArchive')}</h4>
                 <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar pr-1">
                   {client360Data.evidenceItems.map((a) => (
                     <a key={a.id} href={a.evidenceRef} target="_blank" rel="noreferrer" className="block border border-cyan-500/25 rounded-lg p-2 hover:bg-cyan-500/10">
                       <p className="text-sm font-bold text-cyan-200">{a.action}</p>
-                      <p className="text-[11px] text-zinc-400 mt-1">{new Date(a.createdAt).toLocaleString('ar-EG')}</p>
+                      <p className="text-[11px] text-zinc-400 mt-1">{new Date(a.createdAt).toLocaleString(dateLocale)}</p>
                     </a>
                   ))}
-                  {client360Data.evidenceItems.length === 0 && <p className="text-sm text-zinc-500">لا توجد أدلة مرفقة حتى الآن.</p>}
+                  {client360Data.evidenceItems.length === 0 && <p className="text-sm text-zinc-500">{t('client360.noEvidence')}</p>}
                 </div>
               </div>
               )}
               <div className="bg-[#0F1528]/70 border border-white/10 rounded-xl p-4">
-                <h4 className="font-black mb-3">ملخص فواتير العميل</h4>
+                <h4 className="font-black mb-3">{t('client360.invoiceSummary')}</h4>
                 <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar pr-1">
                   {client360Data.leadInvoices.map((inv) => (
                     <div key={inv.id} className="border border-white/10 rounded-lg p-2 flex items-center justify-between text-sm">
                       <span className="text-zinc-200 font-bold">{inv.id}</span>
-                      <span className="text-emerald-300">{Number(inv.totalAmount ?? inv.amount).toLocaleString()} ج.م</span>
+                      <span className="text-emerald-300">{Number(inv.totalAmount ?? inv.amount).toLocaleString(dateLocale)} {t('common.currency')}</span>
                       <span className="text-zinc-400">{inv.status}</span>
                     </div>
                   ))}
-                  {client360Data.leadInvoices.length === 0 && <p className="text-sm text-zinc-500">لا توجد فواتير مرتبطة.</p>}
+                  {client360Data.leadInvoices.length === 0 && <p className="text-sm text-zinc-500">{t('client360.noInvoices')}</p>}
                 </div>
               </div>
               <div className="bg-[#0F1528]/70 border border-white/10 rounded-xl p-4">
-                <h4 className="font-black mb-3">الحالة التشغيلية (اجتماعات/تصوير/معدات)</h4>
+                <h4 className="font-black mb-3">{t('client360.opsStatus')}</h4>
                 <div className="text-xs text-zinc-300 space-y-2">
-                  <p>اجتماعات: <span className="font-black text-indigo-300">{client360Data.leadMeetings.length}</span></p>
-                  <p>طلبات تصوير: <span className="font-black text-amber-300">{client360Data.leadShoots.length}</span></p>
-                  <p>طلبات معدات: <span className="font-black text-cyan-300">{client360Data.leadEquipment.length}</span></p>
-                  <p>مصروفات مرتبطة (تقديري): <span className="font-black text-rose-300">{client360Data.leadExpenses.length}</span></p>
+                  <p>{t('client360.meetings')}: <span className="font-black text-indigo-300">{client360Data.leadMeetings.length}</span></p>
+                  <p>{t('client360.shoots')}: <span className="font-black text-amber-300">{client360Data.leadShoots.length}</span></p>
+                  <p>{t('client360.equipment')}: <span className="font-black text-cyan-300">{client360Data.leadEquipment.length}</span></p>
+                  <p>{t('client360.linkedExpenses')}: <span className="font-black text-rose-300">{client360Data.leadExpenses.length}</span></p>
                 </div>
               </div>
             </div>
@@ -5405,7 +5416,7 @@ const SalesManagerSettings = ({
 
   return (
     <div className="animate-in fade-in duration-500 space-y-8">
-      <SectionTitle title="إعدادات توزيع العمل" subtitle="تحديد مهارات المناديب للتحكم في التوزيع التلقائي لليدز" icon={Settings} />
+      <SectionTitle title={t('screens.workDistribution.title')} subtitle={t('screens.workDistribution.subtitle')} icon={Settings} />
 
       <EquipmentMasterMiniPanel />
 
@@ -6175,6 +6186,7 @@ const RepQuotePipelineCard = ({
 };
 
 const RepProfessionalDashboard = ({ currentUser, onGoToTab }: { currentUser: User; onGoToTab?: (tab: string) => void }) => {
+  const { t } = useTranslation();
   const { leads, logLeadInteraction, updateLeadStatus, setLeadFollowUp, printBrandingSettings, priceQuotes, repRecordClientAcceptance, repRecordClientRejection } = useData();
   const { openInteraction, openLeadUpdate, LeadRepUpdateModal } = useLeadRepUpdate();
   const [quoteLead, setQuoteLead] = useState<Lead | null>(null);
@@ -6518,7 +6530,7 @@ const RepProfessionalDashboard = ({ currentUser, onGoToTab }: { currentUser: Use
 
   return (
     <div className="animate-in fade-in duration-500 space-y-8">
-      <SectionTitle title="لوحة تنفيذ المندوب" subtitle="قائمة عمل حقيقية: ماذا تم، وما الإجراء التالي، وما المتوقع اليوم" icon={LayoutDashboard} />
+      <SectionTitle title={t('screens.repDashboard.title')} subtitle={t('screens.repDashboard.subtitle')} icon={LayoutDashboard} />
       <div className="flex items-center gap-2">
         <button onClick={printRepReport} className="px-4 py-2 rounded-xl text-xs font-black bg-[#0F1528] border border-white/10 text-zinc-200">
           طباعة تقرير المندوب (PDF)
@@ -6959,6 +6971,7 @@ const RepProfessionalDashboard = ({ currentUser, onGoToTab }: { currentUser: Use
 };
 
 const RepPerformanceView = ({ currentUser, onGoToTab }: { currentUser: User; onGoToTab?: (tab: string) => void }) => {
+  const { t } = useTranslation();
   const { getRepSnapshots, leads } = useData();
   const snapshot = useMemo(
     () => getRepSnapshots().find(r => r.repId === currentUser.id),
@@ -7016,7 +7029,7 @@ const RepPerformanceView = ({ currentUser, onGoToTab }: { currentUser: User; onG
   if (!snapshot) {
     return (
       <div className="animate-in fade-in duration-500">
-        <SectionTitle title="أدائي" subtitle="لا توجد بيانات كافية لحساب الأداء حاليًا" icon={Trophy} />
+        <SectionTitle title={t('screens.repPerformanceEmpty.title')} subtitle={t('screens.repPerformanceEmpty.subtitle')} icon={Trophy} />
       </div>
     );
   }
@@ -7032,7 +7045,7 @@ const RepPerformanceView = ({ currentUser, onGoToTab }: { currentUser: User; onG
 
   return (
     <div className="animate-in fade-in duration-500 space-y-8">
-      <SectionTitle title="أدائي" subtitle="قياس نتائجك الفعلية وتحسين معدل الإغلاق" icon={Trophy} />
+      <SectionTitle title={t('screens.repPerformance.title')} subtitle={t('screens.repPerformance.subtitle')} icon={Trophy} />
 
       <div className={`border rounded-[2rem] p-6 flex items-center justify-between gap-4 ${scoreColorClass}`}>
         <div>
@@ -7317,6 +7330,7 @@ const ProductionBookingSpendCompact = ({
 };
 
 const BookingCenter = ({ currentUser, onGoToTab }: { currentUser: User; onGoToTab?: (tab: string) => void }) => {
+  const { t } = useTranslation();
   const {
     leads,
     shootBookings,
@@ -7619,7 +7633,17 @@ const BookingCenter = ({ currentUser, onGoToTab }: { currentUser: User; onGoToTa
 
   return (
     <div className="animate-in fade-in duration-500 space-y-8">
-      <SectionTitle title="نظام الحجوزات" subtitle={canOwnerApprove ? 'اعتماد طلبات الحجز ومتابعتها من نوع واحد في كل مرة' : canAccountantExecute ? 'تنفيذ المطالبات المالية المعتمدة' : 'اختر نوع الحجز: لوكيشن، معدات، اجتماع، أو إدخال بيان لحجز آخر'} icon={Calendar} />
+      <SectionTitle
+        title={t('screens.bookings.title')}
+        subtitle={
+          canOwnerApprove
+            ? t('screens.bookings.subtitleOwner')
+            : canAccountantExecute
+              ? t('screens.bookings.subtitleAccountant')
+              : t('screens.bookings.subtitleDefault')
+        }
+        icon={Calendar}
+      />
       <div className="flex flex-wrap gap-2 p-1.5 rounded-2xl bg-white/[0.04] border border-white/10" dir="rtl">
         {([
           ['shoot', 'لوكيشن / تصوير'],
@@ -8077,6 +8101,7 @@ const BookingCenter = ({ currentUser, onGoToTab }: { currentUser: User; onGoToTa
 };
 
 const TeamPerformanceHub = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) => {
+  const { t } = useTranslation();
   const { currentUser, leads, getRepSnapshots, reviewLeadActivity, updateMonthlyTarget } = useData();
   const snapshots = useMemo(
     () => getRepSnapshots().sort((a, b) => b.revenue - a.revenue),
@@ -8185,7 +8210,7 @@ const TeamPerformanceHub = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }
 
   return (
     <div className="animate-in fade-in duration-500 space-y-8">
-      <SectionTitle title="أداء فريق المبيعات" subtitle="لوحة تنفيذية مختصرة لاتخاذ القرار بسرعة" icon={BarChart3} />
+      <SectionTitle title={t('screens.teamPerformance.title')} subtitle={t('screens.teamPerformance.subtitle')} icon={BarChart3} />
       <div className="flex items-center gap-3">
         <button onClick={exportPerformanceCsv} className="px-4 py-2 rounded-xl text-sm font-black bg-[#0F1528] border border-white/10 text-zinc-200">تصدير تقرير الأداء CSV</button>
       </div>
@@ -8446,6 +8471,7 @@ const TeamPerformanceHub = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }
 
 /** تبويب مدير المبيعات: إضافة مندوبي مبيعات (يظهرون تلقائياً في الرئيسية) */
 const ManagerSalesTeamPanel = () => {
+  const { t } = useTranslation();
   const { users, leads } = useData();
   const reps = useMemo(() => users.filter(u => u.role === 'مندوب'), [users]);
   const activeLeads = useMemo(
@@ -8455,7 +8481,7 @@ const ManagerSalesTeamPanel = () => {
 
   return (
     <div className="animate-in fade-in duration-500 space-y-8">
-      <SectionTitle title="فريق المبيعات" subtitle="لوحة مختصرة لإدارة الفريق والتغطية التشغيلية بدون عناصر إضافية." icon={UserPlus} />
+      <SectionTitle title={t('screens.salesTeam.title')} subtitle={t('screens.salesTeam.subtitle')} icon={UserPlus} />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <MiniMetricCard title="عدد المندوبين" value={reps.length} hint="إجمالي الفريق الحالي" icon={Users} tone="indigo" />
@@ -8521,6 +8547,7 @@ const ApprovalCenter = ({
   setCommentDrafts,
   currentUserName,
 }: any) => {
+  const { t } = useTranslation();
   const [quotePaymentForm, setQuotePaymentForm] = useState<Record<string, { initPayment: string; lines: PaymentInstallment[] }>>({});
 
   const getQPF = (qid: string) => quotePaymentForm[qid] || { initPayment: '', lines: [] };
@@ -8541,7 +8568,7 @@ const ApprovalCenter = ({
   const ownerOnly = currentUserRole === 'مالك';
   return (
     <div className="animate-in fade-in duration-500 space-y-6">
-      <SectionTitle title="مركز الاعتمادات" subtitle="اعتماد/رفض كل الطلبات من شاشة واحدة" icon={ShieldCheck} />
+      <SectionTitle title={t('screens.approvalsHub.title')} subtitle={t('screens.approvalsHub.subtitle')} icon={ShieldCheck} />
       <p className="text-sm text-zinc-300 bg-white/[0.04] border border-white/10 rounded-2xl px-4 py-3 flex flex-wrap gap-x-4 gap-y-1">
         <span>مصروفات: <b className="text-amber-300">{pendingExpenses.length}</b></span>
         <span className="text-zinc-600 hidden sm:inline">|</span>
@@ -10489,6 +10516,7 @@ const NavItems = ({ role, active, onChange, allowedTabs }: any) => {
 
 const WelcomeGate = ({ onUnlock }: { onUnlock: () => void }) => {
   const { dir } = useAppDirection();
+  const { t } = useTranslation();
   const [tapCount, setTapCount] = useState(0);
 
   const onSecretTap = () => {
@@ -10513,7 +10541,7 @@ const WelcomeGate = ({ onUnlock }: { onUnlock: () => void }) => {
           type="button"
           onClick={onSecretTap}
           className="mt-10 flex h-14 w-14 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 outline-none focus:outline-none active:scale-95 transition-transform"
-          aria-label="فتح تسجيل الدخول"
+          aria-label={t('welcome.openLogin')}
         >
           <span className="select-none text-4xl leading-none" role="presentation">
             😄
@@ -10792,8 +10820,8 @@ const Root = () => {
     desktopNotifyWhenVisible,
     setDesktopNotifyWhenVisible,
   } = useData();
-  const { t } = useTranslation();
-  const { dir, isRtl } = useAppDirection();
+  const { t, i18n } = useTranslation();
+  const { dir, isRtl, dateLocale } = useAppDirection();
   const roleLabel = (role: User['role']) => t(`roles.${role}`);
   const [activeTab, setActiveTab] = useState('home');
   const [tabHistory, setTabHistory] = useState<string[]>([]);
@@ -10992,7 +11020,7 @@ const Root = () => {
     } catch {
       return filterNotificationsForViewer(personalTodoBellNotifications, currentRole, String(currentUserId || '').trim());
     }
-  }, [getSystemNotifications, currentRole, currentUserId, personalTodoBellNotifications]);
+  }, [getSystemNotifications, currentRole, currentUserId, personalTodoBellNotifications, i18n.language]);
   const criticalNotifications = useMemo(
     () => notifications.filter((n: any) => (n.priority || (n.level === 'high' ? 'critical' : 'normal')) === 'critical'),
     [notifications]
@@ -11186,6 +11214,12 @@ const Root = () => {
   const todayMeetingsCount = safeShootBookings.filter((b) => b.date === todayDateKey).length
     + safeMeetingBookings.filter((m) => m.date === todayDateKey).length;
   const todayFocusItems = useMemo(() => {
+    const errFinance = t('errors.noFinancePage');
+    const errBookings = t('errors.noBookingsPage');
+    const errProduction = t('errors.noProductionPage');
+    const errFollowups = t('errors.noFollowupsPage');
+    const errMeetings = t('errors.noMeetingsPage');
+    const errClaims = t('errors.noFinancialClaimsPage');
     if (currentRole === 'محاسب') {
       const overdueInstallments = safeInvoices.filter((inv) => Number(inv.remainingAmount || 0) > 0 && inv.nextDueDate && inv.nextDueDate < todayDateKey).length;
       const dueTodayInstallments = safeInvoices.filter((inv) => Number(inv.remainingAmount || 0) > 0 && inv.nextDueDate === todayDateKey).length;
@@ -11194,23 +11228,23 @@ const Root = () => {
         + safeEquipmentBookings.filter((b) => b.financialStatus === 'بانتظار_تنفيذ_محاسب').length
         + safeMeetingBookings.filter((m) => m.financialStatus === 'بانتظار_تنفيذ_محاسب').length;
       return [
-        { id: 'acc-overdue-installments', label: 'أقساط متأخرة', value: overdueInstallments, onClick: () => openAccountantSubTab('invoices', 'لا توجد صفحة الإدارة المالية في صلاحياتك الحالية', { invoiceQuickFilter: 'overdue_installments' }) },
-        { id: 'acc-due-today-installments', label: 'أقساط مستحقة اليوم', value: dueTodayInstallments, onClick: () => openAccountantSubTab('invoices', 'لا توجد صفحة الإدارة المالية في صلاحياتك الحالية', { invoiceQuickFilter: 'due_today_installments' }) },
-        { id: 'acc-financial-claims', label: 'مطالبات مالية بانتظار التنفيذ', value: financialClaimsPending, onClick: () => openBookingsWithIntent('financial_claims_pending_execution', 'لا توجد صفحة متاحة لعرض المطالبات المالية') },
-        { id: 'acc-custody-settlement', label: 'تسويات عهدة بانتظار الإقفال', value: custodySettlementPending, onClick: () => openAccountantSubTab('custody', 'لا توجد صفحة الإدارة المالية في صلاحياتك الحالية') },
+        { id: 'acc-overdue-installments', label: t('homeFocus.accOverdueInstallments'), value: overdueInstallments, onClick: () => openAccountantSubTab('invoices', errFinance, { invoiceQuickFilter: 'overdue_installments' }) },
+        { id: 'acc-due-today-installments', label: t('homeFocus.accDueTodayInstallments'), value: dueTodayInstallments, onClick: () => openAccountantSubTab('invoices', errFinance, { invoiceQuickFilter: 'due_today_installments' }) },
+        { id: 'acc-financial-claims', label: t('homeFocus.accFinancialClaims'), value: financialClaimsPending, onClick: () => openBookingsWithIntent('financial_claims_pending_execution', errClaims) },
+        { id: 'acc-custody-settlement', label: t('homeFocus.accCustodySettlement'), value: custodySettlementPending, onClick: () => openAccountantSubTab('custody', errFinance) },
       ];
     }
     if (currentRole === 'مدير إنتاج') {
       const h = productionCustodyHome;
       const myTodayMeetings = safeMeetingBookings.filter((m) => m.date === todayDateKey && m.repId === currentUserId).length;
-      const goProd = () => openFirstAllowedTab(['production'], 'لا توجد صفحة تمويل الإنتاج في صلاحياتك الحالية');
+      const goProd = () => openFirstAllowedTab(['production'], errProduction);
       return [
-        { id: 'prod-custody-request', label: 'طلبات عهدة عند المالك', value: h.request, onClick: goProd },
-        { id: 'prod-custody-waitpay', label: 'بانتظار دفع المحاسب', value: h.waitPay, onClick: goProd },
-        { id: 'prod-custody-ready', label: 'عهد جاهزة للاستلام', value: h.ready, onClick: goProd },
-        { id: 'prod-custody-active', label: 'عهد نشطة (تسجيل صرف)', value: h.active, onClick: goProd },
-        { id: 'prod-custody-settlement', label: 'تسوية عند المحاسب للإقفال', value: h.settlement, onClick: goProd },
-        { id: 'prod-today-meetings', label: 'اجتماعاتي اليوم', value: myTodayMeetings, onClick: () => openBookingsWithIntent('today', 'لا توجد صفحة متاحة لعرض اجتماعات اليوم في صلاحياتك الحالية') },
+        { id: 'prod-custody-request', label: t('homeFocus.prodCustodyRequest'), value: h.request, onClick: goProd },
+        { id: 'prod-custody-waitpay', label: t('homeFocus.prodCustodyWaitPay'), value: h.waitPay, onClick: goProd },
+        { id: 'prod-custody-ready', label: t('homeFocus.prodCustodyReady'), value: h.ready, onClick: goProd },
+        { id: 'prod-custody-active', label: t('homeFocus.prodCustodyActive'), value: h.active, onClick: goProd },
+        { id: 'prod-custody-settlement', label: t('homeFocus.prodCustodySettlement'), value: h.settlement, onClick: goProd },
+        { id: 'prod-today-meetings', label: t('homeFocus.prodTodayMeetings'), value: myTodayMeetings, onClick: () => openBookingsWithIntent('today', errMeetings) },
       ];
     }
     if (currentRole === 'مندوب') {
@@ -11232,21 +11266,21 @@ const Root = () => {
       return [
         {
           id: 'rep-overdue-followups',
-          label: 'متابعاتي المتأخرة',
+          label: t('homeFocus.repOverdueFollowups'),
           value: myOverdue,
           onClick: () => {
             localStorage.setItem(NAV_INTENT_KEY, JSON.stringify({ tab: 'leads', leadsAssignedFilter: 'mine', leadsOverdueOnly: true }));
-            openFirstAllowedTab(['leads', 'dashboard'], 'لا توجد صفحة متاحة لعرض المتابعات في صلاحياتك الحالية');
+            openFirstAllowedTab(['leads', 'dashboard'], errFollowups);
           },
         },
-        { id: 'rep-today-followups', label: 'متابعات اليوم', value: myTodayFollowups, onClick: () => openFirstAllowedTab(['dashboard', 'leads'], 'لا توجد صفحة متاحة لعرض المتابعات في صلاحياتك الحالية') },
-        { id: 'rep-today-bookings', label: 'حجوزاتي اليوم', value: myTodayBookings, onClick: () => openBookingsWithIntent('today', 'لا توجد صفحة متاحة لعرض الحجوزات في صلاحياتك الحالية') },
+        { id: 'rep-today-followups', label: t('homeFocus.repTodayFollowups'), value: myTodayFollowups, onClick: () => openFirstAllowedTab(['dashboard', 'leads'], errFollowups) },
+        { id: 'rep-today-bookings', label: t('homeFocus.repTodayBookings'), value: myTodayBookings, onClick: () => openBookingsWithIntent('today', errBookings) },
       ];
     }
     return [
-      { id: 'ops-overdue-followups', label: 'المتابعات المتأخرة', value: overdueFollowupsCount, onClick: () => handleTodayFocusClick('overdue-followups') },
-      { id: 'ops-pending-approvals', label: 'طلبات اعتماد', value: dataHealth.pendingApprovals, onClick: () => handleTodayFocusClick('pending-approvals') },
-      { id: 'ops-today-meetings', label: 'اجتماعات اليوم', value: todayMeetingsCount, onClick: () => handleTodayFocusClick('today-meetings') },
+      { id: 'ops-overdue-followups', label: t('homeFocus.opsOverdueFollowups'), value: overdueFollowupsCount, onClick: () => handleTodayFocusClick('overdue-followups') },
+      { id: 'ops-pending-approvals', label: t('homeFocus.opsPendingApprovals'), value: dataHealth.pendingApprovals, onClick: () => handleTodayFocusClick('pending-approvals') },
+      { id: 'ops-today-meetings', label: t('homeFocus.opsTodayMeetings'), value: todayMeetingsCount, onClick: () => handleTodayFocusClick('today-meetings') },
     ];
   }, [
     currentRole,
@@ -11262,6 +11296,8 @@ const Root = () => {
     overdueFollowupsCount,
     dataHealth.pendingApprovals,
     todayMeetingsCount,
+    t,
+    i18n.language,
   ]);
 
   /** تذكيرات قبل الموعد + عند حلول الموعد (نافذة وصوت) + توست ومركز التنبيهات */
@@ -11566,7 +11602,7 @@ const Root = () => {
             <button
               type="button"
               className="fixed inset-0 z-[60] bg-black/70 lg:hidden cursor-default border-0 p-0"
-              aria-label="إغلاق القائمة"
+              aria-label={t('nav.closeMenu')}
               onClick={() => setIsSidebarOpen(false)}
             />
             <aside className="fixed top-0 bottom-0 end-0 z-[70] flex w-[min(20rem,92vw)] max-w-full flex-col border-e border-white/10 bg-[#0C1120] p-6 shadow-2xl lg:hidden">
@@ -11582,7 +11618,7 @@ const Root = () => {
                   type="button"
                   onClick={() => setIsSidebarOpen(false)}
                   className="shrink-0 rounded-xl p-2 text-zinc-400 hover:bg-white/10 hover:text-white"
-                  aria-label="إغلاق"
+                  aria-label={t('common.close')}
                 >
                   <X className="h-6 w-6" />
                 </button>
@@ -11724,7 +11760,7 @@ const Root = () => {
                   style={{ top: notificationsPanelPos.top, left: notificationsPanelPos.left }}
                 >
                   <div className="flex items-center justify-between mb-2 gap-2">
-                    <p className="text-sm font-black text-zinc-900">مركز التنبيهات</p>
+                    <p className="text-sm font-black text-zinc-900">{t('notifications.hub')}</p>
                     <div className="flex items-center gap-2 shrink-0">
                       {isServerDataMode() && currentUser?.authSource === 'database' && (
                         <button
@@ -11735,8 +11771,8 @@ const Root = () => {
                               setNotificationsPanelSyncing(true);
                               try {
                                 const ok = await refreshServerWorkspace();
-                                if (!ok) toast.error('تعذر تحديث البيانات من السيرفر');
-                                else toast.success('تم تحديث التنبيهات من السيرفر');
+                                if (!ok) toast.error(t('notifications.syncFailed'));
+                                else toast.success(t('notifications.syncDone'));
                               } finally {
                                 setNotificationsPanelSyncing(false);
                               }
@@ -11744,24 +11780,23 @@ const Root = () => {
                           }}
                           className="text-[11px] font-bold text-cyan-700 hover:text-cyan-900 disabled:opacity-40"
                         >
-                          {notificationsPanelSyncing ? 'جاري التحديث…' : 'تحديث'}
+                          {notificationsPanelSyncing ? t('common.refreshing') : t('common.refresh')}
                         </button>
                       )}
-                      <button type="button" onClick={() => setIsNotificationsOpen(false)} className="text-xs text-zinc-600 hover:text-zinc-900">إغلاق</button>
+                      <button type="button" onClick={() => setIsNotificationsOpen(false)} className="text-xs text-zinc-600 hover:text-zinc-900">{t('common.close')}</button>
                     </div>
                   </div>
                   {notificationsPanelSyncing && (
-                    <p className="text-[11px] text-zinc-600 mb-2">يتم مزامنة أحدث البيانات من السيرفر لعرض تنبيهات دقيقة…</p>
+                    <p className="text-[11px] text-zinc-600 mb-2">{t('notifications.syncing')}</p>
                   )}
                   {isServerDataMode() && currentUser?.authSource === 'database' && (
                     <p className="text-[10px] text-zinc-600 mb-2 leading-relaxed">
-                      لا يوجد WebSocket: التحديث التلقائي عند العودة للتبويب أو التركيز تقريباً كل 60 ثانية، بالإضافة إلى زر
-                      «تحديث» وفتح هذه اللوحة.
+                      {t('notifications.syncHint')}
                     </p>
                   )}
                   <div className="mb-2 flex items-center gap-2 text-[11px]">
-                    <span className="px-2 py-1 rounded-lg bg-rose-100 text-rose-800 border border-rose-300">Critical: {criticalNotifications.length}</span>
-                    <span className="px-2 py-1 rounded-lg bg-zinc-200 text-zinc-800 border border-zinc-400">Normal: {normalNotifications.length}</span>
+                    <span className="px-2 py-1 rounded-lg bg-rose-100 text-rose-800 border border-rose-300">{t('notifications.critical')}: {criticalNotifications.length}</span>
+                    <span className="px-2 py-1 rounded-lg bg-zinc-200 text-zinc-800 border border-zinc-400">{t('notifications.normal')}: {normalNotifications.length}</span>
                   </div>
                   <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar pr-1">
                     {notifications.map((n) => (
@@ -11779,18 +11814,18 @@ const Root = () => {
                         <p className="text-sm font-bold text-zinc-900">{n.title}</p>
                         <p className="text-xs text-zinc-700 mt-1">{n.message}</p>
                         <div className="mt-2 flex items-center justify-between">
-                          <p className="text-[10px] text-zinc-500">{new Date(n.createdAt).toLocaleString('ar-EG')}</p>
+                          <p className="text-[10px] text-zinc-500">{new Date(n.createdAt).toLocaleString(dateLocale)}</p>
                           <div className="flex items-center gap-2">
                             <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${((n as any).priority || (n.level === 'high' ? 'critical' : 'normal')) === 'critical' ? 'bg-rose-100 text-rose-800' : 'bg-zinc-200 text-zinc-700'}`}>
-                              {((n as any).priority || (n.level === 'high' ? 'critical' : 'normal')) === 'critical' ? 'Critical' : 'Normal'}
+                              {((n as any).priority || (n.level === 'high' ? 'critical' : 'normal')) === 'critical' ? t('notifications.critical') : t('notifications.normal')}
                             </span>
-                            <p className="text-[10px] text-violet-700 font-bold">فتح: {resolveNotificationTab(n) || '—'}</p>
+                            <p className="text-[10px] text-violet-700 font-bold">{t('notifications.openTab', { tab: resolveNotificationTab(n) ? getNavLabel(resolveNotificationTab(n)!, currentUser.role, t) : '—' })}</p>
                           </div>
                         </div>
                       </button>
                     ))}
                     {notifications.length === 0 && (
-                      <p className="text-xs text-zinc-600 text-center py-4">لا توجد تنبيهات جديدة</p>
+                      <p className="text-xs text-zinc-600 text-center py-4">{t('notifications.empty')}</p>
                     )}
                   </div>
                 </div>,
@@ -11822,7 +11857,7 @@ const Root = () => {
               onClick={() => handleHomeDataHealthClick('leads-unassigned')}
               className="text-right bg-gradient-to-br from-white/[0.10] via-white/[0.04] to-rose-500/[0.05] border border-white/15 rounded-2xl px-4 py-3.5 text-sm hover:border-rose-300/35 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_rgba(244,63,94,0.16)] transition-all duration-300"
             >
-              <span className="text-zinc-300">ليدز بدون تعيين</span>
+              <span className="text-zinc-300">{t('home.unassignedLeads')}</span>
               <span className="font-black text-2xl text-white block mt-1">{dataHealth.leadsNoAssignee}</span>
             </button>
             <button
@@ -11830,7 +11865,7 @@ const Root = () => {
               onClick={() => handleHomeDataHealthClick('pending-approvals')}
               className="text-right bg-gradient-to-br from-white/[0.10] via-white/[0.04] to-rose-500/[0.05] border border-white/15 rounded-2xl px-4 py-3.5 text-sm hover:border-rose-300/35 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_rgba(244,63,94,0.16)] transition-all duration-300"
             >
-              <span className="text-zinc-300">طلبات تحتاج اعتماد</span>
+              <span className="text-zinc-300">{t('home.pendingApprovals')}</span>
               <span className="font-black text-2xl text-white block mt-1">{dataHealth.pendingApprovals}</span>
             </button>
             <button
@@ -11838,7 +11873,7 @@ const Root = () => {
               onClick={() => handleHomeDataHealthClick('invoices-no-cc')}
               className="text-right bg-gradient-to-br from-white/[0.10] via-white/[0.04] to-rose-500/[0.05] border border-white/15 rounded-2xl px-4 py-3.5 text-sm hover:border-rose-300/35 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_rgba(244,63,94,0.16)] transition-all duration-300"
             >
-              <span className="text-zinc-300">فواتير بدون مركز تكلفة</span>
+              <span className="text-zinc-300">{t('home.invoicesNoCostCenter')}</span>
               <span className="font-black text-2xl text-white block mt-1">{dataHealth.invoicesNoCostCenter}</span>
             </button>
           </div>
@@ -11846,7 +11881,7 @@ const Root = () => {
         {activeTab === 'home' && (
           <div className="mb-8 grid grid-cols-1 xl:grid-cols-3 gap-4">
             <div className="bg-gradient-to-br from-white/[0.10] via-white/[0.04] to-rose-500/[0.06] border border-white/15 rounded-3xl p-5 backdrop-blur-xl shadow-[0_14px_34px_rgba(0,0,0,0.3)]">
-              <p className="text-[11px] text-zinc-500 mb-3 tracking-widest font-black">تركيز اليوم</p>
+              <p className="text-[11px] text-zinc-500 mb-3 tracking-widest font-black">{t('home.todayFocus')}</p>
               <div className="space-y-2 text-sm">
                 {todayFocusItems.map((item) => (
                   <button
@@ -11866,9 +11901,9 @@ const Root = () => {
                 <p className="text-[11px] text-zinc-500 tracking-widest font-black">{t('header.personalTasks')}</p>
                 <span className="text-[11px] text-zinc-500">{t('personalTodo.openCount', { count: personalTodos.filter((item) => !item.done).length })}</span>
               </div>
-              <input value={todoInput} onChange={(e) => setTodoInput(e.target.value)} placeholder="نص المهمة..." className="w-full bg-black/20 border border-white/15 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-rose-300/45 transition-all mb-2" />
+              <input value={todoInput} onChange={(e) => setTodoInput(e.target.value)} placeholder={t('personalTodo.placeholder')} className="w-full bg-black/20 border border-white/15 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-rose-300/45 transition-all mb-2" />
               <div className="flex flex-wrap items-center gap-2 mb-2">
-                <span className="text-[10px] text-zinc-500 shrink-0 w-full sm:w-auto">الموعد (اختياري):</span>
+                <span className="text-[10px] text-zinc-500 shrink-0 w-full sm:w-auto">{t('personalTodo.dueOptional')}</span>
                 <input
                   type="date"
                   value={todoDueDate}
@@ -11890,7 +11925,7 @@ const Root = () => {
                   }}
                   className="text-[10px] text-zinc-500 underline px-1"
                 >
-                  بدون وقت
+                  {t('personalTodo.noTime')}
                 </button>
               </div>
               <button
@@ -11899,7 +11934,7 @@ const Root = () => {
                   const text = todoInput.trim();
                   if (!text) return;
                   if (!canonicalTodoUserId(currentUser?.id)) {
-                    toast.error('تعذر حفظ المهمة: لا يوجد معرّف مستخدم نشط. أعد تسجيل الدخول.');
+                    toast.error(t('personalTodo.saveFailedNoUser'));
                     return;
                   }
                   let dueIso: string | undefined;
@@ -11907,18 +11942,18 @@ const Root = () => {
                   const timeT = todoDueTime.trim();
                   if (dateT || timeT) {
                     if (!dateT) {
-                      toast.error('اختر التاريخ أو امسح الوقت بالكامل');
+                      toast.error(t('personalTodo.pickDateOrClearTime'));
                       return;
                     }
                     if (!timeT) {
-                      toast.error('اختر الساعة مع التاريخ');
+                      toast.error(t('personalTodo.pickTimeWithDate'));
                       return;
                     }
                     const d = new Date(`${dateT}T${timeT}`);
                     if (!Number.isNaN(d.getTime()) && d.getTime() > Date.now()) {
                       dueIso = d.toISOString();
                     } else {
-                      toast.error('اختَر موعداً في المستقبل لتفعيل التذكيرات');
+                      toast.error(t('personalTodo.futureDueRequired'));
                       return;
                     }
                   }

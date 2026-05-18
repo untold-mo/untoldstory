@@ -1,4 +1,5 @@
 import { isAutoImportedLeadSource } from '@/lib/leadSource';
+import { currencyLabel, dateLocale, st, stMore } from '@/lib/sysNotifyT';
 import { getMonthKey } from './dateMonthKey';
 import { hasAssignedActiveSalesLead, operationalBaselineForPayrollReminder } from './notificationGates';
 import type {
@@ -86,8 +87,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-open-personal-todos-${uid}`,
         level: 'medium',
-        title: 'مهام معلّقة على قائمتك',
-        message: `لديك ${open} مهمة شخصية لم تُكمَل بعد`,
+        title: st('openPersonalTodos.title'),
+        message: st('openPersonalTodos.message', { count: open }),
         createdAt: nowIso,
         targetRoles: [u.role],
         targetUserId: String(uid).trim(),
@@ -105,8 +106,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-overdue-followups-${overdueFollowUps.length}`,
         level: 'high',
-        title: 'متابعات متأخرة (إجمالي الفريق)',
-        message: `يوجد ${overdueFollowUps.length} عميل بحاجة لمتابعة فورية`,
+        title: st('overdueFollowupsTeam.title'),
+        message: st('overdueFollowupsTeam.message', { count: overdueFollowUps.length }),
         createdAt: nowIso,
         targetRoles: ['مالك', 'مدير مبيعات'],
         entityType: 'lead',
@@ -124,8 +125,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
         out.push({
           id: `n-overdue-followups-rep-${rep.id}-${count}`,
           level: 'high',
-          title: 'متابعات متأخرة (خاصتي)',
-          message: `لديك ${count} ليدز بحاجة لمتابعة فورية`,
+          title: st('overdueFollowupsMine.title'),
+          message: st('overdueFollowupsMine.message', { count }),
           createdAt: nowIso,
           targetRoles: ['مندوب'],
           targetUserId: rep.id,
@@ -142,8 +143,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
           out.push({
             id: `n-overdue-followups-mgr-${mgr.id}-${teamCount}`,
             level: 'high',
-            title: 'متابعات متأخرة لفريق المبيعات',
-            message: `${teamCount} ليدز بحاجة متابعة — راجع التوزيع والتعيين`,
+            title: st('overdueFollowupsMgr.title'),
+            message: st('overdueFollowupsMgr.message', { count: teamCount }),
             createdAt: nowIso,
             targetRoles: ['مدير مبيعات'],
             targetUserId: mgr.id,
@@ -165,8 +166,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
         level: 'high',
         priority: 'critical',
         queue: 'ops',
-        title: 'تصعيد: ليدز بدون متابعة',
-        message: `${staleLeads.length} ليدز مفتوحة لم يتم تحديثها منذ يومين أو أكثر`,
+        title: st('staleEscalation.title'),
+        message: st('staleEscalation.message', { count: staleLeads.length }),
         createdAt: nowIso,
         targetRoles: ['مالك', 'مدير مبيعات'],
         entityType: 'lead',
@@ -184,8 +185,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-auto-reassign-candidates-${autoReassignCandidates.length}`,
         level: 'medium',
-        title: 'مرشحين لإعادة توزيع تلقائي',
-        message: `${autoReassignCandidates.length} ليدز تجاوزت حد SLA لإعادة التوزيع`,
+        title: st('autoReassign.title'),
+        message: st('autoReassign.message', { count: autoReassignCandidates.length }),
         createdAt: nowIso,
         targetRoles: ['مالك', 'مدير مبيعات'],
         entityType: 'lead',
@@ -202,8 +203,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
         id: `n-archive-gap-${wonWithoutEvidence.length}`,
         level: 'medium',
         queue: 'ops',
-        title: 'فجوة أرشفة مستندات العملاء',
-        message: `${wonWithoutEvidence.length} عميل فائز بدون أي دليل/مرفق في السجل`,
+        title: st('archiveGap.title'),
+        message: st('archiveGap.message', { count: wonWithoutEvidence.length }),
         createdAt: nowIso,
         targetRoles: ['مالك', 'مدير مبيعات'],
         entityType: 'lead',
@@ -216,8 +217,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-unassigned-${unassigned.length}`,
         level: 'medium',
-        title: 'ليدز غير مسندة',
-        message: `${unassigned.length} ليدز بدون مندوب حتى الآن`,
+        title: st('unassignedLeads.title'),
+        message: st('unassignedLeads.message', { count: unassigned.length }),
         createdAt: nowIso,
         targetRoles: ['مالك', 'مدير مبيعات'],
         entityType: 'lead',
@@ -249,14 +250,16 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       if (!u || (u.role !== 'مندوب' && u.role !== 'مدير مبيعات')) return;
       const lines = list
         .slice(0, 8)
-        .map((l) => `• ${l.name}${l.company ? ` — ${l.company}` : ''}`)
+        .map((l) =>
+          st('assignLeadLine', { name: l.name, company: l.company ? ` — ${l.company}` : '' })
+        )
         .join('\n');
-      const more = list.length > 8 ? `\n… و${list.length - 8} ليدز أخرى` : '';
+      const more = list.length > 8 ? `\n${stMore(list.length - 8)}` : '';
       out.push({
         id: `n-lead-assigned-to-${assigneeId}-${list.length}`,
         level: 'high',
-        title: `تم توجيه ليدز إليك (${list.length})`,
-        message: `يوجد ${list.length} عميلاً مُسنَدين إليك مؤخراً:\n${lines}${more}`,
+        title: st('leadAssigned.title', { count: list.length }),
+        message: st('leadAssigned.message', { count: list.length, lines, more }),
         createdAt: nowIso,
         targetRoles: [u.role],
         targetUserId: assigneeId,
@@ -279,8 +282,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-imported-manager-${pendingImported.length}`,
         level: 'high',
-        title: 'ليدز جديدة من القنوات المربوطة',
-        message: `${pendingImported.length} ليدز وصلت تلقائياً وتنتظر توزيع مدير المبيعات`,
+        title: st('importedLeads.title'),
+        message: st('importedLeads.message', { count: pendingImported.length }),
         createdAt: nowIso,
         targetRoles: ['مدير مبيعات', 'مالك'],
         targetUserId: managerId,
@@ -290,8 +293,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-imported-owner-copy-${pendingImported.length}`,
         level: 'medium',
-        title: 'نسخة متابعة: ليدز القنوات المربوطة',
-        message: `${pendingImported.length} ليدز وصلت تلقائياً وتنتظر توزيع مدير المبيعات`,
+        title: st('importedLeadsOwnerCopy.title'),
+        message: st('importedLeadsOwnerCopy.message', { count: pendingImported.length }),
         createdAt: nowIso,
         targetRoles: ['مالك'],
         entityType: 'lead',
@@ -304,8 +307,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-pending-expenses-owner-${pendingExpRows.length}`,
         level: 'high',
-        title: 'مصروفات بانتظار اعتمادك',
-        message: `يوجد ${pendingExpRows.length} مصروفات تحتاج اعتماد المالك`,
+        title: st('pendingExpensesOwner.title'),
+        message: st('pendingExpensesOwner.message', { count: pendingExpRows.length }),
         createdAt: nowIso,
         targetRoles: ['مالك'],
         entityType: 'system',
@@ -314,8 +317,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-pending-expenses-accountant-${pendingExpRows.length}`,
         level: 'medium',
-        title: 'مصروفات بانتظار اعتماد المالك',
-        message: `يوجد ${pendingExpRows.length} مصروفات لم تُعتمد بعد في مركز الاعتمادات`,
+        title: st('pendingExpensesAccountant.title'),
+        message: st('pendingExpensesAccountant.message', { count: pendingExpRows.length }),
         createdAt: nowIso,
         targetRoles: ['محاسب'],
         entityType: 'system',
@@ -334,18 +337,26 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
     expBySubmitter.forEach((list, submitterId) => {
       const u = users.find((x) => String(x.id).trim() === submitterId);
       if (!u) return;
+      const cur = currencyLabel();
+      const loc = dateLocale();
       const lines = list
         .slice(0, 6)
-        .map((ex) => `• ${ex.title} — ${(ex.totalAmount ?? ex.amount).toLocaleString('ar-EG')} ج.م`)
+        .map((ex) =>
+          st('expenseLine', {
+            title: ex.title,
+            amount: (ex.totalAmount ?? ex.amount).toLocaleString(loc),
+            currency: cur,
+          })
+        )
         .join('\n');
-      const more = list.length > 6 ? `\n… و${list.length - 6} مصروفات أخرى` : '';
+      const more = list.length > 6 ? `\n${stMore(list.length - 6)}` : '';
       const expNav =
         u.role === 'مدير إنتاج' ? 'production' : u.role === 'محاسب' ? 'accountant' : u.role === 'مالك' ? 'approvals' : 'home';
       out.push({
         id: `n-expense-pending-submitter-${submitterId}-${list.length}`,
         level: 'medium',
-        title: `مصروفاتك بانتظار الاعتماد (${list.length})`,
-        message: `${lines}${more}`,
+        title: st('expensePendingSubmitter.title', { count: list.length }),
+        message: st('expensePendingSubmitter.message', { lines, more }),
         createdAt: nowIso,
         targetRoles: [u.role],
         targetUserId: submitterId,
@@ -364,11 +375,16 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
         if (!u) return;
         const expNav =
           u.role === 'مدير إنتاج' ? 'production' : u.role === 'محاسب' ? 'accountant' : u.role === 'مالك' ? 'approvals' : 'home';
+        const approved = e.approvalStatus === 'معتمد';
         out.push({
           id: `n-expense-outcome-${e.id}-${e.approvalStatus}`,
-          level: e.approvalStatus === 'معتمد' ? 'low' : 'medium',
-          title: e.approvalStatus === 'معتمد' ? 'تم اعتماد مصروفك' : 'تم رفض مصروفك',
-          message: `${e.title} — ${(e.totalAmount ?? e.amount).toLocaleString('ar-EG')} ج.م`,
+          level: approved ? 'low' : 'medium',
+          title: st(approved ? 'expenseApproved.title' : 'expenseRejected.title'),
+          message: st(approved ? 'expenseApproved.message' : 'expenseRejected.message', {
+            title: e.title,
+            amount: (e.totalAmount ?? e.amount).toLocaleString(dateLocale()),
+            currency: currencyLabel(),
+          }),
           createdAt: nowIso,
           targetRoles: [u.role],
           targetUserId: sid,
@@ -384,8 +400,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-prod-claims-${pendingProdClaims}`,
         level: 'high',
-        title: 'مطالبات مالية لطلبات الإنتاج',
-        message: `يوجد ${pendingProdClaims} مطالبات مالية معتمدة من المالك بانتظار تنفيذ المحاسب`,
+        title: st('prodClaims.title'),
+        message: st('prodClaims.message', { count: pendingProdClaims }),
         createdAt: nowIso,
         targetRoles: ['محاسب'],
         entityType: 'system',
@@ -398,17 +414,24 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
     if (pendingShootReviews.length > 0) {
       const lines = pendingShootReviews
         .slice(0, 8)
-        .map((b) => `• ${b.customerName} — ${b.date} ${b.time} (${b.repName})`)
+        .map((b) =>
+          st('shootReviewLine', {
+            customer: b.customerName,
+            date: b.date,
+            time: b.time,
+            rep: b.repName,
+          })
+        )
         .join('\n');
       const more =
-        pendingShootReviews.length > 8 ? `\n… و${pendingShootReviews.length - 8} طلبات أخرى` : '';
+        pendingShootReviews.length > 8 ? `\n${stMore(pendingShootReviews.length - 8)}` : '';
       out.push({
         id: `n-shoot-pending-batch-${pendingShootReviews.length}`,
         level: pendingShootReviews.some((b) => b.financialStatus === 'بانتظار_اعتماد_مالك')
           ? 'high'
           : 'medium',
-        title: `طلبات حجز تصوير بانتظار المراجعة (${pendingShootReviews.length})`,
-        message: `${lines}${more}`,
+        title: st('shootPendingReview.title', { count: pendingShootReviews.length }),
+        message: st('shootPendingReview.message', { lines, more }),
         createdAt: nowIso,
         targetRoles: ['مالك', 'مدير مبيعات'],
         entityType: 'system',
@@ -426,14 +449,18 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
     shootPendingByRep.forEach((list, repId) => {
       const u = users.find((x) => String(x.id).trim() === repId);
       if (!u || u.role !== 'مندوب') return;
+      const shootMyLines = list
+        .slice(0, 6)
+        .map((b) =>
+          st('shootMyLine', { customer: b.customerName, date: b.date, time: b.time })
+        )
+        .join('\n');
+      const shootMyMore = list.length > 6 ? `\n${stMore(list.length - 6)}` : '';
       out.push({
         id: `n-shoot-pending-my-${repId}-${list.length}`,
         level: 'medium',
-        title: `طلبات تصويرك بانتظار المراجعة (${list.length})`,
-        message: list
-          .slice(0, 6)
-          .map((b) => `• ${b.customerName} — ${b.date} ${b.time}`)
-          .join('\n') + (list.length > 6 ? `\n… و${list.length - 6} أخرى` : ''),
+        title: st('shootPendingMy.title', { count: list.length }),
+        message: st('shootPendingMy.message', { lines: shootMyLines, more: shootMyMore }),
         createdAt: nowIso,
         targetRoles: ['مندوب'],
         targetUserId: repId,
@@ -446,9 +473,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-shoot-finance-owner-${pendingShootFinanceOwner.length}`,
         level: 'high',
-        title: `مطالبات إنتاج (تصوير) تنتظر اعتمادك (${pendingShootFinanceOwner.length})`,
-        message:
-          `${pendingShootFinanceOwner.length} طلباً من مدير الإنتاج بمبالغ أو شروط مالية بحاجة لاعتماد المالك. راجع الحجوزات.`,
+        title: st('shootFinanceOwner.title', { count: pendingShootFinanceOwner.length }),
+        message: st('shootFinanceOwner.message', { count: pendingShootFinanceOwner.length }),
         createdAt: nowIso,
         targetRoles: ['مالك'],
         entityType: 'system',
@@ -461,11 +487,13 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-equipment-pending-batch-${pendingEquipmentReviews.length}`,
         level: 'medium',
-        title: `حجوزات معدات تحت المراجعة (${pendingEquipmentReviews.length})`,
-        message: pendingEquipmentReviews
-          .slice(0, 6)
-          .map((b) => `• ${b.equipmentName} — ${b.customerName}`)
-          .join('\n'),
+        title: st('equipmentPending.title', { count: pendingEquipmentReviews.length }),
+        message: st('equipmentPending.message', {
+          lines: pendingEquipmentReviews
+            .slice(0, 6)
+            .map((b) => st('equipmentLine', { equipment: b.equipmentName, customer: b.customerName }))
+            .join('\n'),
+        }),
         createdAt: nowIso,
         targetRoles: ['مالك', 'مدير مبيعات'],
         entityType: 'system',
@@ -483,14 +511,16 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
     equipPendingByRep.forEach((list, repId) => {
       const u = users.find((x) => String(x.id).trim() === repId);
       if (!u || u.role !== 'مندوب') return;
+      const equipMyLines = list
+        .slice(0, 6)
+        .map((b) => st('equipmentLine', { equipment: b.equipmentName, customer: b.customerName }))
+        .join('\n');
+      const equipMyMore = list.length > 6 ? `\n${stMore(list.length - 6)}` : '';
       out.push({
         id: `n-equipment-pending-my-${repId}-${list.length}`,
         level: 'medium',
-        title: `طلبات معداتك بانتظار المراجعة (${list.length})`,
-        message: list
-          .slice(0, 6)
-          .map((b) => `• ${b.equipmentName} — ${b.customerName}`)
-          .join('\n') + (list.length > 6 ? `\n… و${list.length - 6} أخرى` : ''),
+        title: st('equipmentPendingMy.title', { count: list.length }),
+        message: st('equipmentPendingMy.message', { lines: equipMyLines, more: equipMyMore }),
         createdAt: nowIso,
         targetRoles: ['مندوب'],
         targetUserId: repId,
@@ -504,11 +534,13 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-meeting-pending-batch-${pendingMeetingReviews.length}`,
         level: 'medium',
-        title: `اجتماعات تحت المراجعة (${pendingMeetingReviews.length})`,
-        message: pendingMeetingReviews
-          .slice(0, 6)
-          .map((b) => `• ${b.title} — ${b.date}`)
-          .join('\n'),
+        title: st('meetingPending.title', { count: pendingMeetingReviews.length }),
+        message: st('meetingPending.message', {
+          lines: pendingMeetingReviews
+            .slice(0, 6)
+            .map((b) => st('meetingLine', { title: b.title, date: b.date }))
+            .join('\n'),
+        }),
         createdAt: nowIso,
         targetRoles: ['مالك', 'مدير مبيعات'],
         entityType: 'system',
@@ -526,14 +558,16 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
     meetingPendingByRep.forEach((list, repId) => {
       const u = users.find((x) => String(x.id).trim() === repId);
       if (!u || u.role !== 'مندوب') return;
+      const meetMyLines = list
+        .slice(0, 6)
+        .map((b) => st('meetingLine', { title: b.title, date: b.date }))
+        .join('\n');
+      const meetMyMore = list.length > 6 ? `\n${stMore(list.length - 6)}` : '';
       out.push({
         id: `n-meeting-pending-my-${repId}-${list.length}`,
         level: 'medium',
-        title: `طلبات اجتماعاتك بانتظار المراجعة (${list.length})`,
-        message: list
-          .slice(0, 6)
-          .map((b) => `• ${b.title} — ${b.date}`)
-          .join('\n') + (list.length > 6 ? `\n… و${list.length - 6} أخرى` : ''),
+        title: st('meetingPendingMy.title', { count: list.length }),
+        message: st('meetingPendingMy.message', { lines: meetMyLines, more: meetMyMore }),
         createdAt: nowIso,
         targetRoles: ['مندوب'],
         targetUserId: repId,
@@ -548,8 +582,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-invoice-overdue-installments-${overdueInstallments.length}`,
         level: 'high',
-        title: 'أقساط عملاء متأخرة',
-        message: `يوجد ${overdueInstallments.length} فواتير بها أقساط مستحقة تجاوزت موعد السداد`,
+        title: st('invoiceOverdue.title'),
+        message: st('invoiceOverdue.message', { count: overdueInstallments.length }),
         createdAt: nowIso,
         targetRoles: ['محاسب', 'مالك'],
         entityType: 'invoice',
@@ -565,8 +599,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-invoice-due-soon-installments-${dueSoonInstallments.length}`,
         level: 'medium',
-        title: 'أقساط عملاء تستحق قريباً',
-        message: `يوجد ${dueSoonInstallments.length} فواتير يتبقى عليها تحصيل خلال 3 أيام`,
+        title: st('invoiceDueSoon.title'),
+        message: st('invoiceDueSoon.message', { count: dueSoonInstallments.length }),
         createdAt: nowIso,
         targetRoles: ['محاسب'],
         entityType: 'invoice',
@@ -579,8 +613,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-pending-quotes-${pendingPriceQuotes}`,
         level: 'high',
-        title: 'عروض أسعار بانتظار اعتماد المالك',
-        message: `يوجد ${pendingPriceQuotes} عرض سعر مالي يحتاج اعتمادك قبل التسجيل في دفاتر المحاسب`,
+        title: st('pendingQuotes.title'),
+        message: st('pendingQuotes.message', { count: pendingPriceQuotes }),
         createdAt: nowIso,
         targetRoles: ['مالك'],
         entityType: 'system',
@@ -589,8 +623,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-pending-quotes-manager-copy-${pendingPriceQuotes}`,
         level: 'medium',
-        title: 'نسخة متابعة لطلبات عرض السعر',
-        message: `يوجد ${pendingPriceQuotes} طلبات عرض سعر بانتظار اعتماد المالك`,
+        title: st('pendingQuotesManagerCopy.title'),
+        message: st('pendingQuotesManagerCopy.message', { count: pendingPriceQuotes }),
         createdAt: nowIso,
         targetRoles: ['مدير مبيعات'],
         entityType: 'system',
@@ -611,14 +645,16 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
     quotesByCreator.forEach((list, creatorId) => {
       const u = users.find((x) => String(x.id).trim() === creatorId);
       if (!u || (u.role !== 'مندوب' && u.role !== 'مدير مبيعات')) return;
+      const quoteClientLines = list
+        .slice(0, 5)
+        .map((q) => st('quoteLine', { title: q.title, customer: q.customerName }))
+        .join('\n');
+      const quoteClientMore = list.length > 5 ? `\n${stMore(list.length - 5)}` : '';
       out.push({
         id: `n-quote-awaiting-client-${creatorId}-${list.length}`,
         level: 'high',
-        title: `عروض معتمدة — بانتظار موافقة العميل (${list.length})`,
-        message: list
-          .slice(0, 5)
-          .map((q) => `• ${q.title} — ${q.customerName}`)
-          .join('\n') + (list.length > 5 ? `\n… و${list.length - 5} أخرى` : ''),
+        title: st('quotesAwaitingClient.title', { count: list.length }),
+        message: st('quotesAwaitingClient.message', { lines: quoteClientLines, more: quoteClientMore }),
         createdAt: nowIso,
         targetRoles: [u.role],
         targetUserId: creatorId,
@@ -640,16 +676,15 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
     });
     pendingPricingByPm.forEach((count, pmId) => {
       const rev = ownerRevisionByPm.get(pmId) || 0;
-      const msg =
-        rev > 0
-          ? `لديك ${count} عرض سعر يحتاج التسعير — منها ${rev} بإعادة طلب من المالك لتعديل التسعير`
-          : `لديك ${count} عرض سعر يحتاج التسعير في الإنتاج`;
       out.push({
         id: `n-quote-pending-pricing-${pmId}`,
         level: 'high',
         priority: rev > 0 ? 'critical' : 'normal',
-        title: rev > 0 ? 'تسعير — يتضمن طلب تعديل من المالك' : 'طلبات تسعير بانتظارك',
-        message: msg,
+        title: st(rev > 0 ? 'quotePricingRevision.title' : 'quotePricingPending.title'),
+        message:
+          rev > 0
+            ? st('quotePricingRevision.message', { count, revision: rev })
+            : st('quotePricingPending.message', { count }),
         createdAt: nowIso,
         targetRoles: ['مدير إنتاج'],
         targetUserId: pmId,
@@ -669,8 +704,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-quote-work-order-${pmId}`,
         level: 'high',
-        title: `أوامر شغل من عروض معتمدة (${count})`,
-        message: 'موافقة العميل — نفّذ التصوير/الإنتاج من تبويب الحجوزات',
+        title: st('quoteWorkOrders.title', { count }),
+        message: st('quoteWorkOrders.message'),
         createdAt: nowIso,
         targetRoles: ['مدير إنتاج'],
         targetUserId: pmId,
@@ -685,11 +720,15 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
     recentQuoteDecisions.forEach((q) => {
       const creator = users.find((u) => String(u.id).trim() === String(q.createdById || '').trim());
       if (!creator) return;
+      const qApproved = q.status === 'معتمد';
       out.push({
         id: `n-quote-result-creator-${q.id}`,
-        level: q.status === 'معتمد' ? 'low' : 'medium',
-        title: q.status === 'معتمد' ? 'تم اعتماد عرض سعر — قدّمه للعميل' : 'تم رفض عرض سعر من المالك',
-        message: `${q.title} — ${q.customerName}`,
+        level: qApproved ? 'low' : 'medium',
+        title: st(qApproved ? 'quoteApprovedForClient.title' : 'quoteRejectedByOwner.title'),
+        message: st(qApproved ? 'quoteApprovedForClient.message' : 'quoteRejectedByOwner.message', {
+          title: q.title,
+          customer: q.customerName,
+        }),
         createdAt: nowIso,
         targetRoles: [creator.role],
         targetUserId: creator.id,
@@ -702,9 +741,12 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
         if (mgr) {
           out.push({
             id: `n-quote-result-manager-copy-${q.id}`,
-            level: q.status === 'معتمد' ? 'low' : 'medium',
-            title: q.status === 'معتمد' ? 'اعتماد عرض سعر (فريقك)' : 'رفض عرض سعر (فريقك)',
-            message: `${q.createdByName} — ${q.title}`,
+            level: qApproved ? 'low' : 'medium',
+            title: st(qApproved ? 'quoteApprovedTeam.title' : 'quoteRejectedTeam.title'),
+            message: st(qApproved ? 'quoteApprovedTeam.message' : 'quoteRejectedTeam.message', {
+              creator: q.createdByName,
+              title: q.title,
+            }),
             createdAt: nowIso,
             targetRoles: ['مدير مبيعات'],
             targetUserId: mgr.id,
@@ -720,8 +762,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-payroll-${monthKey}`,
         level: 'medium',
-        title: 'كشف المرتبات غير معتمد',
-        message: `كشف المرتبات لشهر ${monthKey} لم يتم اعتماده بعد`,
+        title: st('payrollNotApproved.title'),
+        message: st('payrollNotApproved.message', { month: monthKey }),
         createdAt: nowIso,
         targetRoles: ['مالك'],
         entityType: 'system',
@@ -730,8 +772,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-payroll-accountant-${monthKey}`,
         level: 'medium',
-        title: 'كشف المرتبات غير معتمد',
-        message: `شهر ${monthKey} — بانتظار اعتماد المالك`,
+        title: st('payrollNotApprovedAccountant.title'),
+        message: st('payrollNotApprovedAccountant.message', { month: monthKey }),
         createdAt: nowIso,
         targetRoles: ['محاسب'],
         entityType: 'system',
@@ -745,8 +787,12 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-payroll-request-owner-${pendingPayrollRequest.id}`,
         level: 'high',
-        title: 'طلب اعتماد كشف المرتبات من المحاسب',
-        message: `شهر ${monthKey} — مطالبات مرفقة (${pendingPayrollRequest.claimsSummary.totalEstimatedAmount.toLocaleString()} ج.م)`,
+        title: st('payrollRequestOwner.title'),
+        message: st('payrollRequestOwner.message', {
+          month: monthKey,
+          amount: pendingPayrollRequest.claimsSummary.totalEstimatedAmount.toLocaleString(dateLocale()),
+          currency: currencyLabel(),
+        }),
         createdAt: nowIso,
         targetRoles: ['مالك'],
         entityType: 'system',
@@ -756,8 +802,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
         out.push({
           id: `n-payroll-request-accountant-${pendingPayrollRequest.id}`,
           level: 'medium',
-          title: 'طلبك بانتظار اعتماد المالك',
-          message: `كشف مرتبات شهر ${monthKey} أُرسل للمالك ولم يُعتمد بعد`,
+          title: st('payrollRequestAccountant.title'),
+          message: st('payrollRequestAccountant.message', { month: monthKey }),
           createdAt: nowIso,
           targetRoles: ['محاسب'],
           targetUserId: pendingPayrollRequest.requestedById,
@@ -772,8 +818,11 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-month-reopen-owner-${r.id}`,
         level: 'high',
-        title: 'طلب إعادة فتح شهر محاسبي',
-        message: `شهر ${r.monthKey} — ${r.reason || 'بانتظار اعتمادك'}`,
+        title: st('monthReopenOwner.title'),
+        message: st('monthReopenOwner.message', {
+          month: r.monthKey,
+          reason: r.reason || st('monthReopenDefaultReason'),
+        }),
         createdAt: nowIso,
         targetRoles: ['مالك'],
         entityType: 'system',
@@ -783,8 +832,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
         out.push({
           id: `n-month-reopen-requester-${r.id}`,
           level: 'medium',
-          title: 'طلب إعادة فتح شهر — قيد الاعتماد',
-          message: `شهر ${r.monthKey} بانتظار اعتماد المالك`,
+          title: st('monthReopenRequester.title'),
+          message: st('monthReopenRequester.message', { month: r.monthKey }),
           createdAt: nowIso,
           targetRoles: ['محاسب'],
           targetUserId: r.requestedById,
@@ -815,8 +864,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-calls-gap-${repsBehindCalls.length}`,
         level: 'low',
-        title: 'مستهدف المكالمات',
-        message: `${repsBehindCalls.length} مندوبين أقل من مستهدف المكالمات`,
+        title: st('callsTargetGap.title'),
+        message: st('callsTargetGap.message', { count: repsBehindCalls.length }),
         createdAt: nowIso,
         targetRoles: ['مالك', 'مدير مبيعات'],
         entityType: 'user',
@@ -829,11 +878,16 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       .filter(b => b.status === 'معتمد' || b.status === 'مرفوض')
       .filter(b => new Date(b.createdAt).getTime() >= recentThreshold)
       .forEach((b) => {
+        const shootOk = b.status === 'معتمد';
         out.push({
           id: `n-shoot-${b.id}-${b.status}`,
-          level: b.status === 'معتمد' ? 'low' : 'medium',
-          title: b.status === 'معتمد' ? 'تم اعتماد حجز تصوير' : 'تم رفض حجز تصوير',
-          message: `${b.customerName} - ${b.date} ${b.time}`,
+          level: shootOk ? 'low' : 'medium',
+          title: st(shootOk ? 'shootApproved.title' : 'shootRejected.title'),
+          message: st(shootOk ? 'shootApproved.message' : 'shootRejected.message', {
+            customer: b.customerName,
+            date: b.date,
+            time: b.time,
+          }),
           createdAt: nowIso,
           targetRoles: ['مندوب'],
           targetUserId: b.repId,
@@ -847,11 +901,16 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       .filter(b => b.status === 'معتمد' || b.status === 'مرفوض')
       .filter(b => new Date(b.createdAt).getTime() >= recentThreshold)
       .forEach((b) => {
+        const eqOk = b.status === 'معتمد';
         out.push({
           id: `n-eq-${b.id}-${b.status}`,
-          level: b.status === 'معتمد' ? 'low' : 'medium',
-          title: b.status === 'معتمد' ? 'تم اعتماد حجز معدات' : 'تم رفض حجز معدات',
-          message: `${b.equipmentName} x${b.quantity} - ${b.customerName}`,
+          level: eqOk ? 'low' : 'medium',
+          title: st(eqOk ? 'equipmentApproved.title' : 'equipmentRejected.title'),
+          message: st(eqOk ? 'equipmentApproved.message' : 'equipmentRejected.message', {
+            equipment: b.equipmentName,
+            quantity: b.quantity,
+            customer: b.customerName,
+          }),
           createdAt: nowIso,
           targetRoles: ['مندوب'],
           targetUserId: b.repId,
@@ -865,11 +924,16 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       .filter((b) => b.status === 'معتمد' || b.status === 'مرفوض')
       .filter((b) => new Date(b.createdAt).getTime() >= recentThreshold)
       .forEach((b) => {
+        const meetOk = b.status === 'معتمد';
         out.push({
           id: `n-meeting-${b.id}-${b.status}`,
-          level: b.status === 'معتمد' ? 'low' : 'medium',
-          title: b.status === 'معتمد' ? 'تم اعتماد حجز اجتماع' : 'تم رفض حجز اجتماع',
-          message: `${b.title} — ${b.date} ${b.startTime}`,
+          level: meetOk ? 'low' : 'medium',
+          title: st(meetOk ? 'meetingApproved.title' : 'meetingRejected.title'),
+          message: st(meetOk ? 'meetingApproved.message' : 'meetingRejected.message', {
+            title: b.title,
+            date: b.date,
+            time: b.startTime,
+          }),
           createdAt: nowIso,
           targetRoles: ['مندوب'],
           targetUserId: b.repId,
@@ -880,12 +944,19 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       });
 
     const custodyPendingOwner = custodyFunds.filter((c) => c.status === 'طلب_بانتظار_المالك');
+    const custodyLoc = dateLocale();
+    const custodyCur = currencyLabel();
     custodyPendingOwner.slice(0, 8).forEach((c) => {
       out.push({
         id: `n-custody-owner-row-${c.id}`,
         level: 'high',
-        title: 'طلب عهدة إنتاج جديد',
-        message: `${c.title} — ${c.totalAmount.toLocaleString()} ج.م (${c.productionManagerName})`,
+        title: st('custodyNewRequest.title'),
+        message: st('custodyNewRequest.message', {
+          title: c.title,
+          amount: c.totalAmount.toLocaleString(custodyLoc),
+          currency: custodyCur,
+          manager: c.productionManagerName,
+        }),
         createdAt: nowIso,
         targetRoles: ['مالك'],
         entityType: 'system',
@@ -896,14 +967,21 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
     if (custodyPendingOwner.length > 0) {
       const lines = custodyPendingOwner
         .slice(0, 6)
-        .map((c) => `• ${c.title} — ${c.totalAmount.toLocaleString()} ج.م (${c.productionManagerName})`)
+        .map((c) =>
+          st('custodyOwnerLine', {
+            title: c.title,
+            amount: c.totalAmount.toLocaleString(custodyLoc),
+            currency: custodyCur,
+            manager: c.productionManagerName,
+          })
+        )
         .join('\n');
-      const more = custodyPendingOwner.length > 6 ? `\n… و${custodyPendingOwner.length - 6} طلبات أخرى` : '';
+      const more = custodyPendingOwner.length > 6 ? `\n${stMore(custodyPendingOwner.length - 6)}` : '';
       out.push({
         id: `n-custody-owner-${custodyPendingOwner.length}`,
         level: 'high',
-        title: `طلبات عهدة بانتظار اعتمادك (${custodyPendingOwner.length})`,
-        message: `${lines}${more}`,
+        title: st('custodyPendingOwner.title', { count: custodyPendingOwner.length }),
+        message: st('custodyPendingOwner.message', { lines, more }),
         createdAt: nowIso,
         targetRoles: ['مالك'],
         entityType: 'system',
@@ -916,8 +994,13 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-custody-pay-row-${c.id}`,
         level: 'high',
-        title: 'عهدة معتمدة تنتظر تسجيل دفع',
-        message: `${c.title} — ${c.totalAmount.toLocaleString()} ج.م (${c.productionManagerName})`,
+        title: st('custodyApprovedAwaitingPay.title'),
+        message: st('custodyApprovedAwaitingPay.message', {
+          title: c.title,
+          amount: c.totalAmount.toLocaleString(custodyLoc),
+          currency: custodyCur,
+          manager: c.productionManagerName,
+        }),
         createdAt: nowIso,
         targetRoles: ['محاسب'],
         entityType: 'system',
@@ -926,14 +1009,22 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       });
     });
     if (custodyPay.length > 0) {
+      const payLines = custodyPay
+        .slice(0, 5)
+        .map((c) =>
+          st('custodyPayLine', {
+            title: c.title,
+            amount: c.totalAmount.toLocaleString(custodyLoc),
+            currency: custodyCur,
+          })
+        )
+        .join('\n');
+      const payMore = custodyPay.length > 5 ? `\n${stMore(custodyPay.length - 5)}` : '';
       out.push({
         id: `n-custody-pay-${custodyPay.length}`,
         level: 'high',
-        title: `عهدة بانتظار تسجيل الدفع (${custodyPay.length})`,
-        message: custodyPay
-          .slice(0, 5)
-          .map((c) => `• ${c.title} — ${c.totalAmount.toLocaleString()} ج.م`)
-          .join('\n') + (custodyPay.length > 5 ? `\n… و${custodyPay.length - 5} أخرى` : ''),
+        title: st('custodyAwaitingPayment.title', { count: custodyPay.length }),
+        message: st('custodyAwaitingPayment.message', { lines: payLines, more: payMore }),
         createdAt: nowIso,
         targetRoles: ['محاسب'],
         entityType: 'system',
@@ -943,17 +1034,24 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
 
     const custodySettle = custodyFunds.filter((c) => c.status === 'تسوية_بانتظار_محاسب');
     if (custodySettle.length > 0) {
+      const settleLines = custodySettle
+        .slice(0, 5)
+        .map((c) => {
+          const spent = c.spendLines.reduce((s, l) => s + (Number(l.amount) || 0), 0);
+          return st('custodySettleLine', {
+            title: c.title,
+            spent: spent.toLocaleString(custodyLoc),
+            total: c.totalAmount.toLocaleString(custodyLoc),
+            currency: custodyCur,
+          });
+        })
+        .join('\n');
+      const settleMore = custodySettle.length > 5 ? `\n${stMore(custodySettle.length - 5)}` : '';
       out.push({
         id: `n-custody-settle-${custodySettle.length}`,
         level: 'high',
-        title: `تسوية عهدة بانتظار إقفالك (${custodySettle.length})`,
-        message: custodySettle
-          .slice(0, 5)
-          .map((c) => {
-            const spent = c.spendLines.reduce((s, l) => s + (Number(l.amount) || 0), 0);
-            return `• ${c.title} — مصروف ${spent.toLocaleString()} / ${c.totalAmount.toLocaleString()} ج.م`;
-          })
-          .join('\n') + (custodySettle.length > 5 ? `\n… و${custodySettle.length - 5} أخرى` : ''),
+        title: st('custodySettlementPending.title', { count: custodySettle.length }),
+        message: st('custodySettlementPending.message', { lines: settleLines, more: settleMore }),
         createdAt: nowIso,
         targetRoles: ['محاسب'],
         entityType: 'system',
@@ -971,8 +1069,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-custody-long-active-${activeCustodyForLong.length}`,
         level: 'medium',
-        title: 'عهد إنتاج نشطة تحتاج تسوية',
-        message: `يوجد ${activeCustodyForLong.length} عهدة نشطة منذ أكثر من 7 أيام بدون تسوية`,
+        title: st('custodyLongActive.title'),
+        message: st('custodyLongActive.message', { count: activeCustodyForLong.length }),
         createdAt: nowIso,
         targetRoles: ['محاسب', 'مالك'],
         entityType: 'system',
@@ -989,8 +1087,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
         out.push({
           id: `n-custody-long-active-pm-${pmId}`,
           level: 'medium',
-          title: `عهدة نشطة تحتاج تسوية (${list.length})`,
-          message: `لديك ${list.length} عهدة نشطة منذ أكثر من 7 أيام — أكمل التسوية`,
+          title: st('custodyLongActivePm.title', { count: list.length }),
+          message: st('custodyLongActivePm.message', { count: list.length }),
           createdAt: nowIso,
           targetRoles: ['مدير إنتاج'],
           targetUserId: pmId,
@@ -1009,8 +1107,12 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-prod-exec-pending-${prodExecTotal}`,
         level: 'high',
-        title: `حجوزات بانتظار تنفيذ الإنتاج (${prodExecTotal})`,
-        message: `صوّر: ${prodExecShoot.length} — معدات: ${prodExecEquip.length} — اجتماعات: ${prodExecMeet.length}`,
+        title: st('prodExecPending.title', { count: prodExecTotal }),
+        message: st('prodExecPending.message', {
+          shoot: prodExecShoot.length,
+          equipment: prodExecEquip.length,
+          meetings: prodExecMeet.length,
+        }),
         createdAt: nowIso,
         targetRoles: ['مدير إنتاج'],
         entityType: 'system',
@@ -1029,8 +1131,13 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
         out.push({
           id: `n-custody-ready-row-${c.id}`,
           level: 'high',
-          title: 'تم صرف العهدة — جاهزة للاستلام',
-          message: `${c.title} — ${c.totalAmount.toLocaleString()} ج.م${c.paymentMethod ? ` (${c.paymentMethod})` : ''}`,
+          title: st('custodyReadyForPickup.title'),
+          message: st('custodyReadyForPickup.message', {
+            title: c.title,
+            amount: c.totalAmount.toLocaleString(custodyLoc),
+            currency: custodyCur,
+            method: c.paymentMethod ? st('custodyPaymentMethod', { method: c.paymentMethod }) : '',
+          }),
           createdAt: nowIso,
           targetRoles: ['مدير إنتاج'],
           targetUserId: pmId,
@@ -1039,14 +1146,22 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
           navigateTab: 'production',
         });
       });
+      const readyLines = list
+        .slice(0, 8)
+        .map((c) =>
+          st('custodyPayLine', {
+            title: c.title,
+            amount: c.totalAmount.toLocaleString(custodyLoc),
+            currency: custodyCur,
+          })
+        )
+        .join('\n');
+      const readyMore = list.length > 8 ? `\n${stMore(list.length - 8)}` : '';
       out.push({
         id: `n-custody-ready-${pmId}`,
         level: 'high',
-        title: `عهدة جاهزة للاستلام (${list.length})`,
-        message: list
-          .slice(0, 8)
-          .map((c) => `• ${c.title} — ${c.totalAmount.toLocaleString()} ج.م`)
-          .join('\n') + (list.length > 8 ? `\n… و${list.length - 8} أخرى` : ''),
+        title: st('custodyReadyBatch.title', { count: list.length }),
+        message: st('custodyReadyBatch.message', { lines: readyLines, more: readyMore }),
         createdAt: nowIso,
         targetRoles: ['مدير إنتاج'],
         targetUserId: pmId,
@@ -1065,11 +1180,18 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-custody-rej-${pmId}`,
         level: 'medium',
-        title: `طلب عهدة مرفوض (${list.length})`,
-        message: list
-          .slice(0, 6)
-          .map((c) => `• ${c.title}${c.requestRejectReason ? ` — ${c.requestRejectReason}` : ''}`)
-          .join('\n'),
+        title: st('custodyRejected.title', { count: list.length }),
+        message: st('custodyRejected.message', {
+          lines: list
+            .slice(0, 6)
+            .map((c) =>
+              st('custodyRejectedLine', {
+                title: c.title,
+                reason: c.requestRejectReason ? ` — ${c.requestRejectReason}` : '',
+              })
+            )
+            .join('\n'),
+        }),
         createdAt: nowIso,
         targetRoles: ['مدير إنتاج'],
         targetUserId: pmId,

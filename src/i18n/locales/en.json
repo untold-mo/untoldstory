@@ -18,7 +18,21 @@
     "ok": "OK",
     "add": "Add",
     "import": "Import",
-    "uploadExcel": "Upload Excel"
+    "uploadExcel": "Upload Excel",
+    "all": "All",
+    "showAll": "Show all",
+    "previous": "Previous",
+    "next": "Next",
+    "currency": "EGP",
+    "unassigned": "Unassigned",
+    "noAssignee": "No assignee",
+    "atSalesManager": "With sales manager",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing…",
+    "open": "Open",
+    "confirm": "Confirm",
+    "yes": "Yes",
+    "no": "No"
   },
   "roles": {
     "مالك": "Owner",
@@ -64,7 +78,8 @@
     "openTasks": "{{count}} open"
   },
   "welcome": {
-    "continueLogin": "Continue to sign in"
+    "continueLogin": "Continue to sign in",
+    "openLogin": "Open sign in"
   },
   "login": {
     "title": "Sign in",
@@ -82,10 +97,561 @@
     "playSoundAgain": "Play sound again",
     "addTask": "Add task",
     "noTasks": "No tasks yet.",
-    "openCount": "{{count}} open"
+    "openCount": "{{count}} open",
+    "placeholder": "Task text…",
+    "dueOptional": "Due (optional):",
+    "noTime": "No time",
+    "saved": "Task saved",
+    "savedWithReminder": "Task saved with due date and reminders",
+    "saveFailedNoUser": "Could not save task: no active user id. Sign in again.",
+    "pickDateOrClearTime": "Pick a date or clear the time completely",
+    "pickTimeWithDate": "Pick a time along with the date",
+    "futureDueRequired": "Choose a future date/time to enable reminders"
   },
   "settings": {
     "languageSection": "Language & display",
     "languageHint": "Changes menu and main headings. Some detail screens may stay partially localized."
+  },
+  "home": {
+    "unassignedLeads": "Unassigned leads",
+    "pendingApprovals": "Pending approvals",
+    "invoicesNoCostCenter": "Invoices without cost center",
+    "todayFocus": "Today's focus"
+  },
+  "homeFocus": {
+    "accOverdueInstallments": "Overdue installments",
+    "accDueTodayInstallments": "Installments due today",
+    "accFinancialClaims": "Financial claims pending execution",
+    "accCustodySettlement": "Custody settlements awaiting closure",
+    "prodCustodyRequest": "Custody requests with owner",
+    "prodCustodyWaitPay": "Awaiting accountant payment",
+    "prodCustodyReady": "Custody ready for pickup",
+    "prodCustodyActive": "Active custody (record spend)",
+    "prodCustodySettlement": "Settlement with accountant",
+    "prodTodayMeetings": "My meetings today",
+    "repOverdueFollowups": "My overdue follow-ups",
+    "repTodayFollowups": "Today's follow-ups",
+    "repTodayBookings": "My bookings today",
+    "opsOverdueFollowups": "Overdue follow-ups",
+    "opsPendingApprovals": "Pending approvals",
+    "opsTodayMeetings": "Today's meetings"
+  },
+  "errors": {
+    "noFinancePage": "Finance page is not available with your current permissions",
+    "noBookingsPage": "No page available to view bookings with your permissions",
+    "noProductionPage": "Production funding page is not available with your permissions",
+    "noFollowupsPage": "No page available to view follow-ups with your permissions",
+    "noMeetingsPage": "No page available to view today's meetings with your permissions",
+    "noFinancialClaimsPage": "No page available to view financial claims",
+    "noPendingPage": "No page available to view pending requests with your permissions"
+  },
+  "leadForm": {
+    "addLeadTitle": "Add new lead",
+    "addCustomerTitle": "Add new customer",
+    "customerName": "Customer name",
+    "companyName": "Company name",
+    "companyOptional": "Company name (optional)",
+    "phone": "Phone number",
+    "emailOptional": "Email (optional)",
+    "budget": "Expected budget",
+    "sourceExample": "Source (e.g. maintenance / walk-in)",
+    "saveLead": "Save lead",
+    "saveCustomer": "Save customer",
+    "completeRequired": "Please complete required fields (name, company, phone, budget)",
+    "addSuccess": "Lead added successfully",
+    "companySizeSmall": "Small",
+    "companySizeMedium": "Medium",
+    "companySizeLarge": "Large"
+  },
+  "client360": {
+    "title": "Client 360: {{name}}",
+    "subtitle": "{{company}} • {{phone}} • {{statusLabel}}: {{status}}",
+    "addUpdate": "+ Add update",
+    "totalInvoices": "Total invoices",
+    "collected": "Collected",
+    "remaining": "Remaining",
+    "evidenceCount": "Documented attachments",
+    "recentComms": "Recent communications",
+    "noNote": "No note",
+    "evidenceArchive": "Evidence archive",
+    "noEvidence": "No evidence attached yet.",
+    "invoiceSummary": "Customer invoice summary",
+    "noInvoices": "No linked invoices.",
+    "opsStatus": "Operational status (meetings/shoots/equipment)",
+    "meetings": "Meetings",
+    "shoots": "Shoot requests",
+    "equipment": "Equipment requests",
+    "linkedExpenses": "Linked expenses (estimate)"
+  },
+  "statement": {
+    "title": "Customer statement: {{name}}",
+    "meta": "Customer code: {{code}} • Source: {{source}} • Invoices: {{count}}",
+    "exportCsv": "Export CSV",
+    "printPdf": "Print / PDF",
+    "totalInvoices": "Total invoices",
+    "collected": "Collected",
+    "remainingInstallments": "Remaining (installments/receivables)",
+    "colInvoiceId": "Invoice #",
+    "colDate": "Date",
+    "colTotal": "Total",
+    "colPaid": "Paid",
+    "colRemaining": "Remaining",
+    "colDueDate": "Installment due",
+    "colStatus": "Status",
+    "colPayments": "Payments",
+    "paymentCount": "{{count}} payment(s)",
+    "noInvoices": "No invoices for this customer yet.",
+    "paymentsSection": "Payment activity (combined)",
+    "colPayDate": "Date",
+    "colPayMethod": "Payment method",
+    "colPayAmount": "Amount",
+    "colJournalId": "Journal entry #",
+    "colNote": "Note",
+    "noPayments": "No payments recorded for this customer yet.",
+    "undefinedSource": "Unspecified"
+  },
+  "screens": {
+    "ownerOverview": { "title": "Owner overview", "subtitle": "Full company sales and financial performance" },
+    "ownerApprovals": { "title": "Owner financial approvals", "subtitle": "Approval view only — accountant vs production manager sources" },
+    "finance": { "title": "Finance management", "subtitle": "Invoices, cash flow, and collection reports" },
+    "workDistribution": { "title": "Work distribution settings", "subtitle": "Rep skills for automatic lead routing" },
+    "repDashboard": { "title": "Rep execution board", "subtitle": "Real worklist: done, next action, and today's expectations" },
+    "repPerformanceEmpty": { "title": "My performance", "subtitle": "Not enough data to calculate performance yet" },
+    "repPerformance": { "title": "My performance", "subtitle": "Measure results and improve close rate" },
+    "bookings": {
+      "title": "Bookings",
+      "subtitleOwner": "Approve and track one booking type at a time",
+      "subtitleAccountant": "Execute owner-approved financial claims",
+      "subtitleDefault": "Choose booking type: location, equipment, meeting, or other entry"
+    },
+    "teamPerformance": { "title": "Sales team performance", "subtitle": "Executive snapshot for quick decisions" },
+    "salesTeam": { "title": "Sales team", "subtitle": "Compact team management and coverage view" },
+    "approvalsHub": { "title": "Approvals hub", "subtitle": "Approve or reject all requests from one screen" }
+  },
+  "leadUpdate": {
+    "forbidden": "You cannot log an update on a lead not assigned to you.",
+    "noteRequired": "Write a communication summary before saving.",
+    "defaultAction": "Update — client call",
+    "saved": "Update logged",
+    "title": "Lead update",
+    "action": "Interaction type",
+    "note": "Summary",
+    "channel": "Channel",
+    "evidence": "Evidence / attachment",
+    "duration": "Duration (seconds)",
+    "submit": "Save update",
+    "logTitle": "Log lead update",
+    "actionType": "Update type",
+    "summaryLabel": "Communication / update summary",
+    "templateOptional": "Template (optional)",
+    "notePlaceholder": "What happened on this call or follow-up? What did the client ask? What's next?",
+    "channelCall": "Call",
+    "channelChat": "Chat / WhatsApp",
+    "channelOther": "Other",
+    "evidenceNoteOnly": "No attachment",
+    "evidenceRecording": "Call recording URL",
+    "evidenceChat": "Chat export URL",
+    "evidenceLink": "Reference link",
+    "evidenceUrlPlaceholder": "Evidence URL (optional)",
+    "durationPlaceholder": "Call duration in seconds (optional)",
+    "saveToTimeline": "Save to lead timeline",
+    "savedWithName": "Update saved: {{name}}"
+  },
+  "notifications": {
+    "hub": "Notifications hub",
+    "syncing": "Syncing latest data from server…",
+    "syncHint": "No WebSocket: auto-refresh when returning to the tab or on focus (~every 60s), plus the Refresh button and opening this panel.",
+    "syncFailed": "Could not refresh data from server",
+    "syncDone": "Notifications updated from server",
+    "empty": "No new notifications",
+    "critical": "Critical",
+    "normal": "Normal",
+    "openTab": "Open: {{tab}}"
+  },
+  "leadStatus": {
+    "الكل": "All statuses",
+    "جديد": "New",
+    "قيد التواصل": "In contact",
+    "عرض سعر": "Quote sent",
+    "تفاوض": "Negotiation",
+    "مغلق - فوز": "Closed — won",
+    "مغلق - خسارة": "Closed — lost"
+  },
+  "leads": {
+    "titleAll": "All leads",
+    "titleManage": "Lead management",
+    "titleCustomers": "External customers",
+    "subtitleHub": "All inbound leads from Facebook, Instagram, LinkedIn, email/Gmail, and Google — start by assigning unassigned leads to reps",
+    "subtitleDefault": "Search, filter, and update status and assignment directly",
+    "subtitleAccountant": "Accountant sees owner-approved leads only (moved to financial execution)",
+    "subtitleCustomers": "External customers only (outside lead pipeline) with debit/credit balances",
+    "inboundTitle": "Inbound channel leads",
+    "unassignedCount": "Unassigned: {{count}}",
+    "autoUnassignedCount": "Auto inbound unassigned: {{count}}",
+    "allInboundUnassigned": "All inbound (unassigned)",
+    "tabLeads": "Leads",
+    "tabCustomers": "Customers",
+    "searchLeads": "Search by name, company, or phone",
+    "searchCustomers": "Search by name, company, source, or phone",
+    "allStatuses": "All statuses",
+    "allSources": "All sources",
+    "sourceManual": "Manual",
+    "filterMine": "Mine",
+    "filterUnassigned": "Unassigned",
+    "overdueFilterActive": "Overdue filter is active",
+    "repFilterActive": "Rep filter active: {{name}}",
+    "clearRepFilter": "Clear rep filter",
+    "uploadExcelCsv": "Upload Excel / CSV",
+    "importLinkedIn": "Import LinkedIn CSV",
+    "addLead": "Add lead",
+    "addCustomer": "Add customer",
+    "selectedCount": "Selected: {{count}} — assign & delete apply to all selected leads",
+    "clearSelection": "Clear selection",
+    "selectAllResults": "Select all results ({{count}})",
+    "chooseRep": "Choose a rep…",
+    "assigning": "Assigning…",
+    "assignCount": "Assign {{count}} leads",
+    "deleting": "Deleting…",
+    "deleteCount": "Delete {{count}} leads",
+    "selectPageLeads": "Select all leads on this page",
+    "selectLead": "Select {{name}}",
+    "colClient": "Client",
+    "colDetails": "Details",
+    "colCategory": "Category",
+    "colRep": "Rep",
+    "colStatus": "Status",
+    "colActions": "Actions",
+    "colSource": "Source",
+    "colDebit": "Debit balance",
+    "colCredit": "Credit balance",
+    "colAccountStatus": "Account status",
+    "noResults": "No results match the current filters",
+    "showingRange": "Showing {{from}}–{{to}} of {{total}}",
+    "perPage": "Per page:",
+    "deleteLead": "Delete lead",
+    "delete": "Delete",
+    "addUpdate": "+ Update",
+    "priceQuote": "Price quote",
+    "client360": "Client 360",
+    "statement": "Statement",
+    "externalSource": "External ({{label}})",
+    "debit": "Debit",
+    "credit": "Credit",
+    "balanced": "Balanced",
+    "deleted": "Lead deleted",
+    "deleteBlocked": "Cannot delete: linked invoices or price quotes exist",
+    "deleteForbidden": "You do not have permission to delete leads",
+    "deleteFailed": "Could not delete lead",
+    "assignPickRep": "Choose a rep first",
+    "assignRepNotFound": "Rep not found",
+    "assignTargetRep": "Rep «{{name}}»",
+    "deleteConfirmNamed": "Permanently delete lead «{{name}}»? This cannot be undone.",
+    "assignConfirmOne": "Assign 1 lead to {{target}}?",
+    "assignConfirmMany": "Assign {{count}} leads to {{target}}?",
+    "assignFailed": "Could not assign selected leads",
+    "assignPartial": "Assigned {{ok}} of {{total}} leads",
+    "assignDoneOne": "Assigned to {{target}}",
+    "assignDoneMany": "Assigned {{count}} leads to {{target}}",
+    "deleteConfirmOne": "Permanently delete the selected lead? This cannot be undone.",
+    "deleteConfirmMany": "Permanently delete {{count}} leads? This cannot be undone.",
+    "deleteBulkBlocked": "Cannot delete: leads linked to invoices or quotes",
+    "deleteBulkFailed": "Could not delete selected leads",
+    "deleteBulkPartial": "Deleted {{deleted}} — skipped {{blocked}} linked — failed {{failed}}",
+    "deleteBulkDone": "Deleted {{count}} leads"
+  },
+  "bulkUpload": {
+    "title": "Upload leads from Excel / CSV",
+    "forbidden": "Import is available to owner and sales manager only.",
+    "pickFile": "Click to choose an Excel or CSV file",
+    "fileHint": "Up to 10MB — .xlsx .xls .csv",
+    "readyRows": "Ready to import: {{count}} rows",
+    "uploading": "Uploading leads…",
+    "formatHint": "Expo / automotive sheet: Client Name, Client number, Client Interested in (one or two columns) — ignores source, Lead From, Date of Phone Call. Or Arabic/English headers: name, mobile, interest.",
+    "importBtn": "Import {{count}} leads",
+    "importing": "Importing…",
+    "importingPct": "Uploading {{pct}}%…",
+    "doneSuccess": "Import completed successfully",
+    "doneWarning": "Import finished",
+    "added": "Added: {{count}}",
+    "skippedDup": "Duplicates skipped: {{count}}",
+    "failed": "Failed/skipped: {{count}}",
+    "alertHint": "You received an on-screen alert{{osNotify}}.",
+    "osNotify": " and an OS notification",
+    "processed": "Processed",
+    "remaining": "Remaining",
+    "addedSoFar": "Added so far",
+    "batch": "Batch",
+    "progressSkippedFailed": "Skipped duplicates: {{skipped}} · Failed: {{failed}}",
+    "invalidFormat": "Supported formats: Excel (.xlsx, .xls) or CSV",
+    "readOk": "Read {{count}} leads from file",
+    "readFail": "Could not read file",
+    "noValidRows": "No valid rows found in file",
+    "pickValidFirst": "Choose a valid Excel or CSV file first",
+    "importForbidden": "Import permission: owner or sales manager only",
+    "importFail": "Import failed",
+    "toastSuccess": "Imported {{created}} leads{{skipped}}{{failed}}",
+    "toastSkippedPart": " — skipped {{count}} duplicates",
+    "toastFailedPart": " — failed {{count}}",
+    "toastNoNewDup": "No new leads — {{count}} duplicate rows",
+    "toastNoNewFail": "No leads imported — {{count}} rows failed",
+    "toastNoNew": "No new leads imported",
+    "notifyTitleOk": "Lead import completed",
+    "notifyTitleWarn": "File import finished"
+  },
+  "sysNotify": {
+    "moreItems": "… and {{count}} more",
+    "expenseLine": "• {{title}} — {{amount}} {{currency}}",
+    "assignLeadLine": "• {{name}}{{company}}",
+    "custodyOwnerLine": "• {{title}} — {{amount}} {{currency}} ({{manager}})",
+    "custodyPayLine": "• {{title}} — {{amount}} {{currency}}",
+    "custodySettleLine": "• {{title}} — spent {{spent}} / {{total}} {{currency}}",
+    "shootReviewLine": "• {{customer}} — {{date}} {{time}} ({{rep}})",
+    "shootMyLine": "• {{customer}} — {{date}} {{time}}",
+    "equipmentLine": "• {{equipment}} — {{customer}}",
+    "meetingLine": "• {{title}} — {{date}}",
+    "quoteLine": "• {{title}} — {{customer}}",
+    "custodyRejectedLine": "• {{title}}{{reason}}",
+    "openPersonalTodos": {
+      "title": "Open tasks on your list",
+      "message": "You have {{count}} personal tasks not completed yet"
+    },
+    "overdueFollowupsTeam": {
+      "title": "Overdue follow-ups (team total)",
+      "message": "{{count}} clients need immediate follow-up"
+    },
+    "overdueFollowupsMine": {
+      "title": "Overdue follow-ups (mine)",
+      "message": "You have {{count}} leads that need immediate follow-up"
+    },
+    "overdueFollowupsMgr": {
+      "title": "Overdue follow-ups for sales team",
+      "message": "{{count}} leads need follow-up — review assignment and distribution"
+    },
+    "staleEscalation": {
+      "title": "Escalation: leads without follow-up",
+      "message": "{{count}} open leads have not been updated for two days or more"
+    },
+    "autoReassign": {
+      "title": "Candidates for auto-reassignment",
+      "message": "{{count}} leads exceeded the SLA threshold for redistribution"
+    },
+    "archiveGap": {
+      "title": "Client document archive gap",
+      "message": "{{count}} won clients have no evidence or attachment on record"
+    },
+    "unassignedLeads": {
+      "title": "Unassigned leads",
+      "message": "{{count}} leads still have no rep assigned"
+    },
+    "leadAssigned": {
+      "title": "Leads routed to you ({{count}})",
+      "message": "{{count}} clients were recently assigned to you:\n{{lines}}{{more}}"
+    },
+    "importedLeads": {
+      "title": "New leads from connected channels",
+      "message": "{{count}} leads arrived automatically and await sales manager distribution"
+    },
+    "importedLeadsOwnerCopy": {
+      "title": "Follow-up copy: connected channel leads",
+      "message": "{{count}} leads arrived automatically and await sales manager distribution"
+    },
+    "pendingExpensesOwner": {
+      "title": "Expenses awaiting your approval",
+      "message": "{{count}} expenses need owner approval"
+    },
+    "pendingExpensesAccountant": {
+      "title": "Expenses awaiting owner approval",
+      "message": "{{count}} expenses are still pending in the approvals hub"
+    },
+    "expensePendingSubmitter": {
+      "title": "Your expenses awaiting approval ({{count}})",
+      "message": "{{lines}}{{more}}"
+    },
+    "expenseApproved": {
+      "title": "Your expense was approved",
+      "message": "{{title}} — {{amount}} {{currency}}"
+    },
+    "expenseRejected": {
+      "title": "Your expense was rejected",
+      "message": "{{title}} — {{amount}} {{currency}}"
+    },
+    "prodClaims": {
+      "title": "Financial claims for production requests",
+      "message": "{{count}} financial claims approved by the owner await accountant execution"
+    },
+    "shootPendingReview": {
+      "title": "Shoot bookings pending review ({{count}})",
+      "message": "{{lines}}{{more}}"
+    },
+    "shootPendingMy": {
+      "title": "Your shoot requests pending review ({{count}})",
+      "message": "{{lines}}{{more}}"
+    },
+    "shootFinanceOwner": {
+      "title": "Production claims (shoot) awaiting your approval ({{count}})",
+      "message": "{{count}} requests from production with amounts or financial terms need owner approval. Review bookings."
+    },
+    "equipmentPending": {
+      "title": "Equipment bookings under review ({{count}})",
+      "message": "{{lines}}"
+    },
+    "equipmentPendingMy": {
+      "title": "Your equipment requests pending review ({{count}})",
+      "message": "{{lines}}{{more}}"
+    },
+    "meetingPending": {
+      "title": "Meetings under review ({{count}})",
+      "message": "{{lines}}"
+    },
+    "meetingPendingMy": {
+      "title": "Your meeting requests pending review ({{count}})",
+      "message": "{{lines}}{{more}}"
+    },
+    "invoiceOverdue": {
+      "title": "Overdue client installments",
+      "message": "{{count}} invoices have installments past due date"
+    },
+    "invoiceDueSoon": {
+      "title": "Client installments due soon",
+      "message": "{{count}} invoices have collection due within 3 days"
+    },
+    "pendingQuotes": {
+      "title": "Price quotes awaiting owner approval",
+      "message": "{{count}} financial price quotes need your approval before accounting ledger entry"
+    },
+    "pendingQuotesManagerCopy": {
+      "title": "Follow-up copy: price quote requests",
+      "message": "{{count}} price quote requests await owner approval"
+    },
+    "quotesAwaitingClient": {
+      "title": "Approved quotes — awaiting client acceptance ({{count}})",
+      "message": "{{lines}}{{more}}"
+    },
+    "quotePricingRevision": {
+      "title": "Pricing — includes owner revision request",
+      "message": "You have {{count}} quotes needing pricing — {{revision}} with an owner revision request"
+    },
+    "quotePricingPending": {
+      "title": "Pricing requests awaiting you",
+      "message": "You have {{count}} quotes needing production pricing"
+    },
+    "quoteWorkOrders": {
+      "title": "Work orders from approved quotes ({{count}})",
+      "message": "Client approved — execute shoot/production from the bookings tab"
+    },
+    "quoteApprovedForClient": {
+      "title": "Price quote approved — present to client",
+      "message": "{{title}} — {{customer}}"
+    },
+    "quoteRejectedByOwner": {
+      "title": "Price quote rejected by owner",
+      "message": "{{title}} — {{customer}}"
+    },
+    "quoteApprovedTeam": {
+      "title": "Price quote approved (your team)",
+      "message": "{{creator}} — {{title}}"
+    },
+    "quoteRejectedTeam": {
+      "title": "Price quote rejected (your team)",
+      "message": "{{creator}} — {{title}}"
+    },
+    "payrollNotApproved": {
+      "title": "Payroll not approved",
+      "message": "Payroll for {{month}} has not been approved yet"
+    },
+    "payrollNotApprovedAccountant": {
+      "title": "Payroll not approved",
+      "message": "{{month}} — awaiting owner approval"
+    },
+    "payrollRequestOwner": {
+      "title": "Payroll approval request from accountant",
+      "message": "{{month}} — attached claims ({{amount}} {{currency}})"
+    },
+    "payrollRequestAccountant": {
+      "title": "Your request awaits owner approval",
+      "message": "Payroll for {{month}} was sent to the owner and is not approved yet"
+    },
+    "monthReopenOwner": {
+      "title": "Request to reopen accounting month",
+      "message": "Month {{month}} — {{reason}}"
+    },
+    "monthReopenRequester": {
+      "title": "Month reopen request — pending approval",
+      "message": "Month {{month}} awaits owner approval"
+    },
+    "monthReopenDefaultReason": "Awaiting your approval",
+    "callsTargetGap": {
+      "title": "Calls target",
+      "message": "{{count}} reps are below the calls target"
+    },
+    "shootApproved": {
+      "title": "Shoot booking approved",
+      "message": "{{customer}} - {{date}} {{time}}"
+    },
+    "shootRejected": {
+      "title": "Shoot booking rejected",
+      "message": "{{customer}} - {{date}} {{time}}"
+    },
+    "equipmentApproved": {
+      "title": "Equipment booking approved",
+      "message": "{{equipment}} x{{quantity}} - {{customer}}"
+    },
+    "equipmentRejected": {
+      "title": "Equipment booking rejected",
+      "message": "{{equipment}} x{{quantity}} - {{customer}}"
+    },
+    "meetingApproved": {
+      "title": "Meeting booking approved",
+      "message": "{{title}} — {{date}} {{time}}"
+    },
+    "meetingRejected": {
+      "title": "Meeting booking rejected",
+      "message": "{{title}} — {{date}} {{time}}"
+    },
+    "custodyNewRequest": {
+      "title": "New production custody request",
+      "message": "{{title}} — {{amount}} {{currency}} ({{manager}})"
+    },
+    "custodyPendingOwner": {
+      "title": "Custody requests awaiting your approval ({{count}})",
+      "message": "{{lines}}{{more}}"
+    },
+    "custodyApprovedAwaitingPay": {
+      "title": "Approved custody awaiting payment recording",
+      "message": "{{title}} — {{amount}} {{currency}} ({{manager}})"
+    },
+    "custodyAwaitingPayment": {
+      "title": "Custody awaiting payment recording ({{count}})",
+      "message": "{{lines}}{{more}}"
+    },
+    "custodySettlementPending": {
+      "title": "Custody settlement awaiting your close ({{count}})",
+      "message": "{{lines}}{{more}}"
+    },
+    "custodyLongActive": {
+      "title": "Active production custody needs settlement",
+      "message": "{{count}} active custody funds open for more than 7 days without settlement"
+    },
+    "custodyLongActivePm": {
+      "title": "Active custody needs settlement ({{count}})",
+      "message": "You have {{count}} active custody funds open for more than 7 days — complete settlement"
+    },
+    "prodExecPending": {
+      "title": "Bookings awaiting production execution ({{count}})",
+      "message": "Shoot: {{shoot}} — Equipment: {{equipment}} — Meetings: {{meetings}}"
+    },
+    "custodyReadyForPickup": {
+      "title": "Custody disbursed — ready for pickup",
+      "message": "{{title}} — {{amount}} {{currency}}{{method}}"
+    },
+    "custodyReadyBatch": {
+      "title": "Custody ready for pickup ({{count}})",
+      "message": "{{lines}}{{more}}"
+    },
+    "custodyRejected": {
+      "title": "Custody request rejected ({{count}})",
+      "message": "{{lines}}"
+    },
+    "custodyPaymentMethod": " ({{method}})"
   }
 }

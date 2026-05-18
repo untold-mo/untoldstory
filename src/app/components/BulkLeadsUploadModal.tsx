@@ -2,7 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertCircle, Bell, CheckCircle2, FileUp, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 import { useData } from '../context/DataContext';
+import { useAppDirection } from '../hooks/useAppDirection';
 import { importLeadsCsvApi } from '@/lib/api/leadsApi';
 import { isServerDataMode } from '@/config/dataSource';
 const SYSTEM_LOGO = '/brand/the-untold-story-logo.png';
@@ -11,6 +13,7 @@ import {
   spreadsheetRowsToBulkLeads,
   type SpreadsheetLeadRow,
 } from '@/lib/spreadsheetLeadsImport';
+import type { TFunction } from 'i18next';
 
 type Props = {
   isOpen: boolean;
@@ -38,16 +41,24 @@ function browserNotificationsSupported(): boolean {
   return typeof window !== 'undefined' && 'Notification' in window;
 }
 
-function notifyImportFinished(result: ImportResult) {
+function notifyImportFinished(result: ImportResult, t: TFunction, lang: 'ar' | 'en') {
   const { created, skippedDuplicates, failed } = result;
-  const summary =
-    created > 0
-      ? `تم استيراد ${created} ليد${skippedDuplicates ? ` — تخطي ${skippedDuplicates} مكرر` : ''}${failed ? ` — فشل ${failed}` : ''}`
-      : skippedDuplicates > 0
-        ? `لم يُضف ليد جديد — ${skippedDuplicates} صف مكرر`
-        : failed > 0
-          ? `لم يُستورد أي ليد — ${failed} صف فشل`
-          : 'لم يُستورد أي ليد جديد';
+  let summary: string;
+  if (created > 0) {
+    summary = t('bulkUpload.toastSuccess', {
+      created,
+      skipped: skippedDuplicates
+        ? t('bulkUpload.toastSkippedPart', { count: skippedDuplicates })
+        : '',
+      failed: failed ? t('bulkUpload.toastFailedPart', { count: failed }) : '',
+    });
+  } else if (skippedDuplicates > 0) {
+    summary = t('bulkUpload.toastNoNewDup', { count: skippedDuplicates });
+  } else if (failed > 0) {
+    summary = t('bulkUpload.toastNoNewFail', { count: failed });
+  } else {
+    summary = t('bulkUpload.toastNoNew');
+  }
 
   if (created > 0) {
     toast.success(summary, { duration: 12_000, id: 'bulk-leads-import-done' });
@@ -57,12 +68,15 @@ function notifyImportFinished(result: ImportResult) {
 
   if (!browserNotificationsSupported() || Notification.permission !== 'granted') return;
   try {
-    const n = new Notification(created > 0 ? 'اكتمل استيراد الليدز' : 'انتهى استيراد الملف', {
-      body: summary,
-      tag: 'bulk-leads-import',
-      lang: 'ar',
-      icon: typeof window !== 'undefined' ? `${window.location.origin}${SYSTEM_LOGO}` : undefined,
-    });
+    const n = new Notification(
+      created > 0 ? t('bulkUpload.notifyTitleOk') : t('bulkUpload.notifyTitleWarn'),
+      {
+        body: summary,
+        tag: 'bulk-leads-import',
+        lang,
+        icon: typeof window !== 'undefined' ? `${window.location.origin}${SYSTEM_LOGO}` : undefined,
+      },
+    );
     n.onclick = () => {
       window.focus();
       n.close();
@@ -74,6 +88,8 @@ function notifyImportFinished(result: ImportResult) {
 
 export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
   const { bulkAddLeads, currentUser, refreshServerWorkspace } = useData();
+  const { t } = useTranslation();
+  const { dir, dateLocale, lang } = useAppDirection();
   const inputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [fileName, setFileName] = useState('');
@@ -124,7 +140,7 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
     if (!file) return;
     const lower = file.name.toLowerCase();
     if (!lower.endsWith('.xlsx') && !lower.endsWith('.xls') && !lower.endsWith('.csv')) {
-      toast.error('الصيغ المدعومة: Excel (.xlsx, .xls) أو CSV');
+      toast.error(t('bulkUpload.invalidFormat'));
       return;
     }
     setFileName(file.name);
@@ -133,23 +149,23 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
       setParsedRows(parsed.rows);
       setParseErrors(parsed.errors.slice(0, 10));
       if (parsed.rows.length === 0) {
-        toast.error(parsed.errors[0] || 'لم يُعثر على صفوف صالحة في الملف');
+        toast.error(parsed.errors[0] || t('bulkUpload.noValidRows'));
       } else {
-        toast.success(`تم قراءة ${parsed.rows.length} ليد من الملف`);
+        toast.success(t('bulkUpload.readOk', { count: parsed.rows.length }));
       }
     } catch {
-      toast.error('تعذر قراءة الملف');
+      toast.error(t('bulkUpload.readFail'));
       setParsedRows([]);
     }
   };
 
   const runImport = async () => {
     if (!canImport) {
-      toast.error('صلاحية الاستيراد للمالك أو مدير المبيعات فقط');
+      toast.error(t('bulkUpload.importForbidden'));
       return;
     }
     if (parsedRows.length === 0) {
-      toast.error('اختر ملف Excel أو CSV صالح أولاً');
+      toast.error(t('bulkUpload.pickValidFirst'));
       return;
     }
 
@@ -251,10 +267,10 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
 
       setLastResult(result);
       setImportFinished(true);
-      notifyImportFinished(result);
+      notifyImportFinished(result, t, lang);
       panelRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'فشل الاستيراد');
+      toast.error(e instanceof Error ? e.message : t('bulkUpload.importFail'));
     } finally {
       setUploading(false);
       setImportProgress(null);
@@ -272,7 +288,7 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
   return createPortal(
     <div
       className="fixed inset-0 z-[360] flex items-center justify-center p-4 sm:p-6 bg-black/85 backdrop-blur-md isolate"
-      dir="rtl"
+      dir={dir}
       role="dialog"
       aria-modal="true"
       aria-labelledby="bulk-leads-import-title"
@@ -287,14 +303,14 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
       >
         <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-white/10 bg-[#0E1426]/95 backdrop-blur-md px-6 py-4 rounded-t-[2rem]">
           <h2 id="bulk-leads-import-title" className="text-xl font-black text-white">
-            رفع ليدز من Excel / CSV
+            {t('bulkUpload.title')}
           </h2>
           <button
             type="button"
             onClick={handleClose}
             disabled={uploading}
             className="p-2 hover:bg-white/10 rounded-xl transition-colors disabled:opacity-50"
-            aria-label="إغلاق"
+            aria-label={t('common.close')}
           >
             <X className="w-5 h-5" />
           </button>
@@ -309,7 +325,7 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
               aria-busy="true"
             >
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-black text-emerald-200">جاري رفع الليدز…</p>
+                <p className="text-sm font-black text-emerald-200">{t('bulkUpload.uploading')}</p>
                 <p className="text-lg font-black text-white tabular-nums">{progressPercent}%</p>
               </div>
               <div className="h-3 rounded-full bg-black/40 overflow-hidden border border-white/10">
@@ -320,26 +336,26 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <p className="text-zinc-300">
-                  <span className="text-zinc-500 block mb-0.5">تمت معالجته</span>
+                  <span className="text-zinc-500 block mb-0.5">{t('bulkUpload.processed')}</span>
                   <span className="font-black text-white tabular-nums">
-                    {importProgress.processed.toLocaleString('ar-EG')} /{' '}
-                    {importProgress.total.toLocaleString('ar-EG')}
+                    {importProgress.processed.toLocaleString(dateLocale)} /{' '}
+                    {importProgress.total.toLocaleString(dateLocale)}
                   </span>
                 </p>
                 <p className="text-zinc-300">
-                  <span className="text-zinc-500 block mb-0.5">متبقي</span>
+                  <span className="text-zinc-500 block mb-0.5">{t('bulkUpload.remaining')}</span>
                   <span className="font-black text-amber-200 tabular-nums">
-                    {progressRemaining.toLocaleString('ar-EG')}
+                    {progressRemaining.toLocaleString(dateLocale)}
                   </span>
                 </p>
                 <p className="text-zinc-300">
-                  <span className="text-zinc-500 block mb-0.5">أُضيف حتى الآن</span>
+                  <span className="text-zinc-500 block mb-0.5">{t('bulkUpload.addedSoFar')}</span>
                   <span className="font-black text-emerald-300 tabular-nums">
-                    {importProgress.created.toLocaleString('ar-EG')}
+                    {importProgress.created.toLocaleString(dateLocale)}
                   </span>
                 </p>
                 <p className="text-zinc-300">
-                  <span className="text-zinc-500 block mb-0.5">الدفعة</span>
+                  <span className="text-zinc-500 block mb-0.5">{t('bulkUpload.batch')}</span>
                   <span className="font-black text-white tabular-nums">
                     {importProgress.batchIndex} / {importProgress.batchCount}
                   </span>
@@ -347,8 +363,10 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
               </div>
               {(importProgress.skippedDuplicates > 0 || importProgress.failed > 0) && (
                 <p className="text-[11px] text-zinc-400">
-                  تخطي مكرر: {importProgress.skippedDuplicates.toLocaleString('ar-EG')} · فشل:{' '}
-                  {importProgress.failed.toLocaleString('ar-EG')}
+                  {t('bulkUpload.progressSkippedFailed', {
+                    skipped: importProgress.skippedDuplicates.toLocaleString(dateLocale),
+                    failed: importProgress.failed.toLocaleString(dateLocale),
+                  })}
                 </p>
               )}
             </div>
@@ -373,28 +391,29 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
                 ) : (
                   <Bell className="w-5 h-5 shrink-0" />
                 )}
-                {lastResult.created > 0 ? 'اكتمل الاستيراد بنجاح' : 'انتهى الاستيراد'}
+                {lastResult.created > 0 ? t('bulkUpload.doneSuccess') : t('bulkUpload.doneWarning')}
               </p>
-              <p className="text-sm text-zinc-100">تم الإضافة: {lastResult.created}</p>
+              <p className="text-sm text-zinc-100">{t('bulkUpload.added', { count: lastResult.created })}</p>
               {lastResult.skippedDuplicates > 0 && (
-                <p className="text-sm text-zinc-300">مكرر (تخطي): {lastResult.skippedDuplicates}</p>
+                <p className="text-sm text-zinc-300">{t('bulkUpload.skippedDup', { count: lastResult.skippedDuplicates })}</p>
               )}
               {lastResult.failed > 0 && (
-                <p className="text-sm text-zinc-300">فشل/تخطي: {lastResult.failed}</p>
+                <p className="text-sm text-zinc-300">{t('bulkUpload.failed', { count: lastResult.failed })}</p>
               )}
               <p className="text-[11px] text-zinc-400 pt-1">
-                وصلك تنبيه في الشاشة
-                {browserNotificationsSupported() && Notification.permission === 'granted'
-                  ? ' وإشعار نظام التشغيل'
-                  : ''}
-                .
+                {t('bulkUpload.alertHint', {
+                  osNotify:
+                    browserNotificationsSupported() && Notification.permission === 'granted'
+                      ? t('bulkUpload.osNotify')
+                      : '',
+                })}
               </p>
             </div>
           )}
 
           {!canImport && (
             <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
-              صلاحية الاستيراد متاحة للمالك ومدير المبيعات فقط.
+              {t('bulkUpload.forbidden')}
             </div>
           )}
 
@@ -415,29 +434,26 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
             <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
               <FileUp className="w-8 h-8 text-emerald-400" />
             </div>
-            <p className="text-base font-bold text-white mb-1">اضغط لاختيار ملف Excel أو CSV</p>
+            <p className="text-base font-bold text-white mb-1">{t('bulkUpload.pickFile')}</p>
             <p className="text-xs text-zinc-500 font-bold">
-              {fileName || 'حتى 10MB — .xlsx .xls .csv'}
+              {fileName || t('bulkUpload.fileHint')}
             </p>
             {parsedRows.length > 0 && (
               <p className="mt-3 text-emerald-400 text-sm font-bold">
-                جاهز للاستيراد: {parsedRows.length} صف
+                {t('bulkUpload.readyRows', { count: parsedRows.length })}
               </p>
             )}
             {uploading && importProgress && (
               <p className="mt-3 text-emerald-300 font-bold text-sm tabular-nums">
-                {progressPercent}% — {importProgress.processed.toLocaleString('ar-EG')} من{' '}
-                {importProgress.total.toLocaleString('ar-EG')}
+                {t('bulkUpload.importingPct', { pct: progressPercent })} — {importProgress.processed.toLocaleString(dateLocale)} /{' '}
+                {importProgress.total.toLocaleString(dateLocale)}
               </p>
             )}
           </button>
 
           <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-2xl flex items-start gap-3 text-blue-200">
             <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-            <p className="text-xs font-bold leading-relaxed">
-              شيت Expo / سيارات: Client Name، Client number، Client Interested in (عمود أو عمودين) — يُتجاهل
-              source و Lead From و Date of Phone Call. أو ملف عربي/إنجليزي بعناوين: اسم، موبايل، اهتمام.
-            </p>
+            <p className="text-xs font-bold leading-relaxed">{t('bulkUpload.formatHint')}</p>
           </div>
 
           {parseErrors.length > 0 && (
@@ -456,8 +472,8 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
               className="flex-1 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black disabled:opacity-50"
             >
               {uploading && importProgress
-                ? `جاري الرفع ${progressPercent}%…`
-                : `استيراد ${parsedRows.length || ''} ليد`}
+                ? t('bulkUpload.importingPct', { pct: progressPercent })
+                : t('bulkUpload.importBtn', { count: parsedRows.length || 0 })}
             </button>
             {importFinished && (
               <button
@@ -465,7 +481,7 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
                 onClick={handleClose}
                 className="sm:w-auto px-6 py-3.5 rounded-xl font-black border border-white/20 text-zinc-200 hover:bg-white/10"
               >
-                إغلاق
+                {t('common.close')}
               </button>
             )}
           </div>

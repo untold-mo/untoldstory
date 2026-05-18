@@ -2,7 +2,9 @@ import React, { useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 import { useData, type Lead } from '../context/DataContext';
+import { useAppDirection } from '../hooks/useAppDirection';
 import { REP_INTERACTION_PLAYBOOKS, REP_LEAD_UPDATE_ACTIONS } from '../../lib/repInteractionPlaybooks';
 
 type ChannelType = 'call' | 'chat' | 'other';
@@ -34,6 +36,8 @@ const emptyModal = (): ModalState => ({
 
 export function useLeadRepUpdate() {
   const { logLeadInteraction, currentUser } = useData();
+  const { t } = useTranslation();
+  const { dir } = useAppDirection();
   const [modal, setModal] = useState<ModalState>(emptyModal);
 
   const canUpdateLead = useCallback(
@@ -48,7 +52,7 @@ export function useLeadRepUpdate() {
   const openInteraction = useCallback(
     (lead: Lead, action: string, defaultNote = '', toastType: 'success' | 'info' = 'success') => {
       if (!canUpdateLead(lead)) {
-        toast.error('لا يمكنك تسجيل تحديث على ليد غير مسند إليك.');
+        toast.error(t('leadUpdate.forbidden'));
         return;
       }
       const inferredChannel: ChannelType = /(مكالمة|اتصال)/.test(action)
@@ -68,20 +72,20 @@ export function useLeadRepUpdate() {
         toastType,
       });
     },
-    [canUpdateLead],
+    [canUpdateLead, t],
   );
 
   const openLeadUpdate = useCallback(
     (lead: Lead) => {
-      openInteraction(lead, 'تحديث — اتصال بالعميل', '', 'success');
+      openInteraction(lead, t('leadUpdate.defaultAction'), '', 'success');
     },
-    [openInteraction],
+    [openInteraction, t],
   );
 
   const applyPlaybookTemplate = (templateId: string) => {
     if (!templateId) return;
     const templates = REP_INTERACTION_PLAYBOOKS[modal.channelType] || [];
-    const picked = templates.find((t) => t.id === templateId);
+    const picked = templates.find((p) => p.id === templateId);
     if (!picked) return;
     setModal((prev) => ({ ...prev, note: picked.text }));
   };
@@ -90,7 +94,7 @@ export function useLeadRepUpdate() {
     if (!modal.lead) return;
     const note = modal.note.trim();
     if (!note) {
-      toast.error('اكتب ملخص التواصل أو التحديث قبل الحفظ.');
+      toast.error(t('leadUpdate.noteRequired'));
       return;
     }
     logLeadInteraction(modal.lead.id, modal.action, note, {
@@ -99,10 +103,11 @@ export function useLeadRepUpdate() {
       evidenceRef: modal.evidenceRef.trim() || undefined,
       durationSeconds: modal.durationSeconds ? Number(modal.durationSeconds) || undefined : undefined,
     });
+    const msg = t('leadUpdate.savedWithName', { name: modal.lead.name });
     if (modal.toastType === 'info') {
-      toast.info(`تم حفظ التحديث: ${modal.lead.name}`);
+      toast.info(msg);
     } else {
-      toast.success(`تم حفظ التحديث: ${modal.lead.name}`);
+      toast.success(msg);
     }
     setModal(emptyModal());
   };
@@ -112,7 +117,7 @@ export function useLeadRepUpdate() {
     return createPortal(
       <div
         className="fixed inset-0 z-[350] bg-black/65 backdrop-blur-sm flex items-center justify-center p-4"
-        dir="rtl"
+        dir={dir}
         role="dialog"
         aria-modal="true"
       >
@@ -122,13 +127,13 @@ export function useLeadRepUpdate() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <p className="text-xs text-zinc-400">سجل تحديث على الليد</p>
+            <p className="text-xs text-zinc-400">{t('leadUpdate.logTitle')}</p>
             <h3 className="text-lg font-black text-white mt-1">
               {modal.lead.name} — {modal.lead.company}
             </h3>
           </motion.div>
           <motion.div className="p-6 space-y-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <label className="block text-sm font-bold text-zinc-200">نوع التحديث</label>
+            <label className="block text-sm font-bold text-zinc-200">{t('leadUpdate.actionType')}</label>
             <select
               value={modal.action}
               onChange={(e) => {
@@ -151,7 +156,7 @@ export function useLeadRepUpdate() {
               ) : null}
             </select>
 
-            <label className="block text-sm font-bold text-zinc-200">ملخص التواصل / التحديث</label>
+            <label className="block text-sm font-bold text-zinc-200">{t('leadUpdate.summaryLabel')}</label>
             <select
               defaultValue=""
               onChange={(e) => {
@@ -160,7 +165,7 @@ export function useLeadRepUpdate() {
               }}
               className="w-full bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-xs text-zinc-200"
             >
-              <option value="">قالب جاهز (اختياري)</option>
+              <option value="">{t('leadUpdate.templateOptional')}</option>
               {(REP_INTERACTION_PLAYBOOKS[modal.channelType] || []).map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.label}
@@ -172,7 +177,7 @@ export function useLeadRepUpdate() {
               onChange={(e) => setModal((prev) => ({ ...prev, note: e.target.value }))}
               rows={5}
               autoFocus
-              placeholder="ماذا حدث في هذه المكالمة أو المتابعة؟ ما طلبه العميل؟ وما الخطوة التالية؟"
+              placeholder={t('leadUpdate.notePlaceholder')}
               className="w-full bg-[#111A32] border border-white/15 rounded-2xl px-4 py-3 text-sm text-zinc-100 focus:outline-none focus:border-[#7C6BFF] resize-y"
             />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -183,9 +188,9 @@ export function useLeadRepUpdate() {
                 }
                 className="bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-xs"
               >
-                <option value="call">مكالمة</option>
-                <option value="chat">شات/واتساب</option>
-                <option value="other">أخرى</option>
+                <option value="call">{t('leadUpdate.channelCall')}</option>
+                <option value="chat">{t('leadUpdate.channelChat')}</option>
+                <option value="other">{t('leadUpdate.channelOther')}</option>
               </select>
               <select
                 value={modal.evidenceType}
@@ -194,15 +199,15 @@ export function useLeadRepUpdate() {
                 }
                 className="bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-xs"
               >
-                <option value="note_only">بدون مرفق</option>
-                <option value="recording">رابط تسجيل مكالمة</option>
-                <option value="chat_export">رابط محادثة</option>
-                <option value="link">رابط مرجعي</option>
+                <option value="note_only">{t('leadUpdate.evidenceNoteOnly')}</option>
+                <option value="recording">{t('leadUpdate.evidenceRecording')}</option>
+                <option value="chat_export">{t('leadUpdate.evidenceChat')}</option>
+                <option value="link">{t('leadUpdate.evidenceLink')}</option>
               </select>
               <input
                 value={modal.evidenceRef}
                 onChange={(e) => setModal((prev) => ({ ...prev, evidenceRef: e.target.value }))}
-                placeholder="رابط الدليل (اختياري)"
+                placeholder={t('leadUpdate.evidenceUrlPlaceholder')}
                 className="bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-xs md:col-span-2"
               />
               <input
@@ -210,7 +215,7 @@ export function useLeadRepUpdate() {
                 min={0}
                 value={modal.durationSeconds}
                 onChange={(e) => setModal((prev) => ({ ...prev, durationSeconds: e.target.value }))}
-                placeholder="مدة المكالمة بالثواني (اختياري)"
+                placeholder={t('leadUpdate.durationPlaceholder')}
                 className="bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-xs"
               />
             </div>
@@ -221,14 +226,14 @@ export function useLeadRepUpdate() {
               onClick={() => setModal(emptyModal())}
               className="px-4 py-2 rounded-xl text-sm font-bold bg-white/10 border border-white/15 text-zinc-200"
             >
-              إلغاء
+              {t('common.cancel')}
             </button>
             <button
               type="button"
               onClick={submit}
               className="px-4 py-2 rounded-xl text-sm font-black bg-[#7C6BFF] text-white"
             >
-              حفظ في سجل الليد
+              {t('leadUpdate.saveToTimeline')}
             </button>
           </motion.div>
         </div>

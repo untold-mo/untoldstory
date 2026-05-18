@@ -18,7 +18,21 @@
     "ok": "حسناً",
     "add": "إضافة",
     "import": "استيراد",
-    "uploadExcel": "رفع Excel"
+    "uploadExcel": "رفع Excel",
+    "all": "الكل",
+    "showAll": "عرض الكل",
+    "previous": "السابق",
+    "next": "التالي",
+    "currency": "ج.م",
+    "unassigned": "غير معيّن",
+    "noAssignee": "بدون تعيين",
+    "atSalesManager": "عند مدير المبيعات",
+    "refresh": "تحديث",
+    "refreshing": "جاري التحديث…",
+    "open": "فتح",
+    "confirm": "تأكيد",
+    "yes": "نعم",
+    "no": "لا"
   },
   "roles": {
     "مالك": "مالك",
@@ -64,7 +78,8 @@
     "openTasks": "{{count}} مفتوحة"
   },
   "welcome": {
-    "continueLogin": "المتابعة إلى تسجيل الدخول"
+    "continueLogin": "المتابعة إلى تسجيل الدخول",
+    "openLogin": "فتح تسجيل الدخول"
   },
   "login": {
     "title": "تسجيل الدخول",
@@ -82,10 +97,561 @@
     "playSoundAgain": "تشغيل الصوت مرة أخرى",
     "addTask": "إضافة المهمة",
     "noTasks": "لا توجد مهام.",
-    "openCount": "{{count}} مفتوحة"
+    "openCount": "{{count}} مفتوحة",
+    "placeholder": "نص المهمة…",
+    "dueOptional": "الموعد (اختياري):",
+    "noTime": "بدون وقت",
+    "saved": "تم حفظ المهمة",
+    "savedWithReminder": "تم حفظ المهمة مع موعد وتذكيرات",
+    "saveFailedNoUser": "تعذر حفظ المهمة: لا يوجد معرّف مستخدم نشط. أعد تسجيل الدخول.",
+    "pickDateOrClearTime": "اختر التاريخ أو امسح الوقت بالكامل",
+    "pickTimeWithDate": "اختر الساعة مع التاريخ",
+    "futureDueRequired": "اختَر موعداً في المستقبل لتفعيل التذكيرات"
   },
   "settings": {
     "languageSection": "اللغة والعرض",
     "languageHint": "يغيّر لغة القوائم والعناوين الرئيسية. بعض الشاشات التفصيلية قد تبقى بالعربية مؤقتاً."
+  },
+  "home": {
+    "unassignedLeads": "ليدز بدون تعيين",
+    "pendingApprovals": "طلبات تحتاج اعتماد",
+    "invoicesNoCostCenter": "فواتير بدون مركز تكلفة",
+    "todayFocus": "تركيز اليوم"
+  },
+  "homeFocus": {
+    "accOverdueInstallments": "أقساط متأخرة",
+    "accDueTodayInstallments": "أقساط مستحقة اليوم",
+    "accFinancialClaims": "مطالبات مالية بانتظار التنفيذ",
+    "accCustodySettlement": "تسويات عهدة بانتظار الإقفال",
+    "prodCustodyRequest": "طلبات عهدة عند المالك",
+    "prodCustodyWaitPay": "بانتظار دفع المحاسب",
+    "prodCustodyReady": "عهد جاهزة للاستلام",
+    "prodCustodyActive": "عهد نشطة (تسجيل صرف)",
+    "prodCustodySettlement": "تسوية عند المحاسب للإقفال",
+    "prodTodayMeetings": "اجتماعاتي اليوم",
+    "repOverdueFollowups": "متابعاتي المتأخرة",
+    "repTodayFollowups": "متابعات اليوم",
+    "repTodayBookings": "حجوزاتي اليوم",
+    "opsOverdueFollowups": "المتابعات المتأخرة",
+    "opsPendingApprovals": "طلبات اعتماد",
+    "opsTodayMeetings": "اجتماعات اليوم"
+  },
+  "errors": {
+    "noFinancePage": "لا توجد صفحة الإدارة المالية في صلاحياتك الحالية",
+    "noBookingsPage": "لا توجد صفحة متاحة لعرض الحجوزات في صلاحياتك الحالية",
+    "noProductionPage": "لا توجد صفحة تمويل الإنتاج في صلاحياتك الحالية",
+    "noFollowupsPage": "لا توجد صفحة متاحة لعرض المتابعات في صلاحياتك الحالية",
+    "noMeetingsPage": "لا توجد صفحة متاحة لعرض اجتماعات اليوم في صلاحياتك الحالية",
+    "noFinancialClaimsPage": "لا توجد صفحة متاحة لعرض المطالبات المالية",
+    "noPendingPage": "لا توجد صفحة متاحة لعرض الطلبات المنتظرة في صلاحياتك الحالية"
+  },
+  "leadForm": {
+    "addLeadTitle": "إضافة ليد جديد",
+    "addCustomerTitle": "إضافة عميل جديد",
+    "customerName": "اسم العميل",
+    "companyName": "اسم الشركة",
+    "companyOptional": "اسم الشركة (اختياري)",
+    "phone": "رقم الهاتف",
+    "emailOptional": "البريد الإلكتروني (اختياري)",
+    "budget": "الميزانية المتوقعة",
+    "sourceExample": "المصدر (مثال: صيانة / زيارة مباشرة)",
+    "saveLead": "حفظ الليد",
+    "saveCustomer": "حفظ العميل",
+    "completeRequired": "يرجى استكمال البيانات الأساسية (الاسم - الشركة - الهاتف - الميزانية)",
+    "addSuccess": "تمت إضافة ليد جديد بنجاح",
+    "companySizeSmall": "صغير",
+    "companySizeMedium": "متوسط",
+    "companySizeLarge": "كبير"
+  },
+  "client360": {
+    "title": "Client 360: {{name}}",
+    "subtitle": "{{company}} • {{phone}} • {{statusLabel}}: {{status}}",
+    "addUpdate": "+ إضافة تحديث",
+    "totalInvoices": "إجمالي الفواتير",
+    "collected": "المحصل",
+    "remaining": "المتبقي",
+    "evidenceCount": "مرفقات موثقة",
+    "recentComms": "آخر التواصلات",
+    "noNote": "بدون ملاحظة",
+    "evidenceArchive": "أرشيف الأدلة",
+    "noEvidence": "لا توجد أدلة مرفقة حتى الآن.",
+    "invoiceSummary": "ملخص فواتير العميل",
+    "noInvoices": "لا توجد فواتير مرتبطة.",
+    "opsStatus": "الحالة التشغيلية (اجتماعات/تصوير/معدات)",
+    "meetings": "اجتماعات",
+    "shoots": "طلبات تصوير",
+    "equipment": "طلبات معدات",
+    "linkedExpenses": "مصروفات مرتبطة (تقديري)"
+  },
+  "statement": {
+    "title": "كشف حساب العميل: {{name}}",
+    "meta": "كود العميل: {{code}} • المصدر: {{source}} • عدد الفواتير: {{count}}",
+    "exportCsv": "تصدير CSV",
+    "printPdf": "طباعة / PDF",
+    "totalInvoices": "إجمالي الفواتير",
+    "collected": "المحصل",
+    "remainingInstallments": "المتبقي (أقساط/ذمم)",
+    "colInvoiceId": "رقم الفاتورة",
+    "colDate": "التاريخ",
+    "colTotal": "الإجمالي",
+    "colPaid": "المحصل",
+    "colRemaining": "المتبقي",
+    "colDueDate": "موعد القسط",
+    "colStatus": "الحالة",
+    "colPayments": "الدفعات",
+    "paymentCount": "{{count}} دفعة",
+    "noInvoices": "لا توجد فواتير لهذا العميل بعد.",
+    "paymentsSection": "حركة الدفعات (مجمعة)",
+    "colPayDate": "التاريخ",
+    "colPayMethod": "طريقة الدفع",
+    "colPayAmount": "القيمة",
+    "colJournalId": "رقم القيد",
+    "colNote": "ملاحظة",
+    "noPayments": "لا توجد دفعات مسجلة لهذا العميل حتى الآن.",
+    "undefinedSource": "غير محدد"
+  },
+  "screens": {
+    "ownerOverview": { "title": "نظرة عامة للمالك", "subtitle": "متابعة الأداء المالي والبيعي للشركة بالكامل" },
+    "ownerApprovals": { "title": "اعتمادات مالية المالك", "subtitle": "عرض اعتماد فقط مع فصل المصدر: المحاسب vs مدير الإنتاج" },
+    "finance": { "title": "نظام الإدارة المالية", "subtitle": "الفواتير، التدفقات النقدية، وتقارير التحصيل" },
+    "workDistribution": { "title": "إعدادات توزيع العمل", "subtitle": "تحديد مهارات المناديب للتحكم في التوزيع التلقائي لليدز" },
+    "repDashboard": { "title": "لوحة تنفيذ المندوب", "subtitle": "قائمة عمل حقيقية: ماذا تم، وما الإجراء التالي، وما المتوقع اليوم" },
+    "repPerformanceEmpty": { "title": "أدائي", "subtitle": "لا توجد بيانات كافية لحساب الأداء حاليًا" },
+    "repPerformance": { "title": "أدائي", "subtitle": "قياس نتائجك الفعلية وتحسين معدل الإغلاق" },
+    "bookings": {
+      "title": "نظام الحجوزات",
+      "subtitleOwner": "اعتماد طلبات الحجز ومتابعتها من نوع واحد في كل مرة",
+      "subtitleAccountant": "تنفيذ المطالبات المالية المعتمدة",
+      "subtitleDefault": "اختر نوع الحجز: لوكيشن، معدات، اجتماع، أو إدخال بيان لحجز آخر"
+    },
+    "teamPerformance": { "title": "أداء فريق المبيعات", "subtitle": "لوحة تنفيذية مختصرة لاتخاذ القرار بسرعة" },
+    "salesTeam": { "title": "فريق المبيعات", "subtitle": "لوحة مختصرة لإدارة الفريق والتغطية التشغيلية بدون عناصر إضافية." },
+    "approvalsHub": { "title": "مركز الاعتمادات", "subtitle": "اعتماد/رفض كل الطلبات من شاشة واحدة" }
+  },
+  "leadUpdate": {
+    "forbidden": "لا يمكنك تسجيل تحديث على ليد غير مسند إليك.",
+    "noteRequired": "اكتب ملخص التواصل أو التحديث قبل الحفظ.",
+    "defaultAction": "تحديث — اتصال بالعميل",
+    "saved": "تم تسجيل التحديث",
+    "title": "تحديث على الليد",
+    "action": "نوع التواصل",
+    "note": "ملخص التواصل",
+    "channel": "القناة",
+    "evidence": "دليل / مرفق",
+    "duration": "مدة (ثوانٍ)",
+    "submit": "حفظ التحديث",
+    "logTitle": "سجل تحديث على الليد",
+    "actionType": "نوع التحديث",
+    "summaryLabel": "ملخص التواصل / التحديث",
+    "templateOptional": "قالب جاهز (اختياري)",
+    "notePlaceholder": "ماذا حدث في هذه المكالمة أو المتابعة؟ ما طلبه العميل؟ وما الخطوة التالية؟",
+    "channelCall": "مكالمة",
+    "channelChat": "شات/واتساب",
+    "channelOther": "أخرى",
+    "evidenceNoteOnly": "بدون مرفق",
+    "evidenceRecording": "رابط تسجيل مكالمة",
+    "evidenceChat": "رابط محادثة",
+    "evidenceLink": "رابط مرجعي",
+    "evidenceUrlPlaceholder": "رابط الدليل (اختياري)",
+    "durationPlaceholder": "مدة المكالمة بالثواني (اختياري)",
+    "saveToTimeline": "حفظ في سجل الليد",
+    "savedWithName": "تم حفظ التحديث: {{name}}"
+  },
+  "notifications": {
+    "hub": "مركز التنبيهات",
+    "syncing": "يتم مزامنة أحدث البيانات من السيرفر…",
+    "syncHint": "لا يوجد WebSocket: التحديث التلقائي عند العودة للتبويب أو التركيز تقريباً كل 60 ثانية، بالإضافة إلى زر «تحديث» وفتح هذه اللوحة.",
+    "syncFailed": "تعذر تحديث البيانات من السيرفر",
+    "syncDone": "تم تحديث التنبيهات من السيرفر",
+    "empty": "لا توجد تنبيهات جديدة",
+    "critical": "Critical",
+    "normal": "Normal",
+    "openTab": "فتح: {{tab}}"
+  },
+  "leadStatus": {
+    "الكل": "كل الحالات",
+    "جديد": "جديد",
+    "قيد التواصل": "قيد التواصل",
+    "عرض سعر": "عرض سعر",
+    "تفاوض": "تفاوض",
+    "مغلق - فوز": "مغلق - فوز",
+    "مغلق - خسارة": "مغلق - خسارة"
+  },
+  "leads": {
+    "titleAll": "كافة الليدز",
+    "titleManage": "إدارة الليدز",
+    "titleCustomers": "إدارة العملاء الخارجيين",
+    "subtitleHub": "كل الليدز الواردة من فيسبوك وإنستجرام ولينكد إن والإيميل/جيميل وجوجل — ابدأ بتوزيع غير الموزّع على المناديب",
+    "subtitleDefault": "بحث، تصفية، وتحديث الحالة والتعيين بشكل مباشر",
+    "subtitleAccountant": "يعرض للمحاسب الليدز المعتمدة من المالك فقط (تحولت فعلياً لتنفيذ مالي)",
+    "subtitleCustomers": "العملاء الخارجيون فقط (خارج مسار الليدز) مع الأرصدة المدينة/الدائنة",
+    "inboundTitle": "ليدز واردة من القنوات",
+    "unassignedCount": "غير موزّع: {{count}}",
+    "autoUnassignedCount": "وارد تلقائي غير موزّع: {{count}}",
+    "allInboundUnassigned": "كل الوارد (غير موزّع)",
+    "tabLeads": "الليدز",
+    "tabCustomers": "العملاء",
+    "searchLeads": "بحث بالاسم أو الشركة أو الهاتف",
+    "searchCustomers": "بحث بالاسم أو الشركة أو المصدر أو الهاتف",
+    "allStatuses": "كل الحالات",
+    "allSources": "كل المصادر",
+    "sourceManual": "يدوي",
+    "filterMine": "الخاص بي",
+    "filterUnassigned": "غير موزع",
+    "overdueFilterActive": "فلتر المتأخر مفعل الآن",
+    "repFilterActive": "فلتر المندوب مفعل: {{name}}",
+    "clearRepFilter": "إلغاء فلتر المندوب",
+    "uploadExcelCsv": "رفع Excel / CSV",
+    "importLinkedIn": "استيراد LinkedIn CSV",
+    "addLead": "إضافة ليد",
+    "addCustomer": "إضافة عميل",
+    "selectedCount": "محدد: {{count}} — التعيين والحذف يشملان كل الليدز المحددة",
+    "clearSelection": "إلغاء التحديد",
+    "selectAllResults": "تحديد كل النتائج ({{count}})",
+    "chooseRep": "اختر مندوباً…",
+    "assigning": "جاري التعيين…",
+    "assignCount": "تعيين {{count}} ليد",
+    "deleting": "جاري الحذف…",
+    "deleteCount": "حذف {{count}} ليد",
+    "selectPageLeads": "تحديد كل ليدز الصفحة",
+    "selectLead": "تحديد {{name}}",
+    "colClient": "العميل",
+    "colDetails": "التفاصيل",
+    "colCategory": "التصنيف",
+    "colRep": "المندوب",
+    "colStatus": "الحالة",
+    "colActions": "الإجراءات",
+    "colSource": "المصدر",
+    "colDebit": "الرصيد المدين",
+    "colCredit": "الرصيد الدائن",
+    "colAccountStatus": "حالة الحساب",
+    "noResults": "لا توجد نتائج مطابقة للفلاتر الحالية",
+    "showingRange": "عرض {{from}}–{{to}} من {{total}}",
+    "perPage": "في الصفحة:",
+    "deleteLead": "حذف الليد",
+    "delete": "حذف",
+    "addUpdate": "+ تحديث",
+    "priceQuote": "عرض سعر",
+    "client360": "Client 360",
+    "statement": "كشف حساب",
+    "externalSource": "خارجي ({{label}})",
+    "debit": "مدين",
+    "credit": "دائن",
+    "balanced": "متزن",
+    "deleted": "تم حذف الليد",
+    "deleteBlocked": "لا يمكن الحذف: توجد فواتير أو عروض أسعار مرتبطة بهذا الليد",
+    "deleteForbidden": "ليست لديك صلاحية حذف الليد",
+    "deleteFailed": "تعذر حذف الليد",
+    "assignPickRep": "اختر مندوباً أولاً",
+    "assignRepNotFound": "المندوب غير موجود",
+    "assignTargetRep": "المندوب «{{name}}»",
+    "deleteConfirmNamed": "حذف الليد «{{name}}» نهائياً؟ لا يمكن التراجع.",
+    "assignConfirmOne": "تعيين ليد واحد إلى {{target}}؟",
+    "assignConfirmMany": "تعيين {{count}} ليد إلى {{target}}؟",
+    "assignFailed": "تعذر تعيين الليدز المحددة",
+    "assignPartial": "تم تعيين {{ok}} من {{total}} ليد",
+    "assignDoneOne": "تم التعيين إلى {{target}}",
+    "assignDoneMany": "تم تعيين {{count}} ليد إلى {{target}}",
+    "deleteConfirmOne": "حذف الليد المحدد نهائياً؟ لا يمكن التراجع.",
+    "deleteConfirmMany": "حذف {{count}} ليد نهائياً؟ لا يمكن التراجع.",
+    "deleteBulkBlocked": "لا يمكن الحذف: ليدز مرتبطة بفواتير أو عروض أسعار",
+    "deleteBulkFailed": "تعذر حذف الليدز المحددة",
+    "deleteBulkPartial": "تم حذف {{deleted}} ليد — تخطي {{blocked}} مرتبط — فشل {{failed}}",
+    "deleteBulkDone": "تم حذف {{count}} ليد"
+  },
+  "bulkUpload": {
+    "title": "رفع ليدز من Excel / CSV",
+    "forbidden": "صلاحية الاستيراد متاحة للمالك ومدير المبيعات فقط.",
+    "pickFile": "اضغط لاختيار ملف Excel أو CSV",
+    "fileHint": "حتى 10MB — .xlsx .xls .csv",
+    "readyRows": "جاهز للاستيراد: {{count}} صف",
+    "uploading": "جاري رفع الليدز…",
+    "formatHint": "شيت Expo / سيارات: Client Name، Client number، Client Interested in (عمود أو عمودين) — يُتجاهل source و Lead From و Date of Phone Call. أو ملف عربي/إنجليزي بعناوين: اسم، موبايل، اهتمام.",
+    "importBtn": "استيراد {{count}} ليد",
+    "importing": "جاري الاستيراد…",
+    "importingPct": "جاري الرفع {{pct}}%…",
+    "doneSuccess": "اكتمل الاستيراد بنجاح",
+    "doneWarning": "انتهى الاستيراد",
+    "added": "تم الإضافة: {{count}}",
+    "skippedDup": "مكرر (تخطي): {{count}}",
+    "failed": "فشل/تخطي: {{count}}",
+    "alertHint": "وصلك تنبيه في الشاشة{{osNotify}}.",
+    "osNotify": " وإشعار نظام التشغيل",
+    "processed": "تمت معالجته",
+    "remaining": "متبقي",
+    "addedSoFar": "أُضيف حتى الآن",
+    "batch": "الدفعة",
+    "progressSkippedFailed": "تخطي مكرر: {{skipped}} · فشل: {{failed}}",
+    "invalidFormat": "الصيغ المدعومة: Excel (.xlsx, .xls) أو CSV",
+    "readOk": "تم قراءة {{count}} ليد من الملف",
+    "readFail": "تعذر قراءة الملف",
+    "noValidRows": "لم يُعثر على صفوف صالحة في الملف",
+    "pickValidFirst": "اختر ملف Excel أو CSV صالح أولاً",
+    "importForbidden": "صلاحية الاستيراد للمالك أو مدير المبيعات فقط",
+    "importFail": "فشل الاستيراد",
+    "toastSuccess": "تم استيراد {{created}} ليد{{skipped}}{{failed}}",
+    "toastSkippedPart": " — تخطي {{count}} مكرر",
+    "toastFailedPart": " — فشل {{count}}",
+    "toastNoNewDup": "لم يُضف ليد جديد — {{count}} صف مكرر",
+    "toastNoNewFail": "لم يُستورد أي ليد — {{count}} صف فشل",
+    "toastNoNew": "لم يُستورد أي ليد جديد",
+    "notifyTitleOk": "اكتمل استيراد الليدز",
+    "notifyTitleWarn": "انتهى استيراد الملف"
+  },
+  "sysNotify": {
+    "moreItems": "… و{{count}} أخرى",
+    "expenseLine": "• {{title}} — {{amount}} {{currency}}",
+    "assignLeadLine": "• {{name}}{{company}}",
+    "custodyOwnerLine": "• {{title}} — {{amount}} {{currency}} ({{manager}})",
+    "custodyPayLine": "• {{title}} — {{amount}} {{currency}}",
+    "custodySettleLine": "• {{title}} — مصروف {{spent}} / {{total}} {{currency}}",
+    "shootReviewLine": "• {{customer}} — {{date}} {{time}} ({{rep}})",
+    "shootMyLine": "• {{customer}} — {{date}} {{time}}",
+    "equipmentLine": "• {{equipment}} — {{customer}}",
+    "meetingLine": "• {{title}} — {{date}}",
+    "quoteLine": "• {{title}} — {{customer}}",
+    "custodyRejectedLine": "• {{title}}{{reason}}",
+    "openPersonalTodos": {
+      "title": "مهام معلّقة على قائمتك",
+      "message": "لديك {{count}} مهمة شخصية لم تُكمَل بعد"
+    },
+    "overdueFollowupsTeam": {
+      "title": "متابعات متأخرة (إجمالي الفريق)",
+      "message": "يوجد {{count}} عميل بحاجة لمتابعة فورية"
+    },
+    "overdueFollowupsMine": {
+      "title": "متابعات متأخرة (خاصتي)",
+      "message": "لديك {{count}} ليدز بحاجة لمتابعة فورية"
+    },
+    "overdueFollowupsMgr": {
+      "title": "متابعات متأخرة لفريق المبيعات",
+      "message": "{{count}} ليدز بحاجة متابعة — راجع التوزيع والتعيين"
+    },
+    "staleEscalation": {
+      "title": "تصعيد: ليدز بدون متابعة",
+      "message": "{{count}} ليدز مفتوحة لم يتم تحديثها منذ يومين أو أكثر"
+    },
+    "autoReassign": {
+      "title": "مرشحين لإعادة توزيع تلقائي",
+      "message": "{{count}} ليدز تجاوزت حد SLA لإعادة التوزيع"
+    },
+    "archiveGap": {
+      "title": "فجوة أرشفة مستندات العملاء",
+      "message": "{{count}} عميل فائز بدون أي دليل/مرفق في السجل"
+    },
+    "unassignedLeads": {
+      "title": "ليدز غير مسندة",
+      "message": "{{count}} ليدز بدون مندوب حتى الآن"
+    },
+    "leadAssigned": {
+      "title": "تم توجيه ليدز إليك ({{count}})",
+      "message": "يوجد {{count}} عميلاً مُسنَدين إليك مؤخراً:\n{{lines}}{{more}}"
+    },
+    "importedLeads": {
+      "title": "ليدز جديدة من القنوات المربوطة",
+      "message": "{{count}} ليدز وصلت تلقائياً وتنتظر توزيع مدير المبيعات"
+    },
+    "importedLeadsOwnerCopy": {
+      "title": "نسخة متابعة: ليدز القنوات المربوطة",
+      "message": "{{count}} ليدز وصلت تلقائياً وتنتظر توزيع مدير المبيعات"
+    },
+    "pendingExpensesOwner": {
+      "title": "مصروفات بانتظار اعتمادك",
+      "message": "يوجد {{count}} مصروفات تحتاج اعتماد المالك"
+    },
+    "pendingExpensesAccountant": {
+      "title": "مصروفات بانتظار اعتماد المالك",
+      "message": "يوجد {{count}} مصروفات لم تُعتمد بعد في مركز الاعتمادات"
+    },
+    "expensePendingSubmitter": {
+      "title": "مصروفاتك بانتظار الاعتماد ({{count}})",
+      "message": "{{lines}}{{more}}"
+    },
+    "expenseApproved": {
+      "title": "تم اعتماد مصروفك",
+      "message": "{{title}} — {{amount}} {{currency}}"
+    },
+    "expenseRejected": {
+      "title": "تم رفض مصروفك",
+      "message": "{{title}} — {{amount}} {{currency}}"
+    },
+    "prodClaims": {
+      "title": "مطالبات مالية لطلبات الإنتاج",
+      "message": "يوجد {{count}} مطالبات مالية معتمدة من المالك بانتظار تنفيذ المحاسب"
+    },
+    "shootPendingReview": {
+      "title": "طلبات حجز تصوير بانتظار المراجعة ({{count}})",
+      "message": "{{lines}}{{more}}"
+    },
+    "shootPendingMy": {
+      "title": "طلبات تصويرك بانتظار المراجعة ({{count}})",
+      "message": "{{lines}}{{more}}"
+    },
+    "shootFinanceOwner": {
+      "title": "مطالبات إنتاج (تصوير) تنتظر اعتمادك ({{count}})",
+      "message": "{{count}} طلباً من مدير الإنتاج بمبالغ أو شروط مالية بحاجة لاعتماد المالك. راجع الحجوزات."
+    },
+    "equipmentPending": {
+      "title": "حجوزات معدات تحت المراجعة ({{count}})",
+      "message": "{{lines}}"
+    },
+    "equipmentPendingMy": {
+      "title": "طلبات معداتك بانتظار المراجعة ({{count}})",
+      "message": "{{lines}}{{more}}"
+    },
+    "meetingPending": {
+      "title": "اجتماعات تحت المراجعة ({{count}})",
+      "message": "{{lines}}"
+    },
+    "meetingPendingMy": {
+      "title": "طلبات اجتماعاتك بانتظار المراجعة ({{count}})",
+      "message": "{{lines}}{{more}}"
+    },
+    "invoiceOverdue": {
+      "title": "أقساط عملاء متأخرة",
+      "message": "يوجد {{count}} فواتير بها أقساط مستحقة تجاوزت موعد السداد"
+    },
+    "invoiceDueSoon": {
+      "title": "أقساط عملاء تستحق قريباً",
+      "message": "يوجد {{count}} فواتير يتبقى عليها تحصيل خلال 3 أيام"
+    },
+    "pendingQuotes": {
+      "title": "عروض أسعار بانتظار اعتماد المالك",
+      "message": "يوجد {{count}} عرض سعر مالي يحتاج اعتمادك قبل التسجيل في دفاتر المحاسب"
+    },
+    "pendingQuotesManagerCopy": {
+      "title": "نسخة متابعة لطلبات عرض السعر",
+      "message": "يوجد {{count}} طلبات عرض سعر بانتظار اعتماد المالك"
+    },
+    "quotesAwaitingClient": {
+      "title": "عروض معتمدة — بانتظار موافقة العميل ({{count}})",
+      "message": "{{lines}}{{more}}"
+    },
+    "quotePricingRevision": {
+      "title": "تسعير — يتضمن طلب تعديل من المالك",
+      "message": "لديك {{count}} عرض سعر يحتاج التسعير — منها {{revision}} بإعادة طلب من المالك لتعديل التسعير"
+    },
+    "quotePricingPending": {
+      "title": "طلبات تسعير بانتظارك",
+      "message": "لديك {{count}} عرض سعر يحتاج التسعير في الإنتاج"
+    },
+    "quoteWorkOrders": {
+      "title": "أوامر شغل من عروض معتمدة ({{count}})",
+      "message": "موافقة العميل — نفّذ التصوير/الإنتاج من تبويب الحجوزات"
+    },
+    "quoteApprovedForClient": {
+      "title": "تم اعتماد عرض سعر — قدّمه للعميل",
+      "message": "{{title}} — {{customer}}"
+    },
+    "quoteRejectedByOwner": {
+      "title": "تم رفض عرض سعر من المالك",
+      "message": "{{title}} — {{customer}}"
+    },
+    "quoteApprovedTeam": {
+      "title": "اعتماد عرض سعر (فريقك)",
+      "message": "{{creator}} — {{title}}"
+    },
+    "quoteRejectedTeam": {
+      "title": "رفض عرض سعر (فريقك)",
+      "message": "{{creator}} — {{title}}"
+    },
+    "payrollNotApproved": {
+      "title": "كشف المرتبات غير معتمد",
+      "message": "كشف المرتبات لشهر {{month}} لم يتم اعتماده بعد"
+    },
+    "payrollNotApprovedAccountant": {
+      "title": "كشف المرتبات غير معتمد",
+      "message": "شهر {{month}} — بانتظار اعتماد المالك"
+    },
+    "payrollRequestOwner": {
+      "title": "طلب اعتماد كشف المرتبات من المحاسب",
+      "message": "شهر {{month}} — مطالبات مرفقة ({{amount}} {{currency}})"
+    },
+    "payrollRequestAccountant": {
+      "title": "طلبك بانتظار اعتماد المالك",
+      "message": "كشف مرتبات شهر {{month}} أُرسل للمالك ولم يُعتمد بعد"
+    },
+    "monthReopenOwner": {
+      "title": "طلب إعادة فتح شهر محاسبي",
+      "message": "شهر {{month}} — {{reason}}"
+    },
+    "monthReopenRequester": {
+      "title": "طلب إعادة فتح شهر — قيد الاعتماد",
+      "message": "شهر {{month}} بانتظار اعتماد المالك"
+    },
+    "monthReopenDefaultReason": "بانتظار اعتمادك",
+    "callsTargetGap": {
+      "title": "مستهدف المكالمات",
+      "message": "{{count}} مندوبين أقل من مستهدف المكالمات"
+    },
+    "shootApproved": {
+      "title": "تم اعتماد حجز تصوير",
+      "message": "{{customer}} - {{date}} {{time}}"
+    },
+    "shootRejected": {
+      "title": "تم رفض حجز تصوير",
+      "message": "{{customer}} - {{date}} {{time}}"
+    },
+    "equipmentApproved": {
+      "title": "تم اعتماد حجز معدات",
+      "message": "{{equipment}} x{{quantity}} - {{customer}}"
+    },
+    "equipmentRejected": {
+      "title": "تم رفض حجز معدات",
+      "message": "{{equipment}} x{{quantity}} - {{customer}}"
+    },
+    "meetingApproved": {
+      "title": "تم اعتماد حجز اجتماع",
+      "message": "{{title}} — {{date}} {{time}}"
+    },
+    "meetingRejected": {
+      "title": "تم رفض حجز اجتماع",
+      "message": "{{title}} — {{date}} {{time}}"
+    },
+    "custodyNewRequest": {
+      "title": "طلب عهدة إنتاج جديد",
+      "message": "{{title}} — {{amount}} {{currency}} ({{manager}})"
+    },
+    "custodyPendingOwner": {
+      "title": "طلبات عهدة بانتظار اعتمادك ({{count}})",
+      "message": "{{lines}}{{more}}"
+    },
+    "custodyApprovedAwaitingPay": {
+      "title": "عهدة معتمدة تنتظر تسجيل دفع",
+      "message": "{{title}} — {{amount}} {{currency}} ({{manager}})"
+    },
+    "custodyAwaitingPayment": {
+      "title": "عهدة بانتظار تسجيل الدفع ({{count}})",
+      "message": "{{lines}}{{more}}"
+    },
+    "custodySettlementPending": {
+      "title": "تسوية عهدة بانتظار إقفالك ({{count}})",
+      "message": "{{lines}}{{more}}"
+    },
+    "custodyLongActive": {
+      "title": "عهد إنتاج نشطة تحتاج تسوية",
+      "message": "يوجد {{count}} عهدة نشطة منذ أكثر من 7 أيام بدون تسوية"
+    },
+    "custodyLongActivePm": {
+      "title": "عهدة نشطة تحتاج تسوية ({{count}})",
+      "message": "لديك {{count}} عهدة نشطة منذ أكثر من 7 أيام — أكمل التسوية"
+    },
+    "prodExecPending": {
+      "title": "حجوزات بانتظار تنفيذ الإنتاج ({{count}})",
+      "message": "صوّر: {{shoot}} — معدات: {{equipment}} — اجتماعات: {{meetings}}"
+    },
+    "custodyReadyForPickup": {
+      "title": "تم صرف العهدة — جاهزة للاستلام",
+      "message": "{{title}} — {{amount}} {{currency}}{{method}}"
+    },
+    "custodyReadyBatch": {
+      "title": "عهدة جاهزة للاستلام ({{count}})",
+      "message": "{{lines}}{{more}}"
+    },
+    "custodyRejected": {
+      "title": "طلب عهدة مرفوض ({{count}})",
+      "message": "{{lines}}"
+    },
+    "custodyPaymentMethod": " ({{method}})"
   }
 }
