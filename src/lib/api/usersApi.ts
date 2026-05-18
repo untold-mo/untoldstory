@@ -52,7 +52,7 @@ export async function patchUserApi(
     email: string;
     role: import('@/app/context/DataContext').User['role'];
     avatar: string | null;
-    skills: import('@/app/context/DataContext').LeadCategory[];
+    skills: string[];
     baseSalary: number;
     stats: import('@/app/context/DataContext').User['stats'];
     /** تعيين كلمة مرور جديدة (خادم Express + Prisma) — المالك فقط؛ ٨ أحرف فأكثر */

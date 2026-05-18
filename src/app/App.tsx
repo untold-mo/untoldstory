@@ -80,6 +80,8 @@ import {
 import PageViewsHub from './components/PageViewsHub';
 import { useLeadRepUpdate } from './components/LeadRepUpdateModal';
 import { BulkLeadsUploadModal } from './components/BulkLeadsUploadModal';
+import { RepSkillsEditor } from './components/RepSkillsEditor';
+import { REP_SKILL_PRESETS } from '@/lib/repSkills';
 
 // --- Shared Components ---
 const SYSTEM_NAME = 'The Untold Story System';
@@ -4799,7 +4801,8 @@ const SalesManagerSettings = ({
   const canOwnerEditEmployeeRow = (em: User) =>
     Boolean(canEditBranding && !(em.role === 'مالك' && em.id !== currentUser?.id));
 
-  const skillOptions: LeadCategory[] = ['إنجليزي', 'شركات كبرى', 'شركات صغيرة', 'إعلانات', 'سوشيال ميديا'];
+  const skillOptions = REP_SKILL_PRESETS;
+  const canEditRepSkills = currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات';
   const roleOptions: User['role'][] = ['مدير مبيعات', 'محاسب', 'مندوب', 'مدير إنتاج'];
   const [newEmployee, setNewEmployee] = useState({
     name: '',
@@ -4825,19 +4828,6 @@ const SalesManagerSettings = ({
   const [ownerPwdNew, setOwnerPwdNew] = useState('');
   const [ownerPwdConfirm, setOwnerPwdConfirm] = useState('');
   const [ownerPwdSaving, setOwnerPwdSaving] = useState(false);
-  const toggleSkill = async (userId: string, currentSkills: LeadCategory[] = [], skill: LeadCategory) => {
-    const skills = currentSkills || [];
-    const newSkills = skills.includes(skill) 
-      ? skills.filter(s => s !== skill)
-      : [...skills, skill];
-    const ok = await updateUserSkills(userId, newSkills);
-    if (!ok) {
-      toast.error('تعذر حفظ المهارات على السيرفر');
-      return;
-    }
-    toast.success('تم تحديث مهارات المندوب وتوزيع العمل');
-  };
-
   const backupSystemData = async () => {
     if (isServerDataMode()) {
       if (isSupabaseDirectMode()) {
@@ -5664,25 +5654,12 @@ const SalesManagerSettings = ({
               </div>
             </div>
             
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">التخصصات والمهارات:</p>
-            <div className="flex flex-wrap gap-2">
-              {skillOptions.map(skill => {
-                const isSelected = (rep.skills || []).includes(skill);
-                return (
-                  <button
-                    key={`${rep.id}-${skill}`}
-                    onClick={() => { void toggleSkill(rep.id, rep.skills || [], skill); }}
-                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
-                      isSelected
-                        ? 'bg-emerald-500 text-slate-950'
-                        : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                    }`}
-                  >
-                    {skill}
-                  </button>
-                );
-              })}
-            </div>
+            <RepSkillsEditor
+              rep={rep}
+              canEdit={canEditRepSkills}
+              updateUserSkills={updateUserSkills}
+              presets={skillOptions}
+            />
           </div>
         ))}
       </div>

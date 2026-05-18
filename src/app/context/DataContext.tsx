@@ -27,6 +27,7 @@ import {
   patchUserApi,
   deleteUserApi,
 } from '@/lib/api/usersApi';
+import { repSkillMatchesLeadCategory } from '@/lib/repSkills';
 import {
   fetchManualCustomersApi,
   createManualCustomerApi,
@@ -132,7 +133,8 @@ export interface User {
   name: string;
   role: 'مالك' | 'مدير مبيعات' | 'مندوب' | 'محاسب' | 'مدير إنتاج';
   avatar: string;
-  skills: LeadCategory[];
+  /** مهارات التوزيع — تصنيفات ليدز جاهزة أو مهارات مخصّصة */
+  skills: string[];
   baseSalary?: number;
   /** عند تسجيل الدخول عبر الباك اند */
   email?: string;
@@ -1106,7 +1108,7 @@ interface DataContextType {
   setLeadFollowUp: (leadId: string, followUpAt?: string) => void;
   assignLead: (leadId: string, userId?: string) => void;
   deleteLead: (leadId: string) => Promise<DeleteLeadResult>;
-  updateUserSkills: (userId: string, skills: LeadCategory[]) => Promise<boolean>;
+  updateUserSkills: (userId: string, skills: string[]) => Promise<boolean>;
   addEmployee: (employee: {
     name: string;
     role: User['role'];
@@ -4702,7 +4704,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [getLeadScore, slaEscalationSettings]);
 
   const autoDistribute = (lead: Lead, currentLeads: Lead[]) => {
-    let eligibleReps = users.filter((u) => u.role === 'مندوب' && u.skills.includes(lead.category));
+    let eligibleReps = users.filter(
+      (u) => u.role === 'مندوب' && repSkillMatchesLeadCategory(u.skills || [], lead.category),
+    );
     if (eligibleReps.length === 0) {
       eligibleReps = users.filter((u) => u.role === 'مندوب');
     }
@@ -5300,7 +5304,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return 'deleted';
   };
 
-  const updateUserSkills = async (userId: string, skills: LeadCategory[]): Promise<boolean> => {
+  const updateUserSkills = async (userId: string, skills: string[]): Promise<boolean> => {
     if (!(currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات')) return false;
     if (isServerDataMode()) {
       const prevUser = users.find((u) => u.id === userId);
