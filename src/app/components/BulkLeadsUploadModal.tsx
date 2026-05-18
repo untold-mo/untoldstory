@@ -24,6 +24,16 @@ type ImportResult = {
   failed: number;
 };
 
+type ImportProgress = {
+  total: number;
+  processed: number;
+  created: number;
+  skippedDuplicates: number;
+  failed: number;
+  batchIndex: number;
+  batchCount: number;
+};
+
 function browserNotificationsSupported(): boolean {
   return typeof window !== 'undefined' && 'Notification' in window;
 }
@@ -70,8 +80,11 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
   const [parsedRows, setParsedRows] = useState<SpreadsheetLeadRow[]>([]);
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
   const [lastResult, setLastResult] = useState<ImportResult | null>(null);
   const [importFinished, setImportFinished] = useState(false);
+
+  const IMPORT_BATCH_SIZE = 100;
 
   const canImport =
     currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات';
@@ -82,6 +95,7 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
     setParseErrors([]);
     setLastResult(null);
     setImportFinished(false);
+    setImportProgress(null);
   };
 
   const handleClose = () => {
@@ -147,19 +161,31 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
       }
     }
 
+    const total = parsedRows.length;
+    const batchCount = Math.max(1, Math.ceil(total / IMPORT_BATCH_SIZE));
+    let totalCreated = 0;
+    let totalSkipped = 0;
+    let totalFailed = 0;
+
     setUploading(true);
     setImportFinished(false);
+    setImportProgress({
+      total,
+      processed: 0,
+      created: 0,
+      skippedDuplicates: 0,
+      failed: 0,
+      batchIndex: 0,
+      batchCount,
+    });
+
     try {
       let result: ImportResult;
 
       if (isServerDataMode()) {
-        const batchSize = 100;
-        let totalCreated = 0;
-        let totalSkipped = 0;
-        let totalFailed = 0;
-
-        for (let i = 0; i < parsedRows.length; i += batchSize) {
-          const chunk = parsedRows.slice(i, i + batchSize).map((r) => ({
+        for (let i = 0; i < total; i += IMPORT_BATCH_SIZE) {
+          const batchIndex = Math.floor(i / IMPORT_BATCH_SIZE) + 1;
+          const chunk = parsedRows.slice(i, i + IMPORT_BATCH_SIZE).map((r) => ({
             name: r.name,
             company: r.company,
             phone: r.phone,
@@ -174,6 +200,16 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
           totalCreated += res.created;
           totalSkipped += res.skippedDuplicates;
           totalFailed += res.failed;
+          const processed = Math.min(i + chunk.length, total);
+          setImportProgress({
+            total,
+            processed,
+            created: totalCreated,
+            skippedDuplicates: totalSkipped,
+            failed: totalFailed,
+            batchIndex,
+            batchCount,
+          });
         }
 
         result = {
@@ -192,9 +228,25 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
         }
       } else {
         const bulk = spreadsheetRowsToBulkLeads(parsedRows);
-        const { created, failed } = await bulkAddLeads(bulk);
-        result = { created, skippedDuplicates: 0, failed };
-        if (created > 0) onImported?.();
+        for (let i = 0; i < bulk.length; i += IMPORT_BATCH_SIZE) {
+          const batchIndex = Math.floor(i / IMPORT_BATCH_SIZE) + 1;
+          const chunk = bulk.slice(i, i + IMPORT_BATCH_SIZE);
+          const { created, failed } = await bulkAddLeads(chunk);
+          totalCreated += created;
+          totalFailed += failed;
+          const processed = Math.min(i + chunk.length, total);
+          setImportProgress({
+            total,
+            processed,
+            created: totalCreated,
+            skippedDuplicates: 0,
+            failed: totalFailed,
+            batchIndex,
+            batchCount,
+          });
+        }
+        result = { created: totalCreated, skippedDuplicates: 0, failed: totalFailed };
+        if (totalCreated > 0) onImported?.();
       }
 
       setLastResult(result);
@@ -205,8 +257,15 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
       toast.error(e instanceof Error ? e.message : 'فشل الاستيراد');
     } finally {
       setUploading(false);
+      setImportProgress(null);
     }
   };
+
+  const progressPercent =
+    importProgress && importProgress.total > 0
+      ? Math.min(100, Math.round((importProgress.processed / importProgress.total) * 100))
+      : 0;
+  const progressRemaining = importProgress ? Math.max(0, importProgress.total - importProgress.processed) : 0;
 
   if (!isOpen) return null;
 
@@ -242,6 +301,59 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
         </div>
 
         <div className="p-6 space-y-5">
+          {uploading && importProgress && (
+            <div
+              className="rounded-2xl border border-emerald-500/35 bg-emerald-500/10 p-4 space-y-3"
+              role="status"
+              aria-live="polite"
+              aria-busy="true"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-black text-emerald-200">جاري رفع الليدز…</p>
+                <p className="text-lg font-black text-white tabular-nums">{progressPercent}%</p>
+              </div>
+              <div className="h-3 rounded-full bg-black/40 overflow-hidden border border-white/10">
+                <div
+                  className="h-full bg-gradient-to-l from-emerald-400 to-emerald-600 transition-[width] duration-300 ease-out"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <p className="text-zinc-300">
+                  <span className="text-zinc-500 block mb-0.5">تمت معالجته</span>
+                  <span className="font-black text-white tabular-nums">
+                    {importProgress.processed.toLocaleString('ar-EG')} /{' '}
+                    {importProgress.total.toLocaleString('ar-EG')}
+                  </span>
+                </p>
+                <p className="text-zinc-300">
+                  <span className="text-zinc-500 block mb-0.5">متبقي</span>
+                  <span className="font-black text-amber-200 tabular-nums">
+                    {progressRemaining.toLocaleString('ar-EG')}
+                  </span>
+                </p>
+                <p className="text-zinc-300">
+                  <span className="text-zinc-500 block mb-0.5">أُضيف حتى الآن</span>
+                  <span className="font-black text-emerald-300 tabular-nums">
+                    {importProgress.created.toLocaleString('ar-EG')}
+                  </span>
+                </p>
+                <p className="text-zinc-300">
+                  <span className="text-zinc-500 block mb-0.5">الدفعة</span>
+                  <span className="font-black text-white tabular-nums">
+                    {importProgress.batchIndex} / {importProgress.batchCount}
+                  </span>
+                </p>
+              </div>
+              {(importProgress.skippedDuplicates > 0 || importProgress.failed > 0) && (
+                <p className="text-[11px] text-zinc-400">
+                  تخطي مكرر: {importProgress.skippedDuplicates.toLocaleString('ar-EG')} · فشل:{' '}
+                  {importProgress.failed.toLocaleString('ar-EG')}
+                </p>
+              )}
+            </div>
+          )}
+
           {importFinished && lastResult && (
             <div
               className={`rounded-2xl border p-4 space-y-2 ${
@@ -312,9 +424,10 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
                 جاهز للاستيراد: {parsedRows.length} صف
               </p>
             )}
-            {uploading && (
-              <p className="mt-3 text-emerald-300 font-bold text-sm animate-pulse">
-                جاري الاستيراد وتوزيع الليدز…
+            {uploading && importProgress && (
+              <p className="mt-3 text-emerald-300 font-bold text-sm tabular-nums">
+                {progressPercent}% — {importProgress.processed.toLocaleString('ar-EG')} من{' '}
+                {importProgress.total.toLocaleString('ar-EG')}
               </p>
             )}
           </button>
@@ -342,7 +455,9 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
               onClick={() => void runImport()}
               className="flex-1 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black disabled:opacity-50"
             >
-              {uploading ? 'جاري الاستيراد…' : `استيراد ${parsedRows.length || ''} ليد`}
+              {uploading && importProgress
+                ? `جاري الرفع ${progressPercent}%…`
+                : `استيراد ${parsedRows.length || ''} ليد`}
             </button>
             {importFinished && (
               <button
