@@ -1,0 +1,162 @@
+{
+  "name": "Gmail Inbox → Supabase leads (email)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Gmail → Supabase (source = email)\n\n### 1) Credentials في n8n\n- عقدة **Get Gmail Messages** → **Gmail OAuth2** (نفس حساب Gmail Workspace/شخصي)\n- في Google Cloud Console فعّل **Gmail API** وأضف redirect URI الخاص بـ n8n\n\n### 2) متغيرات البيئة (n8n Variables)\n| المتغير | الوصف |\n|--------|--------|\n| `GMAIL_SEARCH_QUERY` | فلتر Gmail — افتراضي `is:unread` |\n| | أمثلة: `is:unread label:Leads` أو `to:leads@yourdomain.com is:unread` |\n| `GMAIL_MAX_PER_RUN` | حد أقصى رسائل لكل تشغيل (افتراضي 25) |\n| `SUPABASE_URL` | `https://xxxx.supabase.co` |\n| `SUPABASE_SERVICE_ROLE_KEY` | service_role |\n| `DEFAULT_ASSIGNED_TO_ID` | اختياري — `users.id` |\n\n### 3) شكل الإيميل (يُستخرج تلقائياً)\nيدعم:\n- **JSON** داخل نص الرسالة: `{\"name\",\"email\",\"phone\",\"company\"}`\n- أسطر **مفتاح: قيمة** (عربي/إنجليزي): الاسم، البريد، الجوال، الشركة\n- بيانات **المرسل** (From) كاحتياطي\n\nيُتخطى الإيميل إذا لم يبدُ كطلب ليد (لا جوال/بريد ولا كلمات lead/ليد/استفسار…).\n\n### 4) عدم التكرار\n- يحفظ `messageId` في static data للـ workflow\n- يتحقق من تكرار email/phone في Supabase\n\n### 5) التشغيل\nImport → اربط Gmail OAuth2 → Test **Manual** → فعّل.\nاختياري: أضف عقدة Gmail **Mark as read** بعد الإدراج.",
+        "height": 560,
+        "width": 560,
+        "color": 6
+      },
+      "id": "sticky-gmail-setup",
+      "name": "Setup (اقرأني)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-360, -80]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 3
+            }
+          ]
+        }
+      },
+      "id": "trigger-schedule-3m",
+      "name": "Every 3 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {},
+      "id": "trigger-manual-gmail",
+      "name": "Manual",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 200]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "message",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": "={{ Math.min(50, Math.max(1, Number($env.GMAIL_MAX_PER_RUN || 25))) }}",
+        "simple": true,
+        "filters": {
+          "q": "={{ $env.GMAIL_SEARCH_QUERY || 'is:unread' }}",
+          "includeSpamTrash": false
+        },
+        "options": {}
+      },
+      "id": "gmail-get-messages",
+      "name": "Get Gmail Messages",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [520, 100],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "CONFIGURE_IN_N8N",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nif (!Array.isArray(staticData.processedGmailIds)) staticData.processedGmailIds = [];\nconst processed = new Set(staticData.processedGmailIds);\nconst MAX = Math.min(50, Math.max(1, Number($env.GMAIL_MAX_PER_RUN || 25)));\n\nfunction stripHtml(html) {\n  return String(html || '')\n    .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/&nbsp;/gi, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nfunction parseFromHeader(from) {\n  const raw =\n    typeof from === 'string'\n      ? from\n      : from?.text || from?.value?.[0]?.name\n        ? `${from.value[0].name} <${from.value[0].address}>`\n        : from?.value?.[0]?.address || '';\n  const s = String(raw || '').trim();\n  const m = s.match(/<([^>]+)>/);\n  const email = (m ? m[1] : s).trim().toLowerCase();\n  const name = s.replace(/<[^>]+>/, '').replace(/\"/g, '').trim();\n  return { name, email };\n}\n\nfunction extractField(text, labels) {\n  for (const label of labels) {\n    const re = new RegExp(`(?:^|[\\n\\r])\\\\s*${label}\\\\s*[:：]\\\\s*([^\\\\n\\r;|]+)`, 'im');\n    const m = text.match(re);\n    if (m && m[1]) return String(m[1]).trim();\n  }\n  return '';\n}\n\nfunction parseLeadFromEmail(msg) {\n  const subject = String(msg.subject || '').trim();\n  const body = String(\n    msg.textPlain || msg.text || msg.snippet || stripHtml(msg.html) || '',\n  ).trim();\n  const full = `${subject}\\n${body}`;\n\n  let json = null;\n  const jsonMatch = body.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    try {\n      json = JSON.parse(jsonMatch[0]);\n    } catch {\n      json = null;\n    }\n  }\n\n  const from = parseFromHeader(msg.from);\n  let name = extractField(full, [\n    'name',\n    'full[\\\\s_]*name',\n    'customer',\n    'الاسم',\n    'الاسم[\\\\s_]*الكامل',\n    'اسم',\n    'عميل',\n  ]);\n  let email = extractField(full, ['e-?mail', 'email', 'البريد', 'الايميل', 'إيميل', 'بريد']).toLowerCase();\n  let phone = extractField(full, [\n    'phone',\n    'phone[\\\\s_]*number',\n    'mobile',\n    'tel',\n    'الجوال',\n    'الهاتف',\n    'جوال',\n    'موبايل',\n    'هاتف',\n  ]).replace(/\\s+/g, '');\n  let company = extractField(full, ['company', 'company[\\\\s_]*name', 'business', 'الشركة', 'شركة', 'مؤسسة']);\n\n  if (json && typeof json === 'object') {\n    name = name || String(json.name || json.full_name || json.fullName || '').trim();\n    email = email || String(json.email || json.mail || '').trim().toLowerCase();\n    phone = phone || String(json.phone || json.mobile || json.tel || '').replace(/\\s+/g, '');\n    company = company || String(json.company || json.company_name || '').trim();\n  }\n\n  if (!email && from.email) email = from.email;\n  if (!name && from.name) name = from.name;\n  if (!name) name = (subject || 'عميل بريد').slice(0, 120);\n  if (!company) company = '—';\n\n  const looksLikeLead =\n    /lead|ليد|عميل|inquiry|استفسار|تسعير|quote|طلب|contact|تواصل/i.test(full) ||\n    Boolean(phone) ||\n    Boolean(email && email !== from.email);\n\n  if (!looksLikeLead) return null;\n\n  const msgId = String(msg.id || msg.messageId || '');\n  if (!msgId) return null;\n\n  if (!email && !phone) email = `gmail-${msgId}@email-lead.local`;\n  if (!phone) phone = '01000000000';\n  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) email = `gmail-${msgId}@email-lead.local`;\n\n  const received =\n    msg.date || msg.internalDate\n      ? new Date(msg.date || Number(msg.internalDate)).toISOString()\n      : new Date().toISOString();\n\n  return {\n    gmail_message_id: msgId,\n    gmail_subject: subject.slice(0, 300),\n    gmail_from: from.email || '',\n    name: name.slice(0, 200),\n    company: company.slice(0, 200),\n    phone,\n    email,\n    source: 'email',\n    received_at: received,\n  };\n}\n\nconst out = [];\nconst newlyProcessed = [];\n\nfor (const item of $input.all()) {\n  const msg = item.json || {};\n  const msgId = String(msg.id || msg.messageId || '');\n  if (!msgId || processed.has(msgId)) continue;\n\n  const lead = parseLeadFromEmail(msg);\n  newlyProcessed.push(msgId);\n  if (!lead) continue;\n\n  out.push({ json: lead });\n  if (out.length >= MAX) break;\n}\n\nfor (const id of newlyProcessed) {\n  processed.add(id);\n}\nstaticData.processedGmailIds = Array.from(processed).slice(-800);\n\nif (out.length === 0) {\n  return [\n    {\n      json: {\n        _summary: true,\n        parsed: 0,\n        scanned: $input.all().length,\n        message: 'No new lead emails to import.',\n      },\n    },\n  ];\n}\n\nreturn out;"
+      },
+      "id": "code-parse-gmail-leads",
+      "name": "Parse lead emails",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [760, 100]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const SUPABASE_URL = String($env.SUPABASE_URL || '').replace(/\\/$/, '');\nconst KEY = $env.SUPABASE_SERVICE_ROLE_KEY;\nconst ASSIGNED = $env.DEFAULT_ASSIGNED_TO_ID || null;\n\nif (!SUPABASE_URL || !KEY) {\n  throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in n8n environment variables.');\n}\n\nconst headers = {\n  apikey: KEY,\n  Authorization: `Bearer ${KEY}`,\n  'Content-Type': 'application/json',\n};\n\nfunction makeId() {\n  return `lead_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;\n}\n\nconst items = $input.all().filter((i) => !i.json._summary);\nconst results = [];\nlet inserted = 0;\nlet skipped = 0;\nlet errors = 0;\n\nfor (const item of items) {\n  const lead = item.json;\n  const email = lead.email;\n  const phone = lead.phone;\n\n  let existing;\n  try {\n    const checkUrl = `${SUPABASE_URL}/rest/v1/leads?or=(email.eq.${encodeURIComponent(email)},phone.eq.${encodeURIComponent(phone)})&select=id&limit=1`;\n    existing = await this.helpers.httpRequest({ method: 'GET', url: checkUrl, headers, json: true });\n  } catch (e) {\n    errors += 1;\n    results.push({ json: { ...lead, status: 'error', step: 'duplicate_check', message: e.message } });\n    continue;\n  }\n\n  if (Array.isArray(existing) && existing.length > 0) {\n    skipped += 1;\n    results.push({ json: { ...lead, status: 'skipped_duplicate', existing_id: existing[0].id } });\n    continue;\n  }\n\n  const id = makeId();\n  const now = new Date().toISOString();\n  const createdAt = lead.received_at || now;\n  const timeline = [\n    {\n      id: `ev-gmail-${id}`,\n      leadId: id,\n      action: 'استيراد من Gmail (n8n)',\n      note: `Gmail ID: ${lead.gmail_message_id} — ${lead.gmail_subject || ''}`,\n      userId: 'n8n',\n      userName: 'تكامل البريد',\n      createdAt,\n    },\n    {\n      id: `a-${id}`,\n      leadId: id,\n      action: 'إضافة الليد إلى النظام',\n      userId: 'n8n',\n      userName: 'تكامل البريد',\n      createdAt: now,\n    },\n  ];\n\n  const row = {\n    id,\n    customer_code: null,\n    name: lead.name,\n    company: lead.company,\n    phone: lead.phone,\n    email: lead.email,\n    status: 'جديد',\n    assigned_to_id: ASSIGNED,\n    budget: 0,\n    company_size: 'صغير',\n    source: 'email',\n    category: 'إعلانات',\n    score: 50,\n    follow_up_at: null,\n    loss_reason_code: null,\n    sla_status: 'مستقر',\n    timeline_json: timeline,\n    created_at: createdAt,\n    updated_at: now,\n  };\n\n  try {\n    await this.helpers.httpRequest({\n      method: 'POST',\n      url: `${SUPABASE_URL}/rest/v1/leads`,\n      headers: { ...headers, Prefer: 'return=minimal' },\n      body: row,\n    });\n    inserted += 1;\n    results.push({ json: { ...lead, status: 'inserted', lead_id: id } });\n  } catch (e) {\n    errors += 1;\n    results.push({ json: { ...lead, status: 'error', step: 'insert', message: e.message } });\n  }\n}\n\nresults.push({\n  json: {\n    _summary: true,\n    processed: items.length,\n    inserted,\n    skipped_duplicate: skipped,\n    errors,\n  },\n});\n\nreturn results;"
+      },
+      "id": "code-insert-email-supabase",
+      "name": "Insert into Supabase",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 100]
+    }
+  ],
+  "connections": {
+    "Every 3 minutes": {
+      "main": [
+        [
+          {
+            "node": "Get Gmail Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual": {
+      "main": [
+        [
+          {
+            "node": "Get Gmail Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Gmail Messages": {
+      "main": [
+        [
+          {
+            "node": "Parse lead emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse lead emails": {
+      "main": [
+        [
+          {
+            "node": "Insert into Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "leads"
+    },
+    {
+      "name": "gmail"
+    },
+    {
+      "name": "email"
+    },
+    {
+      "name": "supabase"
+    }
+  ],
+  "triggerCount": 1,
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

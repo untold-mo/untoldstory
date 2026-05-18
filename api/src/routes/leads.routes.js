@@ -5,6 +5,7 @@ import { leadToJson } from '../lib/leadSerialize.js';
 import { syncMetaLeadAdsForOwner } from '../lib/metaLeadAdsSync.js';
 import { syncLinkedInLeadGenForOwner } from '../lib/linkedinLeadSync.js';
 import { syncGoogleAdsLeadFormsForOwner } from '../lib/googleAdsLeadSync.js';
+import { importLeadsCsvBatch } from '../lib/importLeadsCsv.js';
 
 const router = Router();
 
@@ -214,6 +215,45 @@ router.post('/', requireAuth(), async (req, res) => {
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+/**
+ * POST /api/leads/import-csv — استيراد ليدز من CSV (مثلاً تصدير LinkedIn Lead Gen).
+ * Body: { source: 'linkedin', leads: [...], routeToManagerId? }
+ */
+router.post('/import-csv', requireAuth(), async (req, res) => {
+  try {
+    const role = req.authUser.role;
+    if (role !== 'مالك' && role !== 'مدير مبيعات') {
+      return res.status(403).json({ error: 'غير مصرح باستيراد الليدز' });
+    }
+    const body = req.body || {};
+    const source = String(body.source || 'linkedin').trim().toLowerCase();
+    const allowedSources = ['linkedin', 'google', 'email', 'facebook', 'instagram'];
+    if (!allowedSources.includes(source)) {
+      return res.status(400).json({ error: 'مصدر غير مدعوم' });
+    }
+    const rows = Array.isArray(body.leads) ? body.leads : [];
+    if (rows.length === 0) {
+      return res.status(400).json({ error: 'لا توجد صفوف للاستيراد' });
+    }
+    if (rows.length > 500) {
+      return res.status(400).json({ error: 'الحد الأقصى 500 صف لكل طلب' });
+    }
+    const routeToManagerId = body.routeToManagerId ? String(body.routeToManagerId).trim() : null;
+    const result = await importLeadsCsvBatch({
+      prisma,
+      rows,
+      source,
+      actorUserId: req.authUser.id,
+      actorName: req.authUser.name || 'استيراد CSV',
+      routeToManagerId: routeToManagerId || null,
+    });
+    return res.status(200).json(result);
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ ok: false, error: 'خطأ في الخادم', messageAr: String(e?.message || e) });
   }
 });
 

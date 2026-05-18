@@ -61,6 +61,8 @@ import { fetchAttendanceRecordsApi, postAttendanceRecordApi } from '@/lib/api/at
 import { buildSystemNotifications } from './buildSystemNotifications';
 import { clearLegacyOnboardingStorageKeys } from './legacyStorageCleanup';
 import { getMonthKey } from './dateMonthKey';
+import { notifyNewInboundLeads, resetInboundLeadToastState } from '@/lib/inboundLeadToasts';
+import { fetchLeadsSb } from '@/lib/supabase/directApiSb';
 import { toast } from 'sonner';
 import { syncWorkspacePatch, type WorkspaceStatePatch } from './workspaceSync';
 
@@ -3467,6 +3469,41 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!hasServerAuthToken()) return false;
     return loadServerWorkspaceImplRef.current();
   }, []);
+
+  /** toast فوري عند وصول ليد من n8n / القنوات — للمالك ومدير المبيعات */
+  useEffect(() => {
+    if (!currentUser?.id) {
+      resetInboundLeadToastState();
+      return;
+    }
+    notifyNewInboundLeads(leads, currentUser.role);
+  }, [leads, currentUser?.id, currentUser?.role]);
+
+  /** استطلاع ليدز كل ~90 ثانية (التبويب ظاهر) لاكتشاف إدراج n8n */
+  useEffect(() => {
+    if (!isServerDataMode()) return;
+    if (!hasServerAuthToken()) return;
+    if (!currentUser?.id) return;
+    if (currentUser.role !== 'مالك' && currentUser.role !== 'مدير مبيعات') return;
+
+    let cancelled = false;
+    const poll = async () => {
+      if (cancelled || typeof document === 'undefined') return;
+      if (document.visibilityState === 'hidden') return;
+      try {
+        const fresh = isSupabaseDirectMode() ? await fetchLeadsSb() : await fetchLeadsApi();
+        if (!cancelled) setLeads(fresh);
+      } catch {
+        /* ignore */
+      }
+    };
+
+    const id = window.setInterval(poll, 90_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [currentUser?.id, currentUser?.role]);
 
   // Save to localStorage
   useEffect(() => {
@@ -9260,6 +9297,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       /* ignore */
     }
+    resetInboundLeadToastState();
     setCurrentUserState(null);
     addAuditEvent({
       action: 'تسجيل خروج',

@@ -269,11 +269,12 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       leadIngestionSettings.managerUserId
       || users.find((u) => u.role === 'مدير مبيعات')?.id
       || '';
-    const pendingImported = leads.filter((l) =>
-      l.assignedTo === managerId &&
-      l.status === 'جديد' &&
-      (l.source === 'Facebook Leads API' || isAutoImportedLeadSource(l.source))
-    );
+    const pendingImported = leads.filter((l) => {
+      if (l.status !== 'جديد') return false;
+      if (l.source !== 'Facebook Leads API' && !isAutoImportedLeadSource(l.source)) return false;
+      if (!l.assignedTo) return true;
+      return Boolean(managerId) && l.assignedTo === managerId;
+    });
     if (pendingImported.length > 0 && managerId) {
       out.push({
         id: `n-imported-manager-${pendingImported.length}`,

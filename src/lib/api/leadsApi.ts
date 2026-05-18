@@ -254,6 +254,53 @@ export async function syncRealGoogleAdsLeadsApi(body: {
   };
 }
 
+export type ImportCsvLeadInput = {
+  name: string;
+  company: string;
+  phone: string;
+  email: string;
+  status?: string;
+  budget?: number;
+  companySize?: string;
+  category?: string;
+  score?: number;
+  linkedinRowIndex?: number;
+};
+
+/** استيراد دفعة ليدز من CSV إلى Supabase/الخادم مع تجنب التكرار (بريد/جوال). */
+export async function importLeadsCsvApi(payload: {
+  source: string;
+  leads: ImportCsvLeadInput[];
+  routeToManagerId?: string | null;
+}): Promise<{
+  ok: boolean;
+  created: number;
+  skippedDuplicates: number;
+  failed: number;
+  leads: import('@/app/context/DataContext').Lead[];
+  messageAr?: string;
+}> {
+  if (isSupabaseDirectMode()) {
+    const { supabaseImportLeadsCsv } = await import('@/lib/supabase/leadsRepo');
+    return supabaseImportLeadsCsv(payload);
+  }
+  const r = await fetch(`${getApiBaseUrl()}/api/leads/import-csv`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(typeof data.error === 'string' ? data.error : 'import csv');
+  return {
+    ok: Boolean(data.ok),
+    created: Number(data.created) || 0,
+    skippedDuplicates: Number(data.skippedDuplicates) || 0,
+    failed: Number(data.failed) || 0,
+    leads: Array.isArray(data.leads) ? data.leads : [],
+    messageAr: typeof data.messageAr === 'string' ? data.messageAr : undefined,
+  };
+}
+
 /** استيراد تجريبي لقناة خارجية (مسار خادم واحد). لا يستبدل تكامل Meta/Google الحقيقي. */
 export async function demoChannelIngestApi(payload: {
   channel: 'facebook' | 'linkedin' | 'google' | 'email';

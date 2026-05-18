@@ -191,6 +191,117 @@ export async function supabasePatchLead(
   return mapLeadFromRow(row as Record<string, unknown>);
 }
 
+export async function supabaseImportLeadsCsv(payload: {
+  source: string;
+  leads: Array<{
+    name: string;
+    company: string;
+    phone: string;
+    email: string;
+    status?: string;
+    budget?: number;
+    companySize?: string;
+    category?: string;
+    score?: number;
+    linkedinRowIndex?: number;
+  }>;
+  routeToManagerId?: string | null;
+}): Promise<{
+  ok: boolean;
+  created: number;
+  skippedDuplicates: number;
+  failed: number;
+  leads: Lead[];
+}> {
+  const actor = await getActor();
+  if (actor.role !== 'مالك' && actor.role !== 'مدير مبيعات') {
+    throw new Error('غير مصرح باستيراد الليدز');
+  }
+  const sb = getSupabase();
+  const source = String(payload.source || 'linkedin').trim();
+  const routeToManagerId = payload.routeToManagerId || null;
+  const leadsOut: Lead[] = [];
+  let created = 0;
+  let skippedDuplicates = 0;
+  let failed = 0;
+
+  for (const row of payload.leads) {
+    const name = String(row.name || '').trim().slice(0, 200);
+    const company = String(row.company || '—').trim().slice(0, 200);
+    const phone = String(row.phone || '').trim();
+    let email = String(row.email || '').trim().toLowerCase();
+    if (!name || !phone) {
+      failed += 1;
+      continue;
+    }
+    if (!email) email = `import-${Date.now()}@lead.local`;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      email = `import-${Date.now()}@lead.local`;
+    }
+
+    const { data: byEmail } = await sb.from('leads').select('id').eq('email', email).limit(1);
+    const { data: byPhone } = await sb.from('leads').select('id').eq('phone', phone).limit(1);
+    if ((byEmail && byEmail.length > 0) || (byPhone && byPhone.length > 0)) {
+      skippedDuplicates += 1;
+      continue;
+    }
+
+    const id = `lead_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const now = new Date().toISOString();
+    const timeline = [
+      {
+        id: `ev-csv-${id}`,
+        leadId: id,
+        action: `استيراد CSV (${source})`,
+        note: row.linkedinRowIndex ? `صف الملف: ${row.linkedinRowIndex}` : undefined,
+        userId: actor.id,
+        userName: actor.name,
+        createdAt: now,
+      },
+      {
+        id: `a-${id}`,
+        leadId: id,
+        action: 'إضافة الليد إلى النظام',
+        userId: actor.id,
+        userName: actor.name,
+        createdAt: now,
+      },
+    ];
+
+    const insert = {
+      id,
+      customer_code: null,
+      name,
+      company,
+      phone,
+      email,
+      status: String(row.status || 'جديد'),
+      assigned_to_id: routeToManagerId,
+      budget: Math.max(0, Number(row.budget) || 0),
+      company_size: String(row.companySize || 'صغير'),
+      source,
+      category: String(row.category || 'إعلانات'),
+      score: Math.max(0, Math.min(100, Number(row.score) || 50)),
+      follow_up_at: null,
+      loss_reason_code: null,
+      sla_status: 'مستقر',
+      timeline_json: timeline,
+      created_at: now,
+      updated_at: now,
+    };
+
+    const { error } = await sb.from('leads').insert(insert);
+    if (error) {
+      failed += 1;
+      continue;
+    }
+    leadsOut.push(mapLeadFromRow(insert as Record<string, unknown>));
+    created += 1;
+  }
+
+  return { ok: true, created, skippedDuplicates, failed, leads: leadsOut };
+}
+
 export async function supabaseDeleteLead(leadId: string): Promise<void> {
   const actor = await getActor();
   if (actor.role !== 'مالك' && actor.role !== 'مدير مبيعات') throw new Error('غير مصرح بحذف الليد');

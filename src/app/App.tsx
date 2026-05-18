@@ -63,7 +63,11 @@ import { mapUserFromRow } from '@/lib/supabase/postgrestMappers';
 import { isServerDataMode } from '@/config/dataSource';
 import { expenseSubmitterDisplay } from '@/lib/expenseSubmitterDisplay';
 import {
+  INBOUND_CHANNEL_SOURCES,
+  inboundChannelLabel,
+  isAutoImportedLeadSource,
   leadMatchesSourceFilter,
+  leadSourceBadgeClass,
   leadSourceDisplayLabel,
   type LeadSourceFilter,
 } from '@/lib/leadSource';
@@ -3592,6 +3596,8 @@ const LeadsWorkspace = () => {
   const canManageAssignment = currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات';
   const canChangeAnyStatus = currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات';
   const isSalesManagerLeadDistribution = currentUser?.role === 'مدير مبيعات';
+  const isLeadsDistributionHub =
+    currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات';
   const canSubmitQuoteForLead = (lead: Lead) =>
     !!currentUser &&
     (currentUser.role === 'مدير مبيعات' ||
@@ -3614,14 +3620,35 @@ const LeadsWorkspace = () => {
   }, [currentUser, canUseCustomerMode]);
 
   useEffect(() => {
+    if (!isLeadsDistributionHub) return;
+    try {
+      const raw = localStorage.getItem(NAV_INTENT_KEY);
+      if (raw) return;
+    } catch {
+      /* ignore */
+    }
+    setAssignedFilter('unassigned');
+    setSourceFilter('all');
+  }, [isLeadsDistributionHub, currentUser?.id]);
+
+  useEffect(() => {
     const applyIntent = () => {
       try {
         const raw = localStorage.getItem(NAV_INTENT_KEY);
         if (!raw) return;
-        const intent = JSON.parse(raw) as { tab?: string; leadsAssignedFilter?: 'all' | 'mine' | 'unassigned'; leadsStatusFilter?: 'الكل' | LeadStatus; leadsOverdueOnly?: boolean; leadsRepUserId?: string; leadsClient360Id?: string };
+        const intent = JSON.parse(raw) as {
+          tab?: string;
+          leadsAssignedFilter?: 'all' | 'mine' | 'unassigned';
+          leadsStatusFilter?: 'الكل' | LeadStatus;
+          leadsSourceFilter?: LeadSourceFilter;
+          leadsOverdueOnly?: boolean;
+          leadsRepUserId?: string;
+          leadsClient360Id?: string;
+        };
         if (intent.tab !== 'leads') return;
         if (intent.leadsAssignedFilter) setAssignedFilter(intent.leadsAssignedFilter);
         if (intent.leadsStatusFilter) setStatusFilter(intent.leadsStatusFilter);
+        if (intent.leadsSourceFilter) setSourceFilter(intent.leadsSourceFilter);
         setOverdueOnly(Boolean(intent.leadsOverdueOnly));
         setRepUserFilterId(intent.leadsRepUserId || '');
         if (intent.leadsClient360Id) {
@@ -3636,9 +3663,11 @@ const LeadsWorkspace = () => {
     applyIntent();
     window.addEventListener('storage', applyIntent);
     window.addEventListener('focus', applyIntent);
+    window.addEventListener('prod-system-nav-intent', applyIntent);
     return () => {
       window.removeEventListener('storage', applyIntent);
       window.removeEventListener('focus', applyIntent);
+      window.removeEventListener('prod-system-nav-intent', applyIntent);
     };
   }, [leads]);
 
@@ -3699,6 +3728,27 @@ const LeadsWorkspace = () => {
 
     return result;
   }, [leads, invoices, currentUser, assignedFilter, statusFilter, sourceFilter, overdueOnly, repUserFilterId, search]);
+
+  const inboundHubStats = useMemo(() => {
+    if (!isLeadsDistributionHub) return null;
+    const open = leads.filter(
+      (l) => l.status !== 'مغلق - فوز' && l.status !== 'مغلق - خسارة',
+    );
+    const unassigned = open.filter((l) => !l.assignedTo);
+    const inboundUnassigned = unassigned.filter((l) => isAutoImportedLeadSource(l.source));
+    const bySource = Object.fromEntries(
+      INBOUND_CHANNEL_SOURCES.map((src) => [
+        src,
+        inboundUnassigned.filter((l) => leadMatchesSourceFilter(l.source, src)).length,
+      ]),
+    ) as Record<(typeof INBOUND_CHANNEL_SOURCES)[number], number>;
+    return {
+      openTotal: open.length,
+      unassignedTotal: unassigned.length,
+      inboundUnassignedTotal: inboundUnassigned.length,
+      bySource,
+    };
+  }, [leads, isLeadsDistributionHub]);
 
   const handleCreateLead = () => {
     const budget = Number(leadForm.budget);
@@ -4013,9 +4063,92 @@ const LeadsWorkspace = () => {
 
   return (
     <div className="animate-in fade-in duration-500">
-      <SectionTitle title={entityMode === 'customers' ? 'إدارة العملاء الخارجيين' : 'إدارة الليدز'} subtitle={entityMode === 'customers' ? 'العملاء الخارجيون فقط (خارج مسار الليدز) مع الأرصدة المدينة/الدائنة' : currentUser?.role === 'محاسب' ? 'يعرض للمحاسب الليدز المعتمدة من المالك فقط (تحولت فعلياً لتنفيذ مالي)' : 'بحث، تصفية، وتحديث الحالة والتعيين بشكل مباشر'} icon={Users} />
+      <SectionTitle
+        title={
+          entityMode === 'customers'
+            ? 'إدارة العملاء الخارجيين'
+            : isLeadsDistributionHub
+              ? 'كافة الليدز'
+              : 'إدارة الليدز'
+        }
+        subtitle={
+          entityMode === 'customers'
+            ? 'العملاء الخارجيون فقط (خارج مسار الليدز) مع الأرصدة المدينة/الدائنة'
+            : currentUser?.role === 'محاسب'
+              ? 'يعرض للمحاسب الليدز المعتمدة من المالك فقط (تحولت فعلياً لتنفيذ مالي)'
+              : isLeadsDistributionHub
+                ? 'كل الليدز الواردة من فيسبوك وإنستجرام ولينكد إن والإيميل/جيميل وجوجل — ابدأ بتوزيع غير الموزّع على المناديب'
+                : 'بحث، تصفية، وتحديث الحالة والتعيين بشكل مباشر'
+        }
+        icon={Users}
+      />
 
       <div className="bg-slate-900/40 border border-slate-800 rounded-[3rem] p-6 md:p-8 mb-6">
+        {entityMode === 'leads' && isLeadsDistributionHub && inboundHubStats && (
+          <div className="mb-5 rounded-2xl border border-[#7C6BFF]/25 bg-[#7C6BFF]/10 p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-black text-white">ليدز واردة من القنوات</p>
+              <div className="flex flex-wrap gap-2 text-[11px]">
+                <span className="px-2.5 py-1 rounded-lg bg-white/10 text-zinc-200 font-bold">
+                  غير موزّع: {inboundHubStats.unassignedTotal}
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-indigo-500/20 text-indigo-200 font-bold">
+                  وارد تلقائي غير موزّع: {inboundHubStats.inboundUnassignedTotal}
+                </span>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setAssignedFilter('unassigned');
+                  setSourceFilter('all');
+                  setStatusFilter('الكل');
+                  setOverdueOnly(false);
+                }}
+                className={`px-3 py-1.5 rounded-xl text-[11px] font-black border ${
+                  assignedFilter === 'unassigned' && sourceFilter === 'all'
+                    ? 'bg-[#7C6BFF] text-white border-[#7C6BFF]'
+                    : 'bg-[#0F1528] text-zinc-300 border-white/15'
+                }`}
+              >
+                كل الوارد (غير موزّع)
+              </button>
+              {INBOUND_CHANNEL_SOURCES.map((src) => {
+                const count = inboundHubStats.bySource[src];
+                return (
+                  <button
+                    key={src}
+                    type="button"
+                    onClick={() => {
+                      setAssignedFilter('unassigned');
+                      setSourceFilter(src);
+                      setStatusFilter('الكل');
+                      setOverdueOnly(false);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-[11px] font-black border ${leadSourceBadgeClass(src)} ${
+                      assignedFilter === 'unassigned' && sourceFilter === src ? 'ring-2 ring-white/40' : ''
+                    }`}
+                  >
+                    {inboundChannelLabel(src)}
+                    {count > 0 ? ` (${count})` : ''}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => {
+                  setAssignedFilter('all');
+                  setSourceFilter('all');
+                }}
+                className="px-3 py-1.5 rounded-xl text-[11px] font-black bg-[#0F1528] text-zinc-400 border border-white/10"
+              >
+                عرض الكل
+              </button>
+            </div>
+          </div>
+        )}
+
         {canUseCustomerMode && (
           <div className="mb-4 flex gap-2">
             <button onClick={() => setEntityMode('leads')} className={`px-4 py-2 rounded-xl text-xs font-black ${entityMode === 'leads' ? 'bg-[#7C6BFF] text-white' : 'bg-[#0F1528] border border-white/10 text-zinc-300'}`}>الليدز</button>
@@ -4054,7 +4187,7 @@ const LeadsWorkspace = () => {
             <option value="instagram">Instagram</option>
             <option value="google">Google</option>
             <option value="linkedin">LinkedIn</option>
-            <option value="email">Email</option>
+            <option value="email">Email / Gmail</option>
             <option value="manual">يدوي</option>
           </select>)}
 
@@ -4087,7 +4220,14 @@ const LeadsWorkspace = () => {
         )}
 
         {entityMode === 'leads' && canCreateLead && (
-          <div className="mt-4 flex justify-end">
+          <div className="mt-4 flex justify-end gap-3 flex-wrap">
+            <a
+              href="/leads/import"
+              className="bg-[#0A66C2] text-white px-6 py-3 rounded-2xl text-sm font-black inline-flex items-center gap-2 hover:bg-[#0958a8] transition-colors"
+            >
+              <FileUp className="w-4 h-4" />
+              استيراد LinkedIn CSV
+            </a>
             <button
               onClick={() => setIsAddLeadOpen(true)}
             className="bg-[#7C6BFF] text-white px-6 py-3 rounded-2xl text-sm font-black inline-flex items-center gap-2"
@@ -4146,9 +4286,11 @@ const LeadsWorkspace = () => {
                     <td className="p-5 text-sm">
                       <p>{lead.phone}</p>
                       <p className="text-xs text-zinc-400 mt-1">{lead.budget.toLocaleString()} ج.م</p>
-                      {isSalesManagerLeadDistribution && (
-                        <p className="text-[11px] text-zinc-500 mt-1">{leadSourceDisplayLabel(lead.source)}</p>
-                      )}
+                      <span
+                        className={`inline-block mt-1.5 text-[10px] font-black px-2 py-0.5 rounded-lg border ${leadSourceBadgeClass(lead.source)}`}
+                      >
+                        {leadSourceDisplayLabel(lead.source)}
+                      </span>
                       {isSalesManagerLeadDistribution && canManageAssignment && (
                         <button
                           type="button"
@@ -10028,11 +10170,11 @@ const NavItems = ({ role, active, onChange, allowedTabs }: any) => {
   const common = [
     { id: 'home', label: 'الرئيسية', icon: Home },
     { id: 'dashboard', label: 'لوحة التحكم', icon: LayoutDashboard },
-    { id: 'leads', label: 'الليدز المتاحة', icon: Users },
   ];
 
   const manager = [
     ...common,
+    { id: 'leads', label: 'كافة الليدز', icon: Users },
     { id: 'manager-reps', label: 'فريق المبيعات', icon: UserPlus },
     { id: 'bookings', label: 'الحجوزات', icon: Calendar },
     { id: 'team-performance', label: 'مراقبة المناديب', icon: BarChart3 },
@@ -10107,7 +10249,7 @@ const TAB_TITLE_AR: Record<string, string> = {
   'owner-dash': 'نظرة عامة',
   bookings: 'الحجوزات',
   'team-performance': 'مراقبة الفريق',
-  leads: 'الليدز',
+  leads: 'كافة الليدز',
   accountant: 'الإدارة المالية',
   settings: 'إعدادات النظام',
   seo: 'SEO',
@@ -10732,6 +10874,23 @@ const Root = () => {
     };
   }, [currentUser?.id, currentUser?.authSource, refreshServerWorkspace]);
 
+  useEffect(() => {
+    const onNavIntent = () => {
+      try {
+        const raw = localStorage.getItem(NAV_INTENT_KEY);
+        if (!raw) return;
+        const intent = JSON.parse(raw) as { tab?: string };
+        if (intent.tab === 'leads' && allowedTabs.includes('leads')) {
+          handleTabChange('leads');
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    window.addEventListener('prod-system-nav-intent', onNavIntent);
+    return () => window.removeEventListener('prod-system-nav-intent', onNavIntent);
+  }, [allowedTabs, handleTabChange]);
+
   const resolveNotificationTab = (n: { navigateTab?: string; entityType?: string; title?: string; message?: string }) =>
     resolveNotificationTabForRole(n, allowedTabs);
   const resolveFinanceSubTab = (n: { entityType?: string; title?: string; message?: string }) => {
@@ -10751,11 +10910,24 @@ const Root = () => {
     }
     if (tab === 'leads') {
       const text = `${n.title || ''} ${n.message || ''}`;
-      const intent: { tab: 'leads'; leadsAssignedFilter?: 'all' | 'mine' | 'unassigned'; leadsStatusFilter?: 'الكل' | LeadStatus; leadsOverdueOnly?: boolean; leadsRepUserId?: string; leadsClient360Id?: string } = { tab: 'leads' };
-      if (/غير\s*مسند|غير\s*موزع|تنتظر\s*توزيع|بدون\s*تعيين/i.test(text)) {
+      const intent: {
+        tab: 'leads';
+        leadsAssignedFilter?: 'all' | 'mine' | 'unassigned';
+        leadsStatusFilter?: 'الكل' | LeadStatus;
+        leadsSourceFilter?: LeadSourceFilter;
+        leadsOverdueOnly?: boolean;
+        leadsRepUserId?: string;
+        leadsClient360Id?: string;
+      } = { tab: 'leads' };
+      if (/غير\s*مسند|غير\s*موزع|تنتظر\s*توزيع|بدون\s*تعيين|القنوات\s*المربوطة|وارد/i.test(text)) {
         intent.leadsAssignedFilter = 'unassigned';
         intent.leadsStatusFilter = 'جديد';
       }
+      if (/facebook|فيسبوك/i.test(text)) intent.leadsSourceFilter = 'facebook';
+      else if (/instagram|إنستجرام|انستجرام/i.test(text)) intent.leadsSourceFilter = 'instagram';
+      else if (/linkedin|لينكد/i.test(text)) intent.leadsSourceFilter = 'linkedin';
+      else if (/gmail|email|بريد|إيميل/i.test(text)) intent.leadsSourceFilter = 'email';
+      else if (/google|جوجل|sheet/i.test(text)) intent.leadsSourceFilter = 'google';
       if (/متأخر|متأخرة|تصعيد|بدون\s*متابعة|overdue/i.test(text)) {
         intent.leadsOverdueOnly = true;
       }
@@ -11396,11 +11568,11 @@ const Root = () => {
               </button>
               {isNotificationsOpen && createPortal(
                 <div
-                  className="premium-notifications-panel fixed w-[360px] max-w-[90vw] bg-[#0B1020] border border-white/10 rounded-2xl shadow-2xl z-[9999] p-3"
+                  className="premium-notifications-panel fixed w-[360px] max-w-[90vw] bg-[#E8EAED] border border-zinc-300/80 rounded-2xl shadow-2xl z-[9999] p-3 text-zinc-900"
                   style={{ top: notificationsPanelPos.top, left: notificationsPanelPos.left }}
                 >
                   <div className="flex items-center justify-between mb-2 gap-2">
-                    <p className="text-sm font-black">مركز التنبيهات</p>
+                    <p className="text-sm font-black text-zinc-900">مركز التنبيهات</p>
                     <div className="flex items-center gap-2 shrink-0">
                       {isServerDataMode() && currentUser?.authSource === 'database' && (
                         <button
@@ -11418,26 +11590,26 @@ const Root = () => {
                               }
                             })();
                           }}
-                          className="text-[11px] font-bold text-cyan-300 hover:text-cyan-100 disabled:opacity-40"
+                          className="text-[11px] font-bold text-cyan-700 hover:text-cyan-900 disabled:opacity-40"
                         >
                           {notificationsPanelSyncing ? 'جاري التحديث…' : 'تحديث'}
                         </button>
                       )}
-                      <button type="button" onClick={() => setIsNotificationsOpen(false)} className="text-xs text-zinc-400 hover:text-white">إغلاق</button>
+                      <button type="button" onClick={() => setIsNotificationsOpen(false)} className="text-xs text-zinc-600 hover:text-zinc-900">إغلاق</button>
                     </div>
                   </div>
                   {notificationsPanelSyncing && (
-                    <p className="text-[11px] text-zinc-500 mb-2">يتم مزامنة أحدث البيانات من السيرفر لعرض تنبيهات دقيقة…</p>
+                    <p className="text-[11px] text-zinc-600 mb-2">يتم مزامنة أحدث البيانات من السيرفر لعرض تنبيهات دقيقة…</p>
                   )}
                   {isServerDataMode() && currentUser?.authSource === 'database' && (
-                    <p className="text-[10px] text-zinc-500 mb-2 leading-relaxed">
+                    <p className="text-[10px] text-zinc-600 mb-2 leading-relaxed">
                       لا يوجد WebSocket: التحديث التلقائي عند العودة للتبويب أو التركيز تقريباً كل 60 ثانية، بالإضافة إلى زر
                       «تحديث» وفتح هذه اللوحة.
                     </p>
                   )}
                   <div className="mb-2 flex items-center gap-2 text-[11px]">
-                    <span className="px-2 py-1 rounded-lg bg-rose-500/15 text-rose-200 border border-rose-500/30">Critical: {criticalNotifications.length}</span>
-                    <span className="px-2 py-1 rounded-lg bg-zinc-500/15 text-zinc-200 border border-zinc-500/30">Normal: {normalNotifications.length}</span>
+                    <span className="px-2 py-1 rounded-lg bg-rose-100 text-rose-800 border border-rose-300">Critical: {criticalNotifications.length}</span>
+                    <span className="px-2 py-1 rounded-lg bg-zinc-200 text-zinc-800 border border-zinc-400">Normal: {normalNotifications.length}</span>
                   </div>
                   <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar pr-1">
                     {notifications.map((n) => (
@@ -11447,26 +11619,26 @@ const Root = () => {
                         onClick={() => handleNotificationClick(n)}
                         className={`premium-notification-item w-full text-right rounded-xl border p-3 ${
                         n.level === 'high'
-                          ? 'border-rose-500/30 bg-rose-500/10'
+                          ? 'border-rose-300 bg-white'
                           : n.level === 'medium'
-                            ? 'border-amber-500/30 bg-amber-500/10'
-                            : 'border-emerald-500/30 bg-emerald-500/10'
-                      } hover:border-white/30 cursor-pointer`}>
-                        <p className="text-sm font-bold">{n.title}</p>
-                        <p className="text-xs text-zinc-300 mt-1">{n.message}</p>
+                            ? 'border-amber-300 bg-white'
+                            : 'border-emerald-300 bg-white'
+                      } hover:border-zinc-400 hover:shadow-md cursor-pointer`}>
+                        <p className="text-sm font-bold text-zinc-900">{n.title}</p>
+                        <p className="text-xs text-zinc-700 mt-1">{n.message}</p>
                         <div className="mt-2 flex items-center justify-between">
                           <p className="text-[10px] text-zinc-500">{new Date(n.createdAt).toLocaleString('ar-EG')}</p>
                           <div className="flex items-center gap-2">
-                            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${((n as any).priority || (n.level === 'high' ? 'critical' : 'normal')) === 'critical' ? 'bg-rose-500/20 text-rose-200' : 'bg-zinc-500/20 text-zinc-200'}`}>
+                            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${((n as any).priority || (n.level === 'high' ? 'critical' : 'normal')) === 'critical' ? 'bg-rose-100 text-rose-800' : 'bg-zinc-200 text-zinc-700'}`}>
                               {((n as any).priority || (n.level === 'high' ? 'critical' : 'normal')) === 'critical' ? 'Critical' : 'Normal'}
                             </span>
-                            <p className="text-[10px] text-[#A99FFF] font-bold">فتح: {resolveNotificationTab(n) || '—'}</p>
+                            <p className="text-[10px] text-violet-700 font-bold">فتح: {resolveNotificationTab(n) || '—'}</p>
                           </div>
                         </div>
                       </button>
                     ))}
                     {notifications.length === 0 && (
-                      <p className="text-xs text-zinc-400 text-center py-4">لا توجد تنبيهات جديدة</p>
+                      <p className="text-xs text-zinc-600 text-center py-4">لا توجد تنبيهات جديدة</p>
                     )}
                   </div>
                 </div>,
@@ -11906,3 +12078,4 @@ function App() {
 }
 
 export default App;
+
