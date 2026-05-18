@@ -39,6 +39,11 @@ import {
   BookingSpendLine,
   custodyFundBelongsToProductionManager,
 } from './context/DataContext';
+import {
+  ROLE_TAB_ACCESS,
+  filterNotificationsForViewer,
+  resolveNotificationTabForRole,
+} from './context/notificationPermissions';
 import SeoOverviewPage from './(dashboard)/seo/page';
 import SeoAuditPage from './(dashboard)/seo/audit/page';
 import SeoKeywordsPage from './(dashboard)/seo/keywords/page';
@@ -9989,14 +9994,6 @@ const SeoModuleHub = () => {
   );
 };
 
-const ROLE_TAB_ACCESS: Record<User['role'], string[]> = {
-  'مالك': ['home', 'approvals', 'owner-dash', 'team-performance', 'leads', 'accountant', 'settings', 'bookings', 'linked-views', 'seo'],
-  'مدير مبيعات': ['home', 'dashboard', 'leads', 'team-performance', 'bookings', 'manager-reps', 'linked-views'],
-  'مندوب': ['home', 'dashboard', 'leads', 'performance', 'bookings', 'linked-views'],
-  'محاسب': ['home', 'accountant', 'leads', 'bookings', 'linked-views'],
-  'مدير إنتاج': ['home', 'production', 'bookings', 'leads', 'linked-views'],
-};
-
 const NavItems = ({ role, active, onChange, allowedTabs }: any) => {
   const common = [
     { id: 'home', label: 'الرئيسية', icon: Home },
@@ -10670,15 +10667,12 @@ const Root = () => {
   const notifications = useMemo(() => {
     try {
       const uid = String(currentUserId || '').trim();
-      const base = getSystemNotifications().filter(
-        (n) =>
-          (!n.targetRoles || n.targetRoles.includes(currentRole)) &&
-          (!n.targetUserId || String(n.targetUserId).trim() === uid),
-      );
+      const base = filterNotificationsForViewer(getSystemNotifications(), currentRole, uid);
       const seen = new Set(base.map((n) => n.id));
-      return [...base, ...personalTodoBellNotifications.filter((n) => !seen.has(n.id))];
+      const personalFiltered = filterNotificationsForViewer(personalTodoBellNotifications, currentRole, uid);
+      return [...base, ...personalFiltered.filter((n) => !seen.has(n.id))];
     } catch {
-      return personalTodoBellNotifications;
+      return filterNotificationsForViewer(personalTodoBellNotifications, currentRole, String(currentUserId || '').trim());
     }
   }, [getSystemNotifications, currentRole, currentUserId, personalTodoBellNotifications]);
   const criticalNotifications = useMemo(
@@ -10708,17 +10702,8 @@ const Root = () => {
     };
   }, [currentUser?.id, currentUser?.authSource, refreshServerWorkspace]);
 
-  const resolveNotificationTab = (n: { navigateTab?: string; entityType?: string; title?: string; message?: string }) => {
-    if (n.navigateTab && allowedTabs.includes(n.navigateTab)) return n.navigateTab;
-    const text = `${n.title || ''} ${n.message || ''}`;
-    let candidates: string[] = [];
-    if (n.entityType === 'lead') candidates = ['leads', 'approvals', 'home'];
-    else if (n.entityType === 'invoice') candidates = ['accountant', 'approvals', 'home'];
-    else if (n.entityType === 'user') candidates = ['team-performance', 'manager-reps', 'settings', 'home'];
-    else if (/عهد|اعتماد|موافقة|بانتظار|طلب/i.test(text)) candidates = ['approvals', 'accountant', 'production', 'bookings', 'home'];
-    else candidates = ['home', 'approvals', 'accountant', 'leads', 'bookings'];
-    return candidates.find((t) => allowedTabs.includes(t));
-  };
+  const resolveNotificationTab = (n: { navigateTab?: string; entityType?: string; title?: string; message?: string }) =>
+    resolveNotificationTabForRole(n, allowedTabs);
   const resolveFinanceSubTab = (n: { entityType?: string; title?: string; message?: string }) => {
     const text = `${n.title || ''} ${n.message || ''}`;
     if (/مرتبات|حضور|انصراف|موظفين/i.test(text)) return 'reps' as const;

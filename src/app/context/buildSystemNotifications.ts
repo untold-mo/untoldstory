@@ -11,6 +11,7 @@ import type {
   MonthlyTarget,
   PayrollApproval,
   PayrollApprovalRequest,
+  FinancialPeriodReopenRequest,
   PersonalTodo,
   PriceQuote,
   SlaEscalationSettings,
@@ -26,6 +27,7 @@ export type BuildSystemNotificationsInput = {
   invoices: Invoice[];
   payrollApprovals: PayrollApproval[];
   payrollApprovalRequests: PayrollApprovalRequest[];
+  financialReopenRequests: FinancialPeriodReopenRequest[];
   monthlyTargets: MonthlyTarget[];
   shootBookings: ShootBooking[];
   equipmentBookings: EquipmentBooking[];
@@ -48,6 +50,7 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
     invoices,
     payrollApprovals,
     payrollApprovalRequests,
+    financialReopenRequests,
     monthlyTargets,
     shootBookings,
     equipmentBookings,
@@ -101,12 +104,13 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       out.push({
         id: `n-overdue-followups-${overdueFollowUps.length}`,
         level: 'high',
-        title: 'متابعات متأخرة',
+        title: 'متابعات متأخرة (إجمالي الفريق)',
         message: `يوجد ${overdueFollowUps.length} عميل بحاجة لمتابعة فورية`,
         createdAt: nowIso,
-        targetRoles: ['مالك', 'مدير مبيعات', 'مندوب'],
+        targetRoles: ['مالك', 'مدير مبيعات'],
         entityType: 'lead',
         queue: 'ops',
+        navigateTab: 'leads',
       });
       const overdueByRep = users
         .filter((u) => u.role === 'مندوب')
@@ -129,6 +133,23 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
           navigateTab: 'leads',
         });
       });
+      users
+        .filter((u) => u.role === 'مدير مبيعات')
+        .forEach((mgr) => {
+          const teamCount = overdueFollowUps.length;
+          if (teamCount === 0) return;
+          out.push({
+            id: `n-overdue-followups-mgr-${mgr.id}-${teamCount}`,
+            level: 'high',
+            title: 'متابعات متأخرة لفريق المبيعات',
+            message: `${teamCount} ليدز بحاجة متابعة — راجع التوزيع والتعيين`,
+            createdAt: nowIso,
+            targetRoles: ['مدير مبيعات'],
+            targetUserId: mgr.id,
+            entityType: 'lead',
+            navigateTab: 'leads',
+          });
+        });
     }
 
     const staleLeads = leads.filter((l) => {
@@ -199,6 +220,7 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
         createdAt: nowIso,
         targetRoles: ['مالك', 'مدير مبيعات'],
         entityType: 'lead',
+        navigateTab: 'leads',
       });
     }
 
@@ -281,23 +303,33 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       });
     }
 
-    const pendingExpenses = expenses.filter(e => e.approvalStatus === 'قيد الاعتماد').length;
-    if (pendingExpenses > 0) {
+    const pendingExpRows = expenses.filter((e) => e.approvalStatus === 'قيد الاعتماد');
+    if (pendingExpRows.length > 0) {
       out.push({
-        id: `n-pending-expenses-${pendingExpenses}`,
-        level: 'medium',
-        title: 'مصروفات بانتظار الاعتماد',
-        message: `يوجد ${pendingExpenses} مصروفات تحتاج اعتماد`,
+        id: `n-pending-expenses-owner-${pendingExpRows.length}`,
+        level: 'high',
+        title: 'مصروفات بانتظار اعتمادك',
+        message: `يوجد ${pendingExpRows.length} مصروفات تحتاج اعتماد المالك`,
         createdAt: nowIso,
-        targetRoles: ['مالك', 'مدير مبيعات', 'محاسب'],
+        targetRoles: ['مالك'],
         entityType: 'system',
+        navigateTab: 'approvals',
+      });
+      out.push({
+        id: `n-pending-expenses-accountant-${pendingExpRows.length}`,
+        level: 'medium',
+        title: 'مصروفات بانتظار اعتماد المالك',
+        message: `يوجد ${pendingExpRows.length} مصروفات لم تُعتمد بعد في مركز الاعتمادات`,
+        createdAt: nowIso,
+        targetRoles: ['محاسب'],
+        entityType: 'system',
+        navigateTab: 'accountant',
       });
     }
 
     /** مقدّم المصروف يعرف أن طلبه ما زال بانتظار الاعتماد */
-    const pendingExpRows = expenses.filter((e) => e.approvalStatus === 'قيد الاعتماد' && String(e.submittedById || '').trim());
     const expBySubmitter = new Map<string, Expense[]>();
-    for (const e of pendingExpRows) {
+    for (const e of pendingExpRows.filter((ex) => String(ex.submittedById || '').trim())) {
       const sid = String(e.submittedById).trim();
       const arr = expBySubmitter.get(sid) || [];
       if (arr.length < 20) arr.push(e);
@@ -311,6 +343,8 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
         .map((ex) => `• ${ex.title} — ${(ex.totalAmount ?? ex.amount).toLocaleString('ar-EG')} ج.م`)
         .join('\n');
       const more = list.length > 6 ? `\n… و${list.length - 6} مصروفات أخرى` : '';
+      const expNav =
+        u.role === 'مدير إنتاج' ? 'production' : u.role === 'محاسب' ? 'accountant' : u.role === 'مالك' ? 'approvals' : 'home';
       out.push({
         id: `n-expense-pending-submitter-${submitterId}-${list.length}`,
         level: 'medium',
@@ -320,9 +354,32 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
         targetRoles: [u.role],
         targetUserId: submitterId,
         entityType: 'system',
-        navigateTab: u.role === 'مدير إنتاج' ? 'production' : 'home',
+        navigateTab: expNav,
       });
     });
+
+    const expenseOutcomeWindow = 14 * 24 * 60 * 60 * 1000;
+    expenses
+      .filter((e) => (e.approvalStatus === 'معتمد' || e.approvalStatus === 'مرفوض') && String(e.submittedById || '').trim())
+      .filter((e) => now.getTime() - new Date(e.date).getTime() <= expenseOutcomeWindow)
+      .forEach((e) => {
+        const sid = String(e.submittedById).trim();
+        const u = users.find((x) => String(x.id).trim() === sid);
+        if (!u) return;
+        const expNav =
+          u.role === 'مدير إنتاج' ? 'production' : u.role === 'محاسب' ? 'accountant' : u.role === 'مالك' ? 'approvals' : 'home';
+        out.push({
+          id: `n-expense-outcome-${e.id}-${e.approvalStatus}`,
+          level: e.approvalStatus === 'معتمد' ? 'low' : 'medium',
+          title: e.approvalStatus === 'معتمد' ? 'تم اعتماد مصروفك' : 'تم رفض مصروفك',
+          message: `${e.title} — ${(e.totalAmount ?? e.amount).toLocaleString('ar-EG')} ج.م`,
+          createdAt: nowIso,
+          targetRoles: [u.role],
+          targetUserId: sid,
+          entityType: 'system',
+          navigateTab: expNav,
+        });
+      });
 
     const pendingProdClaims = shootBookings.filter((b) => b.financialStatus === 'بانتظار_تنفيذ_محاسب').length
       + equipmentBookings.filter((b) => b.financialStatus === 'بانتظار_تنفيذ_محاسب').length
@@ -541,9 +598,38 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
         createdAt: nowIso,
         targetRoles: ['مدير مبيعات'],
         entityType: 'system',
-        navigateTab: 'approvals',
+        navigateTab: 'leads',
       });
     }
+
+    /** عروض معتمدة من المالك — المندوب يقدّمها للعميل */
+    const quotesAwaitingClient = priceQuotes.filter((q) => q.status === 'معتمد' && q.createdById);
+    const quotesByCreator = new Map<string, PriceQuote[]>();
+    quotesAwaitingClient.forEach((q) => {
+      const cid = String(q.createdById).trim();
+      if (!cid) return;
+      const arr = quotesByCreator.get(cid) || [];
+      if (arr.length < 15) arr.push(q);
+      quotesByCreator.set(cid, arr);
+    });
+    quotesByCreator.forEach((list, creatorId) => {
+      const u = users.find((x) => String(x.id).trim() === creatorId);
+      if (!u || (u.role !== 'مندوب' && u.role !== 'مدير مبيعات')) return;
+      out.push({
+        id: `n-quote-awaiting-client-${creatorId}-${list.length}`,
+        level: 'high',
+        title: `عروض معتمدة — بانتظار موافقة العميل (${list.length})`,
+        message: list
+          .slice(0, 5)
+          .map((q) => `• ${q.title} — ${q.customerName}`)
+          .join('\n') + (list.length > 5 ? `\n… و${list.length - 5} أخرى` : ''),
+        createdAt: nowIso,
+        targetRoles: [u.role],
+        targetUserId: creatorId,
+        entityType: 'lead',
+        navigateTab: 'leads',
+      });
+    });
 
     const pendingPricingByPm = new Map<string, number>();
     const ownerRevisionByPm = new Map<string, number>();
@@ -580,31 +666,36 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       .filter((q) => q.status === 'معتمد' || q.status === 'مرفوض')
       .filter((q) => q.approvedAt && (now.getTime() - new Date(q.approvedAt).getTime()) <= 1000 * 60 * 60 * 24 * 14);
     recentQuoteDecisions.forEach((q) => {
+      const creator = users.find((u) => String(u.id).trim() === String(q.createdById || '').trim());
+      if (!creator) return;
       out.push({
-        id: `n-quote-result-owner-${q.id}`,
+        id: `n-quote-result-creator-${q.id}`,
         level: q.status === 'معتمد' ? 'low' : 'medium',
-        title: q.status === 'معتمد' ? 'تم اعتماد عرض سعر' : 'تم رفض عرض سعر',
+        title: q.status === 'معتمد' ? 'تم اعتماد عرض سعر — قدّمه للعميل' : 'تم رفض عرض سعر من المالك',
         message: `${q.title} — ${q.customerName}`,
         createdAt: nowIso,
-        targetRoles: ['مندوب', 'مدير مبيعات', 'مالك'],
-        targetUserId: q.createdById,
+        targetRoles: [creator.role],
+        targetUserId: creator.id,
         entityType: 'system',
         entityId: q.id,
         navigateTab: 'leads',
       });
-      const creator = users.find((u) => u.id === q.createdById);
-      if (creator?.role === 'مندوب') {
-        out.push({
-          id: `n-quote-result-manager-copy-${q.id}`,
-          level: q.status === 'معتمد' ? 'low' : 'medium',
-          title: q.status === 'معتمد' ? 'تم اعتماد عرض سعر (نسخة متابعة)' : 'تم رفض عرض سعر (نسخة متابعة)',
-          message: `${q.createdByName} — ${q.title}`,
-          createdAt: nowIso,
-          targetRoles: ['مدير مبيعات'],
-          entityType: 'system',
-          entityId: q.id,
-          navigateTab: 'approvals',
-        });
+      if (creator.role === 'مندوب') {
+        const mgr = users.find((u) => u.role === 'مدير مبيعات');
+        if (mgr) {
+          out.push({
+            id: `n-quote-result-manager-copy-${q.id}`,
+            level: q.status === 'معتمد' ? 'low' : 'medium',
+            title: q.status === 'معتمد' ? 'اعتماد عرض سعر (فريقك)' : 'رفض عرض سعر (فريقك)',
+            message: `${q.createdByName} — ${q.title}`,
+            createdAt: nowIso,
+            targetRoles: ['مدير مبيعات'],
+            targetUserId: mgr.id,
+            entityType: 'system',
+            entityId: q.id,
+            navigateTab: 'leads',
+          });
+        }
       }
     });
 
@@ -615,8 +706,19 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
         title: 'كشف المرتبات غير معتمد',
         message: `كشف المرتبات لشهر ${monthKey} لم يتم اعتماده بعد`,
         createdAt: nowIso,
-        targetRoles: ['مالك', 'محاسب'],
+        targetRoles: ['مالك'],
         entityType: 'system',
+        navigateTab: 'approvals',
+      });
+      out.push({
+        id: `n-payroll-accountant-${monthKey}`,
+        level: 'medium',
+        title: 'كشف المرتبات غير معتمد',
+        message: `شهر ${monthKey} — بانتظار اعتماد المالك`,
+        createdAt: nowIso,
+        targetRoles: ['محاسب'],
+        entityType: 'system',
+        navigateTab: 'accountant',
       });
     }
     const pendingPayrollRequest = payrollApprovalRequests.find(
@@ -631,9 +733,49 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
         createdAt: nowIso,
         targetRoles: ['مالك'],
         entityType: 'system',
-        navigateTab: 'accountant',
+        navigateTab: 'approvals',
       });
+      if (pendingPayrollRequest.requestedById) {
+        out.push({
+          id: `n-payroll-request-accountant-${pendingPayrollRequest.id}`,
+          level: 'medium',
+          title: 'طلبك بانتظار اعتماد المالك',
+          message: `كشف مرتبات شهر ${monthKey} أُرسل للمالك ولم يُعتمد بعد`,
+          createdAt: nowIso,
+          targetRoles: ['محاسب'],
+          targetUserId: pendingPayrollRequest.requestedById,
+          entityType: 'system',
+          navigateTab: 'accountant',
+        });
+      }
     }
+
+    const pendingMonthReopen = financialReopenRequests.filter((r) => r.status === 'بانتظار_اعتماد_المالك');
+    pendingMonthReopen.forEach((r) => {
+      out.push({
+        id: `n-month-reopen-owner-${r.id}`,
+        level: 'high',
+        title: 'طلب إعادة فتح شهر محاسبي',
+        message: `شهر ${r.monthKey} — ${r.reason || 'بانتظار اعتمادك'}`,
+        createdAt: nowIso,
+        targetRoles: ['مالك'],
+        entityType: 'system',
+        navigateTab: 'approvals',
+      });
+      if (r.requestedById) {
+        out.push({
+          id: `n-month-reopen-requester-${r.id}`,
+          level: 'medium',
+          title: 'طلب إعادة فتح شهر — قيد الاعتماد',
+          message: `شهر ${r.monthKey} بانتظار اعتماد المالك`,
+          createdAt: nowIso,
+          targetRoles: ['محاسب'],
+          targetUserId: r.requestedById,
+          entityType: 'system',
+          navigateTab: 'accountant',
+        });
+      }
+    });
 
     const monthNow = getMonthKey(nowIso);
     const repsBehindCalls = users
@@ -659,8 +801,9 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
         title: 'مستهدف المكالمات',
         message: `${repsBehindCalls.length} مندوبين أقل من مستهدف المكالمات`,
         createdAt: nowIso,
-        targetRoles: ['مالك', 'مدير مبيعات', 'محاسب'],
+        targetRoles: ['مالك', 'مدير مبيعات'],
         entityType: 'user',
+        navigateTab: 'team-performance',
       });
     }
 
@@ -679,6 +822,7 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
           targetUserId: b.repId,
           entityType: 'system',
           entityId: b.id,
+          navigateTab: 'bookings',
         });
       });
 
@@ -696,6 +840,7 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
           targetUserId: b.repId,
           entityType: 'system',
           entityId: b.id,
+          navigateTab: 'bookings',
         });
       });
 
@@ -713,6 +858,7 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
           targetUserId: b.repId,
           entityType: 'system',
           entityId: b.id,
+          navigateTab: 'bookings',
         });
       });
 
@@ -811,9 +957,47 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
         title: 'عهد إنتاج نشطة تحتاج تسوية',
         message: `يوجد ${activeCustodyForLong.length} عهدة نشطة منذ أكثر من 7 أيام بدون تسوية`,
         createdAt: nowIso,
-        targetRoles: ['محاسب', 'مدير إنتاج', 'مالك'],
+        targetRoles: ['محاسب', 'مالك'],
         entityType: 'system',
-        navigateTab: 'production',
+        navigateTab: 'accountant',
+      });
+      const longByPm = new Map<string, CustodyFund[]>();
+      activeCustodyForLong.forEach((c) => {
+        if (!c.productionManagerId) return;
+        const arr = longByPm.get(c.productionManagerId) || [];
+        arr.push(c);
+        longByPm.set(c.productionManagerId, arr);
+      });
+      longByPm.forEach((list, pmId) => {
+        out.push({
+          id: `n-custody-long-active-pm-${pmId}`,
+          level: 'medium',
+          title: `عهدة نشطة تحتاج تسوية (${list.length})`,
+          message: `لديك ${list.length} عهدة نشطة منذ أكثر من 7 أيام — أكمل التسوية`,
+          createdAt: nowIso,
+          targetRoles: ['مدير إنتاج'],
+          targetUserId: pmId,
+          entityType: 'system',
+          navigateTab: 'production',
+        });
+      });
+    }
+
+    /** حجوزات بانتظار تنفيذ الإنتاج (بعد اعتماد مالي) */
+    const prodExecShoot = shootBookings.filter((b) => b.financialStatus === 'بانتظار_تنفيذ_إنتاج');
+    const prodExecEquip = equipmentBookings.filter((b) => b.financialStatus === 'بانتظار_تنفيذ_إنتاج');
+    const prodExecMeet = meetingBookings.filter((b) => b.financialStatus === 'بانتظار_تنفيذ_إنتاج');
+    const prodExecTotal = prodExecShoot.length + prodExecEquip.length + prodExecMeet.length;
+    if (prodExecTotal > 0) {
+      out.push({
+        id: `n-prod-exec-pending-${prodExecTotal}`,
+        level: 'high',
+        title: `حجوزات بانتظار تنفيذ الإنتاج (${prodExecTotal})`,
+        message: `صوّر: ${prodExecShoot.length} — معدات: ${prodExecEquip.length} — اجتماعات: ${prodExecMeet.length}`,
+        createdAt: nowIso,
+        targetRoles: ['مدير إنتاج'],
+        entityType: 'system',
+        navigateTab: 'bookings',
       });
     }
 

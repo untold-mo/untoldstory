@@ -6142,6 +6142,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       slaEscalationSettings,
       attendanceRecordsCount: attendanceRecords.length,
       personalTodosByUserId,
+      financialReopenRequests,
     });
   }, [
     leads,
@@ -6160,6 +6161,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     slaEscalationSettings,
     attendanceRecords,
     personalTodosByUserId,
+    financialReopenRequests,
   ]);
 
   const requestPayrollApproval = async (
