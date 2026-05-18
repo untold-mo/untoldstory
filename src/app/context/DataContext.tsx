@@ -518,7 +518,17 @@ function normalizePersonalTodosByUserId(raw: unknown): Record<string, PersonalTo
   return out;
 }
 
-/** يدمج لقطة السيرفر مع الحالة المحلية: مهام موجودة محلياً ولم يُحفظ رد PATCH بعد لا تختفي عند تحديث Workspace. */
+function mergeTodoReminderFlags(base: PersonalTodo, overlay?: PersonalTodo): PersonalTodo {
+  if (!overlay) return base;
+  return {
+    ...base,
+    reminder30Emitted: Boolean(base.reminder30Emitted) || Boolean(overlay.reminder30Emitted),
+    reminder60Emitted: Boolean(base.reminder60Emitted) || Boolean(overlay.reminder60Emitted),
+    dueAlarmEmitted: Boolean(base.dueAlarmEmitted) || Boolean(overlay.dueAlarmEmitted),
+  };
+}
+
+/** يدمج لقطة السيرفر مع الحالة المحلية دون إعادة مهام محذوفة محلياً. */
 function mergePersonalTodosByUserId(
   prev: Record<string, PersonalTodo[]>,
   fromServer: unknown,
@@ -529,6 +539,15 @@ function mergePersonalTodosByUserId(
   for (const uid of uids) {
     const remote = srv[uid] || [];
     const local = (prev || {})[uid] || [];
+
+    if (local.length < remote.length) {
+      const remoteById = new Map(remote.map((t) => [t.id, t]));
+      out[uid] = normalizePersonalTodos(
+        local.map((t) => mergeTodoReminderFlags(t, remoteById.get(t.id))),
+      );
+      continue;
+    }
+
     const byId = new Map<string, PersonalTodo>();
     for (const t of remote) byId.set(t.id, t);
     for (const t of local) {
@@ -537,13 +556,7 @@ function mergePersonalTodosByUserId(
         byId.set(t.id, t);
         continue;
       }
-      /** السيرفر قد لا يُعيد حقول التذكير؛ ندمج بـ OR حتى لا يُعاد التنبيه بعد كل PATCH */
-      byId.set(t.id, {
-        ...r,
-        reminder30Emitted: Boolean(r.reminder30Emitted) || Boolean(t.reminder30Emitted),
-        reminder60Emitted: Boolean(r.reminder60Emitted) || Boolean(t.reminder60Emitted),
-        dueAlarmEmitted: Boolean(r.dueAlarmEmitted) || Boolean(t.dueAlarmEmitted),
-      });
+      byId.set(t.id, mergeTodoReminderFlags(r, t));
     }
     out[uid] = normalizePersonalTodos([...byId.values()]);
   }
@@ -579,16 +592,15 @@ function mergeDisplayedPersonalTodos(
   const keysToTry = [uid];
   if (rawStr && rawStr !== uid && !keysToTry.includes(rawStr)) keysToTry.push(rawStr);
 
-  let fromMap: PersonalTodo[] = [];
-  for (const k of keysToTry) {
-    const chunk = map[k];
-    if (Array.isArray(chunk) && chunk.length > 0) {
-      fromMap = chunk;
-      break;
-    }
-  }
-  if (fromMap.length === 0) {
-    fromMap = map[keysToTry[0]] ?? (keysToTry[1] ? map[keysToTry[1]] : undefined) ?? [];
+  const mapKeyUsed =
+    keysToTry.find((k) => Object.prototype.hasOwnProperty.call(map, k)) ?? keysToTry[0];
+  const fromMap: PersonalTodo[] = Array.isArray(map[mapKeyUsed]) ? map[mapKeyUsed]! : [];
+
+  /** إذا الحالة في الذاكرة عرّفت للمستخدم (حتى []) لا نعيد المهام المحذوفة من localStorage القديم */
+  if (Object.prototype.hasOwnProperty.call(map, mapKeyUsed)) {
+    return normalizePersonalTodos(
+      fromMap.map((t) => ({ ...t, text: String(t.text ?? '').trim() })).filter((t) => t.text),
+    );
   }
 
   let fromLs: PersonalTodo[] = [];
@@ -611,18 +623,7 @@ function mergeDisplayedPersonalTodos(
   for (const t of fromMap) {
     const tx = String(t.text ?? '').trim();
     if (!tx) continue;
-    const prev = byId.get(t.id);
-    if (prev) {
-      byId.set(t.id, {
-        ...t,
-        text: tx,
-        reminder30Emitted: Boolean(prev.reminder30Emitted) || Boolean(t.reminder30Emitted),
-        reminder60Emitted: Boolean(prev.reminder60Emitted) || Boolean(t.reminder60Emitted),
-        dueAlarmEmitted: Boolean(prev.dueAlarmEmitted) || Boolean(t.dueAlarmEmitted),
-      });
-    } else {
-      byId.set(t.id, { ...t, text: tx });
-    }
+    byId.set(t.id, mergeTodoReminderFlags({ ...t, text: tx }, byId.get(t.id)));
   }
   return normalizePersonalTodos([...byId.values()]);
 }
@@ -4047,18 +4048,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           typeof updater === 'function' ? (updater as (p: PersonalTodo[]) => PersonalTodo[])(curList) : updater;
         const nextList = normalizePersonalTodos(raw);
         const nextMap = { ...prev, [uid]: nextList };
-        /* المهام الشخصية: المصدر الحقيقي هو الحالة + localStorage. المزامنة مع السيرفر اختيارية وصامتة — لا توست ولا تراجع سيرفر يمنع إظهار المهمة. */
+        try {
+          if (typeof window !== 'undefined') {
+            const lsKey = `prod_system_todos_${uid}`;
+            if (nextList.length === 0) localStorage.removeItem(lsKey);
+            else localStorage.setItem(lsKey, JSON.stringify(nextList));
+          }
+        } catch {
+          /* ignore */
+        }
         if (isServerDataMode()) {
-          void patchWorkspaceStateApi({ personalTodosByUserId: { [uid]: nextList } })
-            .then((workspace) => {
-              const w = workspace.personalTodosByUserId;
-              if (w != null && typeof w === 'object') {
-                setPersonalTodosByUserIdState((p) =>
-                  mergePersonalTodosByUserId(p, w as Record<string, unknown>),
-                );
-              }
-            })
-            .catch(() => {});
+          void patchWorkspaceStateApi({ personalTodosByUserId: { [uid]: nextList } }).catch(() => {});
         }
         return nextMap;
       });
