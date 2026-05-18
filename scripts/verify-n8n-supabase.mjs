@@ -64,14 +64,7 @@ const REQUIRED_LEAD_COLS = [
   'updated_at',
 ];
 
-const N8N_ENV_VARS = [
-  'SUPABASE_URL',
-  'SUPABASE_SERVICE_ROLE_KEY',
-  'DEFAULT_ASSIGNED_TO_ID',
-  'META_ACCESS_TOKEN',
-  'GMAIL_SEARCH_QUERY',
-  'GOOGLE_SHEETS_SPREADSHEET_ID',
-];
+const N8N_OPTIONAL_ENV = ['META_ACCESS_TOKEN', 'GMAIL_SEARCH_QUERY', 'GOOGLE_SHEETS_SPREADSHEET_ID'];
 
 let failed = 0;
 
@@ -139,13 +132,44 @@ async function checkN8n() {
         const list = Array.isArray(data) ? data : data.data || [];
         const names = list.map((w) => w.name).filter(Boolean);
         ok(`n8n API: ${list.length} workflow(s)`);
-        for (const want of ['Meta Lead Ads', 'Gmail Inbox', 'Google Sheet', 'Client notify']) {
-          const hit = names.some((n) => n.toLowerCase().includes(want.toLowerCase().split(' ')[0]));
-          if (hit) ok(`  • workflow مطابق: ${want}`);
-          else warn(`  • لم يُعثر على workflow يحتوي "${want}" — قد تحتاج استيراد من مجلد n8n/`);
+        const patterns = [
+          ['Meta', 'Meta Lead'],
+          ['Gmail', 'Gmail Inbox'],
+          ['Google', 'Google Sheets'],
+          ['إشعار', 'إشعار العميل'],
+        ];
+        for (const [needle, label] of patterns) {
+          const hit = names.some((n) => n.includes(needle));
+          if (hit) ok(`  • workflow: ${label}`);
+          else warn(`  • لم يُعثر على workflow «${label}» — استورد من n8n/`);
         }
         const active = list.filter((w) => w.active);
         ok(`${active.length} workflow مفعّل (Active)`);
+        if (active.length < list.length) {
+          warn(`${list.length - active.length} workflow غير مفعّل — فعّل Meta/Gmail/Sheets بعد ربط المصادر`);
+        }
+
+        let credLinked = 0;
+        let credMissing = 0;
+        for (const w of list) {
+          if (/notify|إشعار/i.test(w.name || '')) continue;
+          const dRes = await fetch(`${n8nBase}/api/v1/workflows/${w.id}`, { headers: { 'X-N8N-API-KEY': n8nApiKey } });
+          const wf = await dRes.json().catch(() => ({}));
+          const insert = (wf.nodes || []).find((n) => /insert into supabase/i.test(n.name || ''));
+          if (!insert) continue;
+          const sb = insert.credentials?.supabaseApi;
+          if (sb?.id && sb.id !== 'CONFIGURE_IN_N8N') credLinked += 1;
+          else credMissing += 1;
+        }
+        if (credLinked > 0) ok(`${credLinked} workflow(s): Supabase credential مربوط على Insert`);
+        if (credMissing > 0) {
+          fail(`${credMissing} workflow(s): Supabase غير مربوط — شغّل: npm run n8n:link-supabase`);
+        }
+
+        const credListRes = await fetch(`${n8nBase}/api/v1/credentials?limit=20`, {
+          headers: { 'X-N8N-API-KEY': n8nApiKey },
+        });
+        if (credListRes.ok) ok('n8n Credentials API متاح');
       }
     } catch (e) {
       fail(`n8n API: ${e.message}`);
@@ -154,10 +178,11 @@ async function checkN8n() {
     warn('N8N_API_KEY غير معيّن — لا يمكن سرد الـ workflows تلقائياً (أضفه في .env.local للتحقق الكامل)');
   }
 
-  console.log('\n  متغيرات يجب تعيينها في n8n (Settings → Variables):');
-  for (const v of N8N_ENV_VARS) {
-    console.log(`    • ${v}`);
-  }
+  console.log('\n  Supabase على Hostinger: Credentials → Supabase API (بدون Environment).');
+  console.log('  اختياري فقط (Environment أو إعدادات العقد):');
+  for (const v of N8N_OPTIONAL_ENV) console.log(`    • ${v}`);
+  console.log('  ربط تلقائي للـ credential: npm run n8n:link-supabase');
+  console.log('  فحص تفصيلي: npm run audit:n8n');
 }
 
 async function checkSupabase() {
@@ -220,9 +245,12 @@ async function checkSupabase() {
       const errText = await post.text();
       fail(`INSERT تجريبي فشل HTTP ${post.status}: ${errText.slice(0, 200)}`);
     }
+  } else if (n8nApiKey) {
+    warn('SUPABASE_SERVICE_ROLE_KEY غير موجود محلياً — طبيعي إن كان في n8n Credentials فقط');
+    warn('تأكد من Host + service_role في n8n → Supabase API ثم npm run audit:n8n');
   } else {
-    fail('SUPABASE_SERVICE_ROLE_KEY غير موجود في api/.env أو .env.local — n8n لن يستطيع إدراج ليدز');
-    warn('انسخ service_role من Supabase → Settings → API → service_role إلى n8n Variables');
+    fail('SUPABASE_SERVICE_ROLE_KEY غير موجود محلياً ولا N8N_API_KEY للتحقق من n8n');
+    warn('أضف service_role في n8n Credentials أو في .env.local للاختبار المحلي');
   }
 
   if (dbUrl && !/USER:PASSWORD|xxxx/i.test(dbUrl)) {
@@ -265,7 +293,7 @@ await checkSupabase();
 
 console.log('\n── الخلاصة ──');
 if (failed === 0) {
-  console.log('✅ الأساسيات جاهزة. تأكد يدوياً في n8n: تفعيل workflows الليدز + META_ACCESS_TOKEN + Gmail/Sheets credentials.');
+  console.log('✅ الأساسيات جاهزة. تفعيل workflows الليدز + Gmail/Meta/Sheets ثم Manual test.');
 } else {
   console.log(`❌ ${failed} مشكلة/مشاكل تحتاج إصلاح قبل الاعتماد على الاستيراد التلقائي.`);
   process.exit(1);

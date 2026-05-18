@@ -21,6 +21,8 @@
     "db:apply-pending": "node scripts/apply-db-pending.mjs",
     "n8n:setup-notify": "node scripts/setup-n8n-client-notify.mjs",
     "verify:n8n": "node scripts/verify-n8n-supabase.mjs",
+    "audit:n8n": "node scripts/audit-n8n-api.mjs",
+    "n8n:link-supabase": "node scripts/patch-n8n-supabase-cred.mjs",
     "uat:auto": "node scripts/run-uat-automated.mjs"
   },
   "dependencies": {
