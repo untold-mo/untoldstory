@@ -60,6 +60,29 @@ jobs:
           ftp.login(username, password)
           print("Login successful!")
 
+          def delete_remote_assets(ftp, remote_assets_path):
+              """Remove stale hashed bundles so browsers cannot keep loading old UI."""
+              try:
+                  names = ftp.nlst(remote_assets_path)
+              except Exception as exc:
+                  print(f"Skip asset cleanup ({remote_assets_path}): {exc}")
+                  return
+              for name in names:
+                  base = name.rsplit("/", 1)[-1]
+                  if base in (".", ".."):
+                      continue
+                  try:
+                      ftp.delete(name)
+                      print(f"Deleted stale {name}")
+                  except Exception:
+                      try:
+                          ftp.rmd(name)
+                          print(f"Removed dir {name}")
+                      except Exception as exc:
+                          print(f"Could not delete {name}: {exc}")
+
+          delete_remote_assets(ftp, f"{remote_dir}/assets")
+
           def upload_dir(ftp, local_path, remote_path):
               try:
                   ftp.mkd(remote_path)

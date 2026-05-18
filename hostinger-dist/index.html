@@ -14,7 +14,16 @@
             try {
               window.localStorage.removeItem('prod_system_jwt');
               window.localStorage.removeItem('prod_system_current_user');
+              window.localStorage.removeItem('prod_system_supabase');
             } catch (e0) {}
+            try {
+              var sbI, sbK, sbKeys = [];
+              for (sbI = 0; sbI < window.localStorage.length; sbI++) {
+                sbK = window.localStorage.key(sbI);
+                if (sbK && sbK.indexOf('sb-') === 0) sbKeys.push(sbK);
+              }
+              for (sbI = 0; sbI < sbKeys.length; sbI++) window.localStorage.removeItem(sbKeys[sbI]);
+            } catch (e0b) {}
             try {
               window.sessionStorage.setItem('prod_system_session_signed_out_v1', '1');
             } catch (e1) {}
@@ -29,6 +38,14 @@
               window.sessionStorage.removeItem('prod_system_last_equipment_bookings_json_v1');
               window.sessionStorage.removeItem('prod_system_last_meeting_bookings_json_v1');
             } catch (e4) {}
+            try {
+              var mi, kj, mir = [];
+              for (mi = 0; mi < window.localStorage.length; mi++) {
+                kj = window.localStorage.key(mi);
+                if (kj && kj.indexOf('prod_system_ls_bookings_mirror_v1_') === 0) mir.push(kj);
+              }
+              for (mi = 0; mi < mir.length; mi++) window.localStorage.removeItem(mir[mi]);
+            } catch (e5) {}
             sp.delete('_hl');
             var q = sp.toString();
             var next = window.location.pathname + (q ? '?' + q : '') + (window.location.hash || '');
@@ -36,8 +53,8 @@
           } catch (e) {}
         })();
       </script>
-      <script type="module" crossorigin src="/assets/index-B165y8II.js"></script>
-      <link rel="stylesheet" crossorigin href="/assets/index-CFqHgLLN.css">
+      <script type="module" crossorigin src="/assets/index-D2l-4M0T.js"></script>
+      <link rel="stylesheet" crossorigin href="/assets/index-JJqlLp6C.css">
     </head>
 
     <body>
