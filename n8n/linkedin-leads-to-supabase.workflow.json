@@ -1,0 +1,149 @@
+{
+  "name": "LinkedIn Lead Gen → Supabase (linkedin)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## ترتيب الإعداد\n\n### 0) Supabase API\nHost + Service Role → عقدة **Insert into Supabase**\n\n### 4) LinkedIn Lead Gen\n**Credentials → LinkedIn OAuth2 API** → Connect\n(صلاحيات: r_ads_reporting على تطبيق LinkedIn Developers)\n\nعقدة **Fetch LinkedIn Leads** → نفس الـ Credential\n\n**Workflow → Static Data** (اختياري):\n`{\"linkedInMaxPerRun\":80,\"defaultAssignedToId\":\"u_xxx\"}`\n\nManual → Active",
+        "height": 400,
+        "width": 520,
+        "color": 3
+      },
+      "id": "sticky-linkedin-setup",
+      "name": "Setup (اقرأني)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -320,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "trigger-schedule-li",
+      "name": "Every 15 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "trigger-manual-li",
+      "name": "Manual",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "async function resolveLinkedInToken() {\n  try {\n    const li = await this.getCredentials('linkedInOAuth2Api');\n    const t = String(li.oauthTokenData?.access_token || li.accessToken || li.access_token || '').trim();\n    if (t) return t;\n  } catch (_) {}\n  try {\n    const h = await this.getCredentials('httpHeaderAuth');\n    let v = String(h.value || h.headerValue || '').trim();\n    if (v.toLowerCase().startsWith('bearer ')) v = v.slice(7).trim();\n    if (v) return v;\n  } catch (_) {}\n  const sd = $getWorkflowStaticData('global');\n  if (sd.linkedInAccessToken) return String(sd.linkedInAccessToken).trim();\n  return '';\n}\nconst TOKEN = await resolveLinkedInToken.call(this);\nconst MAX = Math.min(120, Math.max(1, Number($getWorkflowStaticData('global').linkedInMaxPerRun || 80)));\nif (!TOKEN) {\n  throw new Error('ربط LinkedIn: Credentials → LinkedIn OAuth2 على عقدة Fetch LinkedIn Leads (أو Header Auth Bearer)');\n}\n\nconst staticData = $getWorkflowStaticData('global');\nif (!Array.isArray(staticData.processedLinkedInIds)) staticData.processedLinkedInIds = [];\nconst processed = new Set(staticData.processedLinkedInIds);\n\nasync function liGet(url) {\n  return await this.helpers.httpRequest({\n    method: 'GET',\n    url,\n    headers: { Authorization: `Bearer ${TOKEN}`, 'X-Restli-Protocol-Version': '2.0.0' },\n    json: true,\n    timeout: 60000,\n  });\n}\n\nfunction extractStrings(el) {\n  const out = [];\n  function walk(n, d) {\n    if (d > 12 || n == null) return;\n    if (typeof n === 'string') {\n      const t = n.trim();\n      if (t) out.push(t);\n      return;\n    }\n    if (Array.isArray(n)) {\n      for (const x of n) walk(x, d + 1);\n      return;\n    }\n    if (typeof n !== 'object') return;\n    for (const v of Object.values(n)) {\n      if (v && (typeof v === 'object' || typeof v === 'string')) walk(v, d + 1);\n    }\n  }\n  walk(el, 0);\n  return out;\n}\n\nfunction parseStrings(strings) {\n  let email = '';\n  let phone = '';\n  let fullName = '';\n  for (const s of strings) {\n    if (!email && /[^\\s@]+@[^\\s@]+\\.[^\\s@]+/.test(s)) email = s.trim().toLowerCase();\n    else if (!phone && /^[\\d+\\-().\\s]{7,}$/.test(s.replace(/\\s/g, ''))) phone = s.replace(/\\s+/g, '').trim();\n    else if (!fullName && s.length > 2 && !/^\\d+$/.test(s) && !s.includes('@')) fullName = s.trim();\n  }\n  if (!fullName && strings[0]) fullName = strings[0].trim();\n  return { email, phone, fullName };\n}\n\nconst out = [];\nlet graphErrors = 0;\nlet accountsRes;\ntry {\n  accountsRes = await liGet.call(\n    this,\n    'https://api.linkedin.com/v2/adAccountsV2?q=search&search.type=ENTERPRISE&search.status=ACTIVE&count=15',\n  );\n} catch (e) {\n  throw new Error(`LinkedIn API: ${e.message}. تأكد من OAuth وصلاحية r_ads_reporting`);\n}\n\nconst accounts = accountsRes.elements || [];\nfor (const acct of accounts.slice(0, 8)) {\n  const acctId = acct.id != null ? String(acct.id) : null;\n  const acctName = acct.name || acct.localizedName || acctId || 'حساب إعلانات';\n  if (!acctId) continue;\n  const accountUrn = encodeURIComponent(`urn:li:sponsoredAccount:${acctId}`);\n  let formsRes;\n  try {\n    formsRes = await liGet.call(\n      this,\n      `https://api.linkedin.com/v2/adLeadGenForms?q=account&account=${accountUrn}&count=25`,\n    );\n  } catch {\n    graphErrors += 1;\n    continue;\n  }\n  for (const form of formsRes.elements || []) {\n    const formId = form.id != null ? String(form.id) : null;\n    const formName = form.name || form.localizedName || formId || 'نموذج';\n    if (!formId) continue;\n    const formUrn = encodeURIComponent(`urn:li:leadGenForm:${formId}`);\n    let respRes;\n    try {\n      respRes = await liGet.call(\n        this,\n        `https://api.linkedin.com/v2/adLeadGenResponses?q=form&form=${formUrn}&count=50`,\n      );\n    } catch {\n      graphErrors += 1;\n      continue;\n    }\n    for (const row of respRes.elements || []) {\n      if (out.length >= MAX) break;\n      const rowId = row.id != null ? String(row.id) : `${formId}-${out.length}`;\n      if (processed.has(rowId)) continue;\n      const parsed = parseStrings(extractStrings(row));\n      let email = (parsed.email || '').toLowerCase().trim();\n      let phone = (parsed.phone || '').replace(/\\s+/g, '').trim();\n      const name = ((parsed.fullName || '').trim() || 'عميل إعلان').slice(0, 200);\n      const company = (acctName || '—').slice(0, 200);\n      if (!email && !phone) email = `lead-${rowId}@linkedin-lead.local`;\n      if (!phone) phone = '01000000000';\n      if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) email = `lead-${rowId}@linkedin-lead.local`;\n      const createdAt =\n        row.submittedAt != null ? new Date(Number(row.submittedAt)).toISOString() : new Date().toISOString();\n      out.push({\n        linkedin_response_id: rowId,\n        name,\n        company,\n        phone,\n        email,\n        source: 'linkedin',\n        account_name: acctName,\n        form_name: formName,\n        created_time: createdAt,\n      });\n      processed.add(rowId);\n    }\n    if (out.length >= MAX) break;\n  }\n  if (out.length >= MAX) break;\n}\n\nstaticData.processedLinkedInIds = Array.from(processed).slice(-1500);\n\nif (out.length === 0) {\n  return [\n    {\n      json: {\n        _summary: true,\n        fetched: 0,\n        graph_errors: graphErrors,\n        accounts: accounts.length,\n        message: accounts.length === 0 ? 'No LinkedIn ad accounts for this token.' : 'No new LinkedIn leads in this run.',\n      },\n    },\n  ];\n}\nreturn out.map((item) => ({ json: item }));\n"
+      },
+      "id": "code-fetch-linkedin",
+      "name": "Fetch LinkedIn Leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        100
+      ],
+      "credentials": {
+        "linkedInOAuth2Api": {
+          "id": "CONFIGURE_IN_N8N",
+          "name": "LinkedIn account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": ""
+      },
+      "id": "code-insert-li-supabase",
+      "name": "Insert into Supabase",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        100
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "CONFIGURE_IN_N8N",
+          "name": "Supabase — Untold Story"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every 15 minutes": {
+      "main": [
+        [
+          {
+            "node": "Fetch LinkedIn Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual": {
+      "main": [
+        [
+          {
+            "node": "Fetch LinkedIn Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch LinkedIn Leads": {
+      "main": [
+        [
+          {
+            "node": "Insert into Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "leads"
+    },
+    {
+      "name": "linkedin"
+    },
+    {
+      "name": "supabase"
+    }
+  ],
+  "triggerCount": 1,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
