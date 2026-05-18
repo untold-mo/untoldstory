@@ -31,8 +31,6 @@ import {
   CustodyFund,
   CustodySpendLine,
   CustodySpendAttachment,
-  ExternalLeadChannel,
-  IntegrationProvider,
   SystemNotification,
   DeleteLeadResult,
   canonicalTodoUserId,
@@ -4767,10 +4765,6 @@ const SalesManagerSettings = ({
     updateLeadDataQualitySettings,
     workflowRulesSettings,
     updateWorkflowRulesSettings,
-    integrations,
-    startIntegrationConnect,
-    disconnectIntegration,
-    syncExternalLeads,
   } = useData();
   const reps = users.filter(u => u.role === 'مندوب');
   const salesManager = users.find(u => u.role === 'مدير مبيعات');
@@ -4807,14 +4801,6 @@ const SalesManagerSettings = ({
   const [ownerPwdNew, setOwnerPwdNew] = useState('');
   const [ownerPwdConfirm, setOwnerPwdConfirm] = useState('');
   const [ownerPwdSaving, setOwnerPwdSaving] = useState(false);
-  const integrationRows: { provider: IntegrationProvider; title: string; hint: string }[] = [
-    { provider: 'facebook', title: 'Facebook', hint: 'Meta Pages + Lead Ads' },
-    { provider: 'instagram', title: 'Instagram', hint: 'Instagram Business via Meta' },
-    { provider: 'google_ads', title: 'Google Ads', hint: 'Google Ads API lead sources' },
-    { provider: 'whatsapp', title: 'WhatsApp Business', hint: 'Cloud API templates + inbox sync' },
-    { provider: 'linkedin', title: 'LinkedIn', hint: 'Lead Gen Forms + organization pages' },
-  ];
-
   const toggleSkill = async (userId: string, currentSkills: LeadCategory[] = [], skill: LeadCategory) => {
     const skills = currentSkills || [];
     const newSkills = skills.includes(skill) 
@@ -5013,57 +4999,6 @@ const SalesManagerSettings = ({
       toast.success('تم رفع الصورة بنجاح');
     };
     reader.readAsDataURL(file);
-  };
-
-  const handleSyncChannel = async (channel: ExternalLeadChannel) => {
-    try {
-      const imported = await syncExternalLeads(channel, 5);
-      if (!imported) {
-        if (isSupabaseDirectMode()) return;
-        toast.error('تعذر سحب الليدز. تأكد أن القناة مربوطة أولاً أو أن الخادم يعمل.');
-        return;
-      }
-      toast.success(`تم سحب ${imported} ليدز وتحويلها تلقائياً لمدير المبيعات`);
-    } catch {
-      toast.error('تعذر مزامنة القناة مع الخادم');
-    }
-  };
-
-  const providerToPullChannel: Partial<Record<IntegrationProvider, ExternalLeadChannel>> = {
-    facebook: 'facebook',
-    instagram: 'facebook',
-    google_ads: 'google',
-    linkedin: 'linkedin',
-  };
-
-  const handlePullFromIntegration = (provider: IntegrationProvider) => {
-    const ch = providerToPullChannel[provider];
-    if (!ch) {
-      toast.message('سحب الليدز لهذه المنصة يتطلّب تكاملاً خاصاً على خادم التطبيق.');
-      return;
-    }
-    void handleSyncChannel(ch);
-  };
-
-  const handleConnectIntegration = (provider: IntegrationProvider) => {
-    const result = startIntegrationConnect(provider);
-    if (!result.ok || !result.authUrl) {
-      toast.error('تعذر بدء الربط حالياً');
-      return;
-    }
-    window.open(result.authUrl, '_blank', 'noopener,noreferrer');
-    toast.info(
-      'سيتم فتح نافذة تسجيل الدخول الرسمية للمنصة. سجّل الدخول بالحساب الذي تريد سحب الليدز أو الإعلانات منه، ثم وافق على الصلاحيات لإتمام الربط.',
-    );
-  };
-
-  const handleDisconnectIntegration = (provider: IntegrationProvider) => {
-    const ok = disconnectIntegration(provider);
-    if (!ok) {
-      toast.error('تعذر فصل الربط');
-      return;
-    }
-    toast.success('تم فصل الربط بنجاح');
   };
 
   const ensureEdit = (u: User) => {
@@ -5272,11 +5207,19 @@ const SalesManagerSettings = ({
         <div className="bg-slate-900/40 border border-slate-800 p-6 rounded-[2rem] space-y-4">
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
             <div>
-              <h3 className="text-lg font-black">ربط مصادر الليدز — تسجيل الدخول الرسمي</h3>
+              <h3 className="text-lg font-black">مصادر الليدز (n8n)</h3>
+              <p className="text-xs text-zinc-400 mt-1">
+                Facebook و Instagram و Gmail و LinkedIn و Google تُستورد عبر workflows على n8n مباشرة إلى Supabase.
+              </p>
             </div>
             <div className="text-xs text-zinc-300 bg-white/5 px-3 py-2 rounded-xl border border-white/10 shrink-0">
               المدير المستلم: <span className="font-black">{salesManager?.name || 'غير محدد'}</span>
             </div>
+          </div>
+          <div className="rounded-xl border border-indigo-500/25 bg-indigo-500/10 px-4 py-3 text-[11px] text-indigo-100/90 leading-relaxed">
+            Workflows في مجلد <span className="font-mono text-indigo-200">n8n/</span>: Meta، Gmail، Google Sheets.
+            عيّن <span className="font-mono">SUPABASE_URL</span> و <span className="font-mono">SUPABASE_SERVICE_ROLE_KEY</span>
+            واختياريًا <span className="font-mono">DEFAULT_ASSIGNED_TO_ID</span> لتعيين الليدز لمدير المبيعات.
           </div>
           <div className="flex items-center gap-3 text-xs flex-wrap">
             <button
@@ -5299,7 +5242,7 @@ const SalesManagerSettings = ({
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 space-y-2">
             <p className="text-sm font-black text-zinc-200">إشعار العميل (Webhook)</p>
             <p className="text-[11px] text-zinc-500">
-              عند اعتماد عرض السعر أو موافقة العميل — اربط n8n (ملف n8n/client-notify.workflow.json) أو أي بوابة واتساب/بريد.
+              عند اعتماد عرض السعر أو موافقة العميل — workflow: n8n/client-notify.workflow.json
             </p>
             <input
               type="url"
@@ -5308,132 +5251,6 @@ const SalesManagerSettings = ({
               placeholder="https://n8n.example.com/webhook/client-notify"
               className="w-full bg-[#0F1528] border border-white/10 rounded-xl px-3 py-2 text-sm"
             />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {integrationRows.map((row) => {
-              const state = integrations.find((x) => x.provider === row.provider);
-              const connected = !!state?.connected;
-              const pullCh = providerToPullChannel[row.provider];
-              return (
-                <div key={row.provider} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 flex flex-col gap-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-black">{row.title}</p>
-                      <p className="text-[11px] text-zinc-400">{row.hint}</p>
-                      <p className="text-[11px] mt-1 text-zinc-500">
-                        الربط:{' '}
-                        <span
-                          className={
-                            connected ? 'text-emerald-300' : state?.status === 'error' ? 'text-rose-300' : 'text-zinc-400'
-                          }
-                        >
-                          {connected ? 'متصل' : state?.status === 'error' ? 'خطأ' : 'غير متصل'}
-                        </span>
-                        {!connected && state?.status && state.status !== 'error' ? (
-                          <span className="text-zinc-500"> ({state.status})</span>
-                        ) : null}
-                      </p>
-                      {state?.accountLabel && <p className="text-[11px] text-zinc-400">الحساب: {state.accountLabel}</p>}
-                      {state?.lastError && <p className="text-[11px] text-rose-300 mt-1">{state.lastError}</p>}
-                    </div>
-                    <div className="flex flex-col gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleConnectIntegration(row.provider)}
-                        className="px-3 py-2 rounded-xl text-xs font-black border border-indigo-400/35 bg-indigo-500/20 text-indigo-200 hover:border-indigo-300/60 transition-all"
-                      >
-                        {connected ? 'إعادة الربط' : 'ربط (تسجيل دخول)'}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!connected}
-                        onClick={() => handleDisconnectIntegration(row.provider)}
-                        className="px-3 py-2 rounded-xl text-xs font-black border border-rose-400/35 bg-rose-500/15 text-rose-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                      >
-                        فصل الربط
-                      </button>
-                    </div>
-                  </div>
-                  {pullCh ? (
-                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/10">
-                      <button
-                        type="button"
-                        disabled={!connected || isSupabaseDirectMode()}
-                        onClick={() => handlePullFromIntegration(row.provider)}
-                        className="px-3 py-2 rounded-xl text-xs font-black border border-white/15 bg-white/5 hover:border-white/30 transition-all disabled:opacity-45 disabled:cursor-not-allowed"
-                      >
-                        سحب ليدز الآن
-                      </button>
-                      {isSupabaseDirectMode() ? (
-                        <span className="text-[10px] text-zinc-500">غير متاح في وضع Supabase المباشر حالياً</span>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <p className="text-[10px] text-zinc-500 pt-2 border-t border-white/10">
-                      سحب الليدز من هذه القناة يتطلّب تطويراً إضافياً على خادم التطبيق.
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.02] p-4 space-y-3">
-            <div>
-              <p className="font-black text-sm">البريد الوارد</p>
-              <p className="text-[11px] text-zinc-500">لا يوجد OAuth للبريد في هذه القائمة — إعداد يدوي ثم سحب تجريبي.</p>
-            </div>
-            {(() => {
-              const cfg = leadIngestionSettings.email;
-              return (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 items-start">
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateLeadIngestionSettings({
-                          email: { connected: !cfg.connected },
-                        } as any)
-                      }
-                      className={`px-3 py-2 rounded-xl text-xs font-black border transition-all ${cfg.connected ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-200' : 'bg-rose-500/15 border-rose-400/35 text-rose-200'}`}
-                    >
-                      {cfg.connected ? 'متصل (يدوي)' : 'غير متصل'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSyncChannel('email')}
-                      className="px-3 py-2 rounded-xl text-xs font-black border border-white/15 bg-white/5 hover:border-white/30 transition-all"
-                    >
-                      سحب ليدز الآن
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 gap-2">
-                    <input
-                      value={cfg.accountRef || ''}
-                      onChange={(e) =>
-                        updateLeadIngestionSettings({
-                          email: { accountRef: e.target.value },
-                        } as any)
-                      }
-                      placeholder="معرّف صندوق / عنوان IMAP"
-                      className="bg-[#0F1528] border border-white/10 rounded-xl px-3 py-2 text-xs"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateLeadIngestionSettings({
-                          email: { autoSync: !cfg.autoSync },
-                        } as any)
-                      }
-                      className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all ${cfg.autoSync ? 'bg-indigo-500/20 border-indigo-400/40 text-indigo-200' : 'bg-white/5 border-white/10 text-zinc-300'}`}
-                    >
-                      المزامنة التلقائية: {cfg.autoSync ? 'ON' : 'OFF'}
-                    </button>
-                  </div>
-                </div>
-              );
-            })()}
           </div>
         </div>
       )}
@@ -10762,11 +10579,7 @@ const Root = () => {
     custodyFunds,
     ownerApproveCustodyRequest,
     ownerRejectCustodyRequest,
-    completeIntegrationConnect,
-    markIntegrationError,
-    syncExternalLeads,
     leadIngestionSettings,
-    integrations,
     entityComments,
     setEntityComments,
     personalTodos,
@@ -10839,75 +10652,6 @@ const Root = () => {
       setActiveTab(allowedTabs[0] || 'dashboard');
     }
   }, [currentUser, activeTab]);
-
-  useEffect(() => {
-    if (!currentUser || currentUser.role !== 'مالك') return;
-    const params = new URLSearchParams(window.location.search);
-    const provider = params.get('integration_provider') as IntegrationProvider | null;
-    const status = params.get('integration_status');
-    if (!provider || !status) return;
-    const providers: IntegrationProvider[] = ['facebook', 'instagram', 'google_ads', 'whatsapp', 'linkedin'];
-    if (!providers.includes(provider)) return;
-    if (status === 'success') {
-      const account = params.get('integration_account') || undefined;
-      const expiresAt = params.get('integration_expires_at') || undefined;
-      completeIntegrationConnect(provider, { accountLabel: account, tokenExpiresAt: expiresAt });
-      toast.success(`تم ربط ${provider} بنجاح — جاري جلب الليدز تلقائياً`);
-      const pullChannel: Partial<Record<IntegrationProvider, ExternalLeadChannel>> = {
-        facebook: 'facebook',
-        instagram: 'facebook',
-        google_ads: 'google',
-        linkedin: 'linkedin',
-      };
-      const ch = pullChannel[provider];
-      if (ch) {
-        void (async () => {
-          const n = await syncExternalLeads(ch, 15);
-          if (n > 0) {
-            toast.success(`تم إضافة ${n} ليد. افتح «الليدز» وستجد عمود المصدر يوضح القناة وحساب الربط.`);
-          }
-        })();
-      }
-    } else {
-      const error = params.get('integration_error') || 'OAuth failed';
-      markIntegrationError(provider, error);
-      toast.error(`فشل ربط ${provider}`);
-    }
-    const cleanUrl = `${window.location.pathname}${window.location.hash || ''}`;
-    window.history.replaceState({}, document.title, cleanUrl);
-  }, [currentUser, completeIntegrationConnect, markIntegrationError, syncExternalLeads]);
-
-  /** مزامنة تلقائية للمالك: كل قناة مفعّل لها «المزامنة التلقائية» ومربوطة */
-  useEffect(() => {
-    if (!isServerDataMode()) return;
-    if (!currentUser || currentUser.role !== 'مالك') return;
-    const everyMs = 15 * 60 * 1000;
-    const run = () => {
-      void (async () => {
-        const channels: ExternalLeadChannel[] = ['facebook', 'google', 'linkedin', 'email'];
-        for (const ch of channels) {
-          const cfg = leadIngestionSettings[ch];
-          const oauthLinked =
-            ch === 'facebook'
-              ? integrations.some((i) => (i.provider === 'facebook' || i.provider === 'instagram') && i.connected)
-              : ch === 'linkedin'
-                ? integrations.some((i) => i.provider === 'linkedin' && i.connected)
-                : ch === 'google'
-                  ? integrations.some((i) => i.provider === 'google_ads' && i.connected)
-                  : false;
-          if (!cfg?.autoSync) continue;
-          if (!cfg.connected && !oauthLinked) continue;
-          await syncExternalLeads(ch, 6);
-        }
-      })();
-    };
-    const t0 = setTimeout(run, 90_000);
-    const id = setInterval(run, everyMs);
-    return () => {
-      clearTimeout(t0);
-      clearInterval(id);
-    };
-  }, [currentUser?.id, currentUser?.role, leadIngestionSettings, integrations, syncExternalLeads]);
 
   const currentRole: User['role'] = currentUser?.role || 'مندوب';
   const currentUserId = currentUser?.id || '';
