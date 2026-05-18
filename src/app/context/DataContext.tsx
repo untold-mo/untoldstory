@@ -220,6 +220,8 @@ export interface PriceQuote {
   clientAcceptedAt?: string;
   clientRejectedAt?: string;
   clientRejectionNote?: string;
+  /** أمر شغل (حجز تصوير) يُنشأ تلقائياً بعد موافقة العميل */
+  workOrderShootBookingId?: string;
   /** نسبة هامش الشركة على أساس بنود التكلفة (يحددها مدير الإنتاج عند التسعير) */
   companyMarginPercent?: number;
   /** مجموع بنود التكلفة قبل تطبيق نسبة الشركة */
@@ -887,6 +889,11 @@ export interface ShootBooking {
   status: 'قيد المراجعة' | 'معتمد' | 'مرفوض' | 'مكتمل';
   requestedByRole?: User['role'];
   estimatedCost?: number;
+  /** عند الإنشاء من موافقة العميل على عرض سعر */
+  priceQuoteId?: string;
+  productionAssignedId?: string;
+  productionAssignedName?: string;
+  workOrderFromQuote?: boolean;
   financialStatus?: BookingFinancialStatusPhase;
   /** بعد اعتماد مالك + تقدير مصروف: مصروف «قيد الانتظار» يظهر بالدفاتر كالتزام */
   accrualExpenseId?: string;
@@ -6448,13 +6455,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
     const amount = Number(data.amount) || 0;
-    // if routed to production for pricing, amount can be 0
-    const routedToProduction = Boolean(data.productionAssignedId);
-    if (!routedToProduction && (!amount || amount <= 0)) return false;
+    const routedToProduction = Boolean(String(data.productionAssignedId || '').trim());
+    // مسار المندوب/مدير المبيعات: التسعير عبر مدير الإنتاج المحدد ثم المالك
+    if (!routedToProduction) return false;
     const vatRate = typeof data.vatRate === 'number' ? data.vatRate : 14;
     const vatAmount = amount > 0 ? (data.vatAmount ?? Math.round(amount * (vatRate / 100))) : 0;
     const totalAmount = amount > 0 ? (data.totalAmount ?? amount + vatAmount) : 0;
-    const initialStatus: PriceQuote['status'] = routedToProduction ? 'بانتظار التسعير' : 'قيد اعتماد المالك';
+    const initialStatus: PriceQuote['status'] = 'بانتظار التسعير';
     const q: PriceQuote = {
       ...data,
       amount,
@@ -6489,11 +6496,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           status: q.status as PriceQuote['status'],
         });
         setPriceQuotes((prev) => [row, ...prev]);
+        updateLeadStatus(data.leadId, 'عرض سعر', 'طلب عرض سعر — بانتظار تسعير الإنتاج');
         addAuditEvent({
-          action: 'إرسال عرض سعر مالي للاعتماد',
+          action: 'إرسال طلب تسعير لمدير الإنتاج',
           entityType: 'system',
           entityId: q.id,
-          details: `${q.title} — ${q.customerName} — ${amount} ج.م`,
+          details: `${q.title} — ${q.customerName} → ${q.productionAssignedName || 'إنتاج'}`,
         });
         return true;
       } catch (err) {
@@ -6503,11 +6511,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
     setPriceQuotes(prev => [q, ...prev]);
+    updateLeadStatus(data.leadId, 'عرض سعر', 'طلب عرض سعر — بانتظار تسعير الإنتاج');
     addAuditEvent({
-      action: 'إرسال عرض سعر مالي للاعتماد',
+      action: 'إرسال طلب تسعير لمدير الإنتاج',
       entityType: 'system',
       entityId: q.id,
-      details: `${q.title} — ${q.customerName} — ${amount} ج.م`,
+      details: `${q.title} — ${q.customerName} → ${q.productionAssignedName || 'إنتاج'}`,
     });
     return true;
   };
@@ -6632,7 +6641,68 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return true;
   };
 
-  /** المندوب يسجل موافقة العميل وتفاصيل الدفع الفعلية → ينشئ الفاتورة */
+  /** إنشاء أمر شغل (حجز تصوير) لمدير الإنتاج بعد موافقة العميل على عرض السعر */
+  const spawnWorkOrderFromAcceptedQuote = async (quote: PriceQuote): Promise<string | null> => {
+    const pmId = String(quote.productionAssignedId || quote.pricedById || '').trim();
+    if (!pmId) return null;
+    const pmName = String(quote.productionAssignedName || quote.pricedByName || '').trim();
+    const existing = shootBookings.find(
+      (b) => b.workOrderFromQuote && b.priceQuoteId === quote.id && b.productionAssignedId === pmId,
+    );
+    if (existing) return existing.id;
+    const estCost =
+      typeof quote.productionCostAmount === 'number' && quote.productionCostAmount > 0
+        ? quote.productionCostAmount
+        : quote.amount;
+    const scheduleNote =
+      quote.paymentSchedule?.length
+        ? `\nجدول دفع مقترح: ${quote.paymentSchedule.map((p) => `${p.amount} ج.م — ${p.dueDate}`).join(' | ')}`
+        : '';
+    const workOrderId = `SB-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+    const plannedDate = new Date();
+    plannedDate.setDate(plannedDate.getDate() + 7);
+    const row: ShootBooking = {
+      id: workOrderId,
+      repId: quote.createdById,
+      repName: quote.createdByName,
+      leadId: quote.leadId,
+      customerName: quote.customerName,
+      date: plannedDate.toISOString().slice(0, 10),
+      time: '10:00',
+      location: 'يُحدد مع العميل',
+      notes: [
+        `أمر شغل من عرض سعر معتمد: ${quote.title}`,
+        quote.note || '',
+        quote.pricingNote ? `ملاحظة التسعير: ${quote.pricingNote}` : '',
+        scheduleNote,
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      status: 'معتمد',
+      requestedByRole: 'مندوب',
+      estimatedCost: estCost > 0 ? estCost : undefined,
+      priceQuoteId: quote.id,
+      productionAssignedId: pmId,
+      productionAssignedName: pmName || undefined,
+      workOrderFromQuote: true,
+      financialStatus: estCost > 0 ? 'بانتظار_تنفيذ_إنتاج' : 'غير_مطلوب',
+      createdAt: new Date().toISOString(),
+    };
+    if (isServerDataMode()) {
+      try {
+        const saved = await createShootBookingApi(row);
+        if (!saved || typeof saved !== 'object') return null;
+        setShootBookings((prev) => [saved, ...prev.filter((b) => b.id !== row.id)]);
+        return saved.id;
+      } catch {
+        return null;
+      }
+    }
+    setShootBookings((prev) => [row, ...prev]);
+    return row.id;
+  };
+
+  /** المندوب يسجل موافقة العميل وتفاصيل الدفع الفعلية → ينشئ الفاتورة وأمر شغل للإنتاج */
   const repRecordClientAcceptance = async (
     quoteId: string,
     clientPayments: ClientPayment[],
@@ -6642,6 +6712,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const quote = priceQuotes.find((q) => q.id === quoteId);
     if (!quote || quote.status !== 'معتمد') return false;
     if (!clientPayments.length) return false;
+    const pmId = String(quote.productionAssignedId || quote.pricedById || '').trim();
+    if (!pmId) {
+      toast.error('لا يوجد مدير إنتاج مخصص لهذا العرض — راجع مسار التسعير');
+      return false;
+    }
     const nowIso = new Date().toISOString();
     const vatRate = typeof quote.vatRate === 'number' ? quote.vatRate : 14;
     const vatAmount = quote.vatAmount ?? Math.round(quote.amount * (vatRate / 100));
@@ -6660,12 +6735,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }]
       : [];
     const initPaid = initCollections.reduce((s, c) => s + c.amount, 0);
+    const workOrderId = await spawnWorkOrderFromAcceptedQuote(quote);
     const quotePatch: Partial<PriceQuote> = {
       status: 'مكتمل',
       clientPayments,
       clientAcceptedAt: nowIso,
       invoiceId: invId,
     };
+    const quotePatchLocal: Partial<PriceQuote> = workOrderId
+      ? { ...quotePatch, workOrderShootBookingId: workOrderId }
+      : quotePatch;
     const newInvoice: Invoice = {
       id: invId,
       leadId: quote.leadId,
@@ -6694,23 +6773,31 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setInvoices((prev) => [ni, ...prev]);
         try {
           const row = await patchPriceQuoteApi(quoteId, { ...quotePatch, invoiceId: ni.id });
-          setPriceQuotes((prev) => prev.map((q) => (q.id === quoteId ? { ...q, ...row } : q)));
+          setPriceQuotes((prev) =>
+            prev.map((q) => (q.id === quoteId ? { ...q, ...row, ...quotePatchLocal, invoiceId: ni.id } : q)),
+          );
         } catch {
-          setPriceQuotes((prev) => prev.map((q) => (q.id === quoteId ? { ...q, ...quotePatch, invoiceId: ni.id } : q)));
+          setPriceQuotes((prev) =>
+            prev.map((q) => (q.id === quoteId ? { ...q, ...quotePatchLocal, invoiceId: ni.id } : q)),
+          );
         }
       } catch {
         return false;
       }
     } else {
       setInvoices((prev) => [newInvoice, ...prev]);
-      setPriceQuotes((prev) => prev.map((q) => (q.id === quoteId ? { ...q, ...quotePatch } : q)));
+      setPriceQuotes((prev) => prev.map((q) => (q.id === quoteId ? { ...q, ...quotePatchLocal } : q)));
     }
+    updateLeadStatus(quote.leadId, 'مغلق - فوز', 'موافقة العميل على عرض السعر');
     addAuditEvent({
-      action: 'موافقة العميل — تم تسجيل الصفقة وإنشاء الفاتورة',
+      action: 'موافقة العميل — فاتورة وأمر شغل للإنتاج',
       entityType: 'invoice',
       entityId: invId,
-      details: `${quote.title} — ${quote.customerName} — ${totalAmount.toLocaleString()} ج.م`,
+      details: `${quote.title} — ${quote.customerName} — ${totalAmount.toLocaleString()} ج.م${workOrderId ? ` — أمر شغل ${workOrderId}` : ''}`,
     });
+    if (!workOrderId) {
+      toast.warning('تمت الفاتورة لكن تعذر إنشاء أمر الشغل لمدير الإنتاج — راجع الحجوزات');
+    }
     return true;
   };
 

@@ -3421,11 +3421,9 @@ const PriceQuoteSubmitModal = ({
 
   const allowedCC = accountingPolicy.allowedCostCentersForQuotes;
   const productionUsers = useMemo(
-    () => users.filter((u) => u.role === 'مدير إنتاج' || u.role === 'إنتاج'),
+    () => users.filter((u) => u.role === 'مدير إنتاج'),
     [users]
   );
-  const routeToProduction = productionUserId !== '';
-
   useEffect(() => {
     if (open && lead) {
       setTitle(`عرض سعر — ${lead.company}`);
@@ -3433,9 +3431,9 @@ const PriceQuoteSubmitModal = ({
       setVatRate('14');
       setCostCenter(allowedCC.includes('عام') ? 'عام' : allowedCC[0] || 'عام');
       setNote('');
-      setProductionUserId('');
+      setProductionUserId(productionUsers[0]?.id || '');
     }
-  }, [open, lead?.id, allowedCC.join(',')]);
+  }, [open, lead?.id, allowedCC.join(','), productionUsers]);
 
   useEffect(() => {
     if (!open) return;
@@ -3450,11 +3448,11 @@ const PriceQuoteSubmitModal = ({
 
   const submit = async () => {
     if (!title.trim()) { toast.error('أدخل عنوان العرض'); return; }
-    const amt = Number(amount);
-    if (!routeToProduction && (!amt || amt <= 0)) {
-      toast.error('أدخل المبلغ، أو اختر موظف إنتاج للتسعير');
+    if (!productionUserId) {
+      toast.error('اختر مدير الإنتاج المسؤول عن التسعير');
       return;
     }
+    const amt = 0;
     const vr = Number(vatRate);
     if (Number.isNaN(vr) || vr < 0 || vr > 100) { toast.error('نسبة ضريبة غير صحيحة'); return; }
     let ok = false;
@@ -3474,12 +3472,8 @@ const PriceQuoteSubmitModal = ({
       toast.error(`تعذر الإرسال: ${err instanceof Error ? err.message : String(err)}`);
       return;
     }
-    if (!ok) { toast.error('تعذر الإرسال: تحقق من البيانات'); return; }
-    toast.success(
-      routeToProduction
-        ? `تم إرسال طلب التسعير إلى ${selectedProdUser?.name} — سيُرسَل للمالك بعد التسعير`
-        : 'تم إرسال عرض السعر للمالك — لن يُسجَّل محاسبياً إلا بعد الاعتماد'
-    );
+    if (!ok) { toast.error('تعذر الإرسال: تحقق من البيانات ومدير الإنتاج'); return; }
+    toast.success(`تم إرسال طلب التسعير إلى ${selectedProdUser?.name} — ثم للمالك للاعتماد، وبعدها يعود لك لتقديمه للعميل`);
     onClose();
   };
 
@@ -3487,7 +3481,7 @@ const PriceQuoteSubmitModal = ({
     <div className="fixed inset-0 z-[240] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" dir="rtl">
       <div className="w-full max-w-lg rounded-3xl border border-white/15 bg-[#0B1020] shadow-2xl p-6 space-y-4">
         <div>
-          <p className="text-xs text-zinc-500">طلب عرض سعر — يمكن إرساله مباشرةً للمالك أو لموظف إنتاج للتسعير أولاً</p>
+          <p className="text-xs text-zinc-500">طلب عرض سعر: مدير الإنتاج → المالك → أنت تقدّمه للعميل → أمر شغل للإنتاج عند الموافقة</p>
           <h3 className="text-lg font-black text-white mt-1">{lead.name} / {lead.company}</h3>
         </div>
 
@@ -3496,36 +3490,31 @@ const PriceQuoteSubmitModal = ({
           <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-sm" placeholder="مثال: تغطية حفل شركة..." />
         </div>
 
-        {productionUsers.length > 0 && (
+        {productionUsers.length > 0 ? (
           <div>
-            <label className="block text-xs font-bold text-zinc-400 mb-1">توجيه التسعير إلى موظف إنتاج (اختياري)</label>
+            <label className="block text-xs font-bold text-zinc-400 mb-1">
+              مدير الإنتاج للتسعير <span className="text-rose-400">*</span>
+            </label>
             <select
               value={productionUserId}
               onChange={(e) => setProductionUserId(e.target.value)}
               className="w-full bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-sm"
             >
-              <option value="">— أُسعِّر بنفسي الآن —</option>
+              <option value="">— اختر مدير إنتاج —</option>
               {productionUsers.map((u) => (
                 <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
               ))}
             </select>
-            {routeToProduction && (
-              <p className="text-[11px] text-amber-300/80 mt-1">سيحصل {selectedProdUser?.name} على الطلب لوضع السعر ثم يُحوَّل للمالك تلقائياً.</p>
-            )}
+            {selectedProdUser ? (
+              <p className="text-[11px] text-amber-300/80 mt-1">
+                {selectedProdUser.name} يُسعّر → المالك يعتمد ويحدد الدفع → تعود لك نسخة معتمدة للعميل.
+              </p>
+            ) : null}
           </div>
-        )}
-
-        {!routeToProduction && (
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-bold text-zinc-400">المبلغ (قبل الضريبة)</label>
-              <input value={amount} onChange={(e) => setAmount(e.target.value)} type="number" min={0} className="w-full bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-sm mt-1" />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-zinc-400">ضريبة %</label>
-              <input value={vatRate} onChange={(e) => setVatRate(e.target.value)} type="number" min={0} max={100} className="w-full bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-sm mt-1" />
-            </div>
-          </div>
+        ) : (
+          <p className="text-sm text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-xl px-3 py-2">
+            لا يوجد مدير إنتاج مسجل — أضف مستخدم «مدير إنتاج» من الإعدادات أولاً.
+          </p>
         )}
 
         <div>
@@ -3544,8 +3533,13 @@ const PriceQuoteSubmitModal = ({
 
         <div className="flex gap-2 justify-end pt-2">
           <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-bold bg-white/10 border border-white/15">إلغاء</button>
-          <button type="button" onClick={submit} className={`px-4 py-2 rounded-xl text-sm font-black text-white ${routeToProduction ? 'bg-amber-500 hover:bg-amber-400' : 'bg-[#7C6BFF] hover:bg-[#6B5AEE]'} transition-colors`}>
-            {routeToProduction ? `إرسال للتسعير → ${selectedProdUser?.name}` : 'إرسال للمالك'}
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!productionUserId}
+            className="px-4 py-2 rounded-xl text-sm font-black text-white bg-amber-500 hover:bg-amber-400 transition-colors disabled:opacity-40"
+          >
+            {selectedProdUser ? `إرسال للتسعير → ${selectedProdUser.name}` : 'إرسال للتسعير'}
           </button>
         </div>
       </div>
@@ -6009,7 +6003,7 @@ const RepProfessionalDashboard = ({ currentUser, onGoToTab }: { currentUser: Use
     }));
     const ok = await repRecordClientAcceptance(clientRespQuote.id, payments);
     if (ok) {
-      toast.success('تم تسجيل موافقة العميل وإنشاء الفاتورة');
+      toast.success('تم تسجيل موافقة العميل — الفاتورة وأمر الشغل لمدير الإنتاج');
       setClientRespQuote(null);
     } else {
       toast.error('تعذر الحفظ');
@@ -7281,13 +7275,18 @@ const BookingCenter = ({ currentUser, onGoToTab }: { currentUser: User; onGoToTa
   };
   const myLeads = useMemo(() => leads.filter(l => l.assignedTo === currentUser.id), [leads, currentUser.id]);
   /** المحاسب كان يرى فقط «بانتظار تنفيذ محاسب / منفذ» فاختفت كل الحجوزات قبل اعتماد المالك وبعده إذا كانت غير_مطلوب أو بانتظار_اعتماد_مالك */
-  const visibleShoot = useMemo(
-    () =>
-      canViewAll || canAccountantExecute
-        ? shootBookings
-        : shootBookings.filter((b) => b.repId === currentUser.id),
-    [canViewAll, canAccountantExecute, shootBookings, currentUser.id],
-  );
+  const visibleShoot = useMemo(() => {
+    if (canViewAll || canAccountantExecute) return shootBookings;
+    if (currentUser.role === 'مدير إنتاج') {
+      const uid = String(currentUser.id).trim();
+      return shootBookings.filter(
+        (b) =>
+          String(b.productionAssignedId || '').trim() === uid ||
+          (b.workOrderFromQuote && String(b.productionAssignedId || '').trim() === uid),
+      );
+    }
+    return shootBookings.filter((b) => b.repId === currentUser.id);
+  }, [canViewAll, canAccountantExecute, shootBookings, currentUser.id, currentUser.role]);
   const visibleEquipment = useMemo(
     () =>
       canViewAll || canAccountantExecute
@@ -8927,6 +8926,7 @@ const ProductionCustodyDashboard = () => {
     custodyFunds,
     expenses,
     priceQuotes,
+    shootBookings,
     addExpense,
     managerReceiveCustody,
     managerUpdateCustodySpendLines,
@@ -8961,7 +8961,21 @@ const ProductionCustodyDashboard = () => {
   );
   const [reassignTarget, setReassignTarget] = useState<Record<string, string>>({});
 
-  const [prodActiveTab, setProdActiveTab] = useState<'requests' | 'pricing'>(() => {
+  const myWorkOrders = useMemo(() => {
+    if (!currentUser?.id) return [];
+    const uid = String(currentUser.id).trim();
+    return shootBookings
+      .filter(
+        (b) =>
+          b.workOrderFromQuote &&
+          String(b.productionAssignedId || '').trim() === uid &&
+          b.status !== 'مكتمل' &&
+          b.status !== 'مرفوض',
+      )
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [shootBookings, currentUser?.id]);
+
+  const [prodActiveTab, setProdActiveTab] = useState<'requests' | 'pricing' | 'workorders'>(() => {
     if (!currentUser?.id) return 'requests';
     const uid = String(currentUser.id).trim();
     const uname = (currentUser.name || '').trim();
@@ -9304,6 +9318,17 @@ const ProductionCustodyDashboard = () => {
             </span>
           )}
         </button>
+        <button
+          onClick={() => setProdActiveTab('workorders')}
+          className={`relative px-5 py-2 rounded-xl text-sm font-black transition-all ${prodActiveTab === 'workorders' ? 'bg-emerald-600 text-white' : 'text-zinc-400 hover:text-white'}`}
+        >
+          أوامر شغل
+          {myWorkOrders.length > 0 && (
+            <span className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center">
+              {myWorkOrders.length}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* ===== TAB: طلبات التسعير ===== */}
@@ -9531,6 +9556,41 @@ const ProductionCustodyDashboard = () => {
                 ))}
               </div>
             </details>
+          )}
+        </div>
+      )}
+
+      {prodActiveTab === 'workorders' && (
+        <div className="space-y-4">
+          {myWorkOrders.length === 0 ? (
+            <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-12 text-center text-zinc-500">
+              لا توجد أوامر شغل نشطة — تظهر هنا بعد موافقة العميل على عرض سعر سعّرتَه.
+            </div>
+          ) : (
+            myWorkOrders.map((b) => (
+              <div key={b.id} className="bg-emerald-500/10 border border-emerald-500/25 rounded-3xl p-5 space-y-2">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="font-black text-white">{b.customerName}</p>
+                    <p className="text-xs text-zinc-400">من عرض سعر معتمد — المندوب: {b.repName}</p>
+                    {b.priceQuoteId && <p className="text-[10px] text-zinc-500">مرجع عرض: {b.priceQuoteId}</p>}
+                  </div>
+                  <span className="px-2 py-1 rounded-lg text-[10px] font-black bg-emerald-500/20 text-emerald-200 border border-emerald-500/30">
+                    أمر شغل
+                  </span>
+                </div>
+                <p className="text-sm text-zinc-300">
+                  {b.date} — {b.time} — {b.location}
+                </p>
+                {b.estimatedCost ? (
+                  <p className="text-xs text-amber-200">تكلفة تقديرية: {b.estimatedCost.toLocaleString('ar-EG')} ج.م</p>
+                ) : null}
+                {b.notes ? (
+                  <p className="text-xs text-zinc-400 whitespace-pre-wrap bg-black/20 rounded-xl p-3 border border-white/5">{b.notes}</p>
+                ) : null}
+                <p className="text-[10px] text-zinc-500">نفّذ من تبويب «الحجوزات» — حالة: {b.status}</p>
+              </div>
+            ))
           )}
         </div>
       )}
@@ -11872,7 +11932,7 @@ const Root = () => {
                 void (async () => {
                 const ok = await approvePriceQuote(id, paymentSchedule, initialPayment);
                 if (!ok) toast.error('تعذر الاعتماد — تحقق من صلاحية المالك أو إغلاق الشهر');
-                else toast.success('تم اعتماد عرض السعر وتسجيل الفاتورة للمحاسب');
+                else toast.success('تم اعتماد عرض السعر — يُعاد للمندوب لتقديمه للعميل');
                 })();
               }}
               onRejectPriceQuote={(id: string) => {

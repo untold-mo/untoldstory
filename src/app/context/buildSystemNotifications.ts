@@ -654,6 +654,27 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
         targetRoles: ['مدير إنتاج'],
         targetUserId: pmId,
         entityType: 'system',
+        navigateTab: 'production',
+      });
+    });
+
+    const workOrdersByPm = new Map<string, number>();
+    shootBookings.forEach((b) => {
+      if (!b.workOrderFromQuote || b.status === 'مكتمل' || b.status === 'مرفوض') return;
+      const pmId = String(b.productionAssignedId || '').trim();
+      if (!pmId) return;
+      workOrdersByPm.set(pmId, (workOrdersByPm.get(pmId) || 0) + 1);
+    });
+    workOrdersByPm.forEach((count, pmId) => {
+      out.push({
+        id: `n-quote-work-order-${pmId}`,
+        level: 'high',
+        title: `أوامر شغل من عروض معتمدة (${count})`,
+        message: 'موافقة العميل — نفّذ التصوير/الإنتاج من تبويب الحجوزات',
+        createdAt: nowIso,
+        targetRoles: ['مدير إنتاج'],
+        targetUserId: pmId,
+        entityType: 'system',
         navigateTab: 'bookings',
       });
     });

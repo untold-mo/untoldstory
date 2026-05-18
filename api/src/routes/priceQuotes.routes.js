@@ -59,8 +59,8 @@ router.post('/', requireAuth(), async (req, res) => {
     const productionAssignedId = body.productionAssignedId ? String(body.productionAssignedId).trim() : null;
     const productionAssignedName = body.productionAssignedName ? String(body.productionAssignedName).trim() : null;
     const routedToProduction = Boolean(productionAssignedId);
-    if (!leadId || !customerName || !title || (!amount && !routedToProduction)) {
-      return res.status(400).json({ error: 'بيانات عرض السعر ناقصة' });
+    if (!leadId || !customerName || !title || !routedToProduction) {
+      return res.status(400).json({ error: 'يجب تحديد مدير إنتاج للتسعير قبل الإرسال' });
     }
     const vatRate = typeof body.vatRate === 'number' ? body.vatRate : 14;
     const vatAmount =
@@ -72,8 +72,7 @@ router.post('/', requireAuth(), async (req, res) => {
     const totalAmount =
       typeof body.totalAmount === 'number' ? Math.round(body.totalAmount) : amount > 0 ? amount + vatAmount : 0;
     const stRaw = String(body.status || '').trim();
-    const status =
-      stRaw === 'بانتظار التسعير' && routedToProduction ? 'بانتظار التسعير' : 'قيد اعتماد المالك';
+    const status = 'بانتظار التسعير';
     const row = await prisma.priceQuote.create({
       data: {
         ...(id ? { id } : {}),
