@@ -1,0 +1,162 @@
+{
+  "name": "Google Sheets → Supabase leads (google)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## إعداد Google Sheet + n8n\n\n### أعمدة الشيت (صف 1 = عناوين)\nيدعم عربي/إنجليزي:\n- **name** أو الاسم / الاسم الكامل\n- **email** أو البريد / الإيميل\n- **phone** أو الجوال / الهاتف / الموبايل\n- **company** أو الشركة (اختياري)\n\n### متغيرات n8n (Environment / Variables)\n| المتغير | الوصف |\n|--------|--------|\n| `GOOGLE_SHEETS_SPREADSHEET_ID` | من رابط الشيت: `/d/THIS_ID/edit` |\n| `GOOGLE_SHEETS_TAB_NAME` | اسم التبويب — افتراضي `Leads` |\n| `SUPABASE_URL` | `https://xxxx.supabase.co` |\n| `SUPABASE_SERVICE_ROLE_KEY` | service_role |\n| `DEFAULT_ASSIGNED_TO_ID` | اختياري — `users.id` |\n| `GOOGLE_SHEETS_MAX_NEW_PER_RUN` | اختياري — افتراضي 200 |\n\n### Credentials في n8n\nعقدة **Read Google Sheet** → أنشئ **Google Sheets OAuth2** وشارك الشيت مع حساب Google نفسه.\n\n### صفوف جديدة فقط\nيحفظ آخر رقم صف في static data للـ workflow (`lastSheetRowIndex`). الصف 1 = عناوين؛ أول مزامنة تبدأ من الصف 2.\n\n**source** في Supabase = `google`\n\nاستيراد: Import from File → اربط Credential → Test **Manual** → فعّل.",
+        "height": 520,
+        "width": 540,
+        "color": 4
+      },
+      "id": "sticky-google-setup",
+      "name": "Setup (اقرأني)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-340, -120]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "trigger-schedule-5m",
+      "name": "Every 5 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {},
+      "id": "trigger-manual-google",
+      "name": "Manual",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 200]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.GOOGLE_SHEETS_SPREADSHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $env.GOOGLE_SHEETS_TAB_NAME || 'Leads' }}",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "gsheets-read-all",
+      "name": "Read Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [520, 100],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "CONFIGURE_IN_N8N",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst lastIdx = Number(staticData.lastSheetRowIndex ?? 1);\nconst MAX = Math.min(500, Math.max(1, Number($env.GOOGLE_SHEETS_MAX_NEW_PER_RUN || 200)));\n\nfunction normKey(s) {\n  return String(s || '')\n    .trim()\n    .toLowerCase()\n    .replace(/\\s+/g, '_')\n    .replace(/[^a-z0-9_\\u0600-\\u06ff]/g, '');\n}\n\nfunction pick(row, keys) {\n  const entries = Object.entries(row || {});\n  const byNorm = {};\n  for (const [k, v] of entries) {\n    byNorm[normKey(k)] = v;\n  }\n  for (const key of keys) {\n    const v = row[key] ?? byNorm[normKey(key)];\n    if (v != null && String(v).trim() !== '') return String(v).trim();\n  }\n  return '';\n}\n\nfunction mapRow(raw, sheetRow) {\n  let name = pick(raw, ['name', 'full_name', 'fullname', 'الاسم', 'الاسم_الكامل', 'اسم', 'customer', 'عميل']);\n  let email = pick(raw, ['email', 'e_mail', 'mail', 'البريد', 'الايميل', 'إيميل', 'بريد']);\n  let phone = pick(raw, ['phone', 'phone_number', 'mobile', 'tel', 'الجوال', 'الهاتف', 'جوال', 'موبايل', 'هاتف']);\n  let company = pick(raw, ['company', 'company_name', 'business', 'الشركة', 'شركة', 'مؤسسة']);\n\n  email = email.toLowerCase();\n  phone = phone.replace(/\\s+/g, '');\n\n  if (!name) name = 'عميل Google';\n  if (!company) company = '—';\n\n  const rowKey = `sheet-${sheetRow}`;\n  if (!email && !phone) email = `${rowKey}@google-lead.local`;\n  if (!phone) phone = '01000000000';\n  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) email = `${rowKey}@google-lead.local`;\n\n  return {\n    sheet_row: sheetRow,\n    sheet_row_key: rowKey,\n    name: name.slice(0, 200),\n    company: company.slice(0, 200),\n    phone,\n    email,\n    source: 'google',\n    raw,\n  };\n}\n\nconst allItems = $input.all();\nconst newItems = [];\nlet maxRow = lastIdx;\n\nfor (let i = 0; i < allItems.length; i++) {\n  const sheetRow = i + 2;\n  if (sheetRow <= lastIdx) continue;\n  const mapped = mapRow(allItems[i].json, sheetRow);\n  newItems.push({ json: mapped });\n  maxRow = sheetRow;\n  if (newItems.length >= MAX) break;\n}\n\nstaticData.lastSheetRowIndex = maxRow;\n\nif (newItems.length === 0) {\n  return [\n    {\n      json: {\n        _summary: true,\n        new_rows: 0,\n        last_sheet_row: maxRow,\n        total_sheet_rows: allItems.length,\n        message: 'No new rows since last sync.',\n      },\n    },\n  ];\n}\n\nreturn newItems;"
+      },
+      "id": "code-filter-new-rows",
+      "name": "New rows only",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [760, 100]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const SUPABASE_URL = String($env.SUPABASE_URL || '').replace(/\\/$/, '');\nconst KEY = $env.SUPABASE_SERVICE_ROLE_KEY;\nconst ASSIGNED = $env.DEFAULT_ASSIGNED_TO_ID || null;\n\nif (!SUPABASE_URL || !KEY) {\n  throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in n8n environment variables.');\n}\n\nconst headers = {\n  apikey: KEY,\n  Authorization: `Bearer ${KEY}`,\n  'Content-Type': 'application/json',\n};\n\nfunction makeId() {\n  return `lead_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;\n}\n\nconst items = $input.all().filter((i) => !i.json._summary);\nconst results = [];\nlet inserted = 0;\nlet skipped = 0;\nlet errors = 0;\n\nfor (const item of items) {\n  const lead = item.json;\n  const email = lead.email;\n  const phone = lead.phone;\n\n  let existing;\n  try {\n    const checkUrl = `${SUPABASE_URL}/rest/v1/leads?or=(email.eq.${encodeURIComponent(email)},phone.eq.${encodeURIComponent(phone)})&select=id&limit=1`;\n    existing = await this.helpers.httpRequest({ method: 'GET', url: checkUrl, headers, json: true });\n  } catch (e) {\n    errors += 1;\n    results.push({ json: { ...lead, status: 'error', step: 'duplicate_check', message: e.message } });\n    continue;\n  }\n\n  if (Array.isArray(existing) && existing.length > 0) {\n    skipped += 1;\n    results.push({ json: { ...lead, status: 'skipped_duplicate', existing_id: existing[0].id } });\n    continue;\n  }\n\n  const id = makeId();\n  const now = new Date().toISOString();\n  const timeline = [\n    {\n      id: `ev-google-${id}`,\n      leadId: id,\n      action: 'استيراد من Google Sheets (n8n)',\n      note: `صف الشيت: ${lead.sheet_row}`,\n      userId: 'n8n',\n      userName: 'تكامل Google',\n      createdAt: now,\n    },\n    {\n      id: `a-${id}`,\n      leadId: id,\n      action: 'إضافة الليد إلى النظام',\n      userId: 'n8n',\n      userName: 'تكامل Google',\n      createdAt: now,\n    },\n  ];\n\n  const row = {\n    id,\n    customer_code: null,\n    name: lead.name,\n    company: lead.company,\n    phone: lead.phone,\n    email: lead.email,\n    status: 'جديد',\n    assigned_to_id: ASSIGNED,\n    budget: 0,\n    company_size: 'صغير',\n    source: 'google',\n    category: 'إعلانات',\n    score: 50,\n    follow_up_at: null,\n    loss_reason_code: null,\n    sla_status: 'مستقر',\n    timeline_json: timeline,\n    created_at: now,\n    updated_at: now,\n  };\n\n  try {\n    await this.helpers.httpRequest({\n      method: 'POST',\n      url: `${SUPABASE_URL}/rest/v1/leads`,\n      headers: { ...headers, Prefer: 'return=minimal' },\n      body: row,\n    });\n    inserted += 1;\n    results.push({ json: { ...lead, status: 'inserted', lead_id: id } });\n  } catch (e) {\n    errors += 1;\n    results.push({ json: { ...lead, status: 'error', step: 'insert', message: e.message } });\n  }\n}\n\nresults.push({\n  json: {\n    _summary: true,\n    processed: items.length,\n    inserted,\n    skipped_duplicate: skipped,\n    errors,\n  },\n});\n\nreturn results;"
+      },
+      "id": "code-insert-google-supabase",
+      "name": "Insert into Supabase",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 100]
+    }
+  ],
+  "connections": {
+    "Every 5 minutes": {
+      "main": [
+        [
+          {
+            "node": "Read Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual": {
+      "main": [
+        [
+          {
+            "node": "Read Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Google Sheet": {
+      "main": [
+        [
+          {
+            "node": "New rows only",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New rows only": {
+      "main": [
+        [
+          {
+            "node": "Insert into Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "leads"
+    },
+    {
+      "name": "google"
+    },
+    {
+      "name": "supabase"
+    }
+  ],
+  "triggerCount": 1,
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

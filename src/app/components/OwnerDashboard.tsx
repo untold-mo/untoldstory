@@ -54,7 +54,14 @@ export default function OwnerDashboard() {
   const pieData = Object.entries(sourcesMap).map(([name, value]: [string, number]) => ({
     name,
     value: Math.round((value / leads.length) * 100),
-    color: name === 'Facebook' ? '#1877F2' : name === 'Instagram' ? '#E4405F' : name === 'Website' ? '#10B981' : '#6366F1',
+    color:
+      name === 'Facebook' || name === 'facebook'
+        ? '#1877F2'
+        : name === 'Instagram' || name === 'instagram'
+          ? '#E4405F'
+          : name === 'Website'
+            ? '#10B981'
+            : '#6366F1',
   }));
 
   const teamPerformance = users

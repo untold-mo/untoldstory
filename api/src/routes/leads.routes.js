@@ -251,12 +251,12 @@ router.post('/demo-channel-ingest', requireAuth(), async (req, res) => {
             : 'Email';
     const sourceLabel =
       channel === 'facebook'
-        ? 'Facebook Leads API'
+        ? 'facebook'
         : channel === 'linkedin'
-          ? 'LinkedIn Lead Gen'
+          ? 'linkedin'
           : channel === 'google'
-            ? 'Google Ads Leads'
-            : 'Email Leads Inbox';
+            ? 'google'
+            : 'email';
     const sourceDisplay =
       typeof body.sourceDisplay === 'string' && body.sourceDisplay.trim()
         ? body.sourceDisplay.trim()

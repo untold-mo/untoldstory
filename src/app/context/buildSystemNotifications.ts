@@ -1,3 +1,4 @@
+import { isAutoImportedLeadSource } from '@/lib/leadSource';
 import { getMonthKey } from './dateMonthKey';
 import { hasAssignedActiveSalesLead, operationalBaselineForPayrollReminder } from './notificationGates';
 import type {
@@ -271,13 +272,7 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
     const pendingImported = leads.filter((l) =>
       l.assignedTo === managerId &&
       l.status === 'جديد' &&
-      (
-        l.source === 'Facebook Leads API'
-        || l.source === 'LinkedIn Lead Gen'
-        || l.source === 'Google Ads Leads'
-        || l.source === 'Google Business Leads'
-        || l.source === 'Email Leads Inbox'
-      )
+      (l.source === 'Facebook Leads API' || isAutoImportedLeadSource(l.source))
     );
     if (pendingImported.length > 0 && managerId) {
       out.push({

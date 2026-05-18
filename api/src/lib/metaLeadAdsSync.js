@@ -68,6 +68,16 @@ export function parseLeadgenFieldData(fieldData) {
   return { email, phone, fullName, company, raw: map };
 }
 
+/** @returns {'facebook'|'instagram'} */
+export function resolveMetaLeadSource(platform, formName, pageName) {
+  const p = String(platform || '').toLowerCase();
+  if (p === 'ig' || p === 'instagram' || p.includes('instagram')) return 'instagram';
+  if (p === 'fb' || p === 'facebook') return 'facebook';
+  const blob = `${pageName || ''} ${formName || ''}`.toLowerCase();
+  if (/instagram|\binsta\b|\big\b/.test(blob)) return 'instagram';
+  return 'facebook';
+}
+
 /**
  * @param {object} opts
  * @param {string} opts.userId - JWT sub / owner id (token file key)
@@ -139,7 +149,7 @@ export async function syncMetaLeadAdsForOwner(opts) {
       let leadsRes;
       try {
         leadsRes = await graphGet(
-          `https://graph.facebook.com/${version}/${formId}/leads?fields=id,created_time,field_data&limit=50&access_token=${encodeURIComponent(pageToken)}`,
+          `https://graph.facebook.com/${version}/${formId}/leads?fields=id,created_time,field_data,platform&limit=50&access_token=${encodeURIComponent(pageToken)}`,
         );
       } catch {
         graphErrors += 1;
@@ -172,7 +182,7 @@ export async function syncMetaLeadAdsForOwner(opts) {
           continue;
         }
 
-        const sourceLine = `فيسبوك Lead Ads — ${String(pageName).slice(0, 80)} — ${String(formName).slice(0, 80)}`;
+        const sourceLine = resolveMetaLeadSource(row.platform, formName, pageName);
         const nowIso = row.created_time ? new Date(row.created_time).toISOString() : new Date().toISOString();
         const budget = 0;
         const category = 'إعلانات';

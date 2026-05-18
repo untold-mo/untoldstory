@@ -4550,7 +4550,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const source = (lead.source || '').toLowerCase();
     if (/linkedin|لينكد|referral|إحالة|website|موقع/.test(source)) score += 16;
-    else if (/google|فيس|facebook|email|ايميل/.test(source)) score += 10;
+    else if (/google|فيس|facebook|instagram|email|ايميل/.test(source)) score += 10;
     else if (source) score += 6;
 
     if (lead.category === 'شركات كبرى') score += 10;

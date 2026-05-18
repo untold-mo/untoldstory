@@ -14,6 +14,11 @@ import { motion as Motion, AnimatePresence } from 'motion/react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useData, Lead, LeadStatus, DeleteLeadResult } from '../context/DataContext';
+import {
+  leadMatchesSourceFilter,
+  leadSourceDisplayLabel,
+  type LeadSourceFilter,
+} from '@/lib/leadSource';
 import * as Dialog from '@radix-ui/react-dialog';
 
 const STATUS_FILTERS: Array<'all' | LeadStatus> = [
@@ -24,6 +29,13 @@ const STATUS_FILTERS: Array<'all' | LeadStatus> = [
   'تفاوض',
   'مغلق - فوز',
   'مغلق - خسارة',
+];
+
+const SOURCE_FILTERS: Array<{ id: LeadSourceFilter; label: string }> = [
+  { id: 'all', label: 'كل المصادر' },
+  { id: 'facebook', label: 'Facebook' },
+  { id: 'instagram', label: 'Instagram' },
+  { id: 'google', label: 'Google' },
 ];
 
 function getStatusStyle(status: string) {
@@ -52,6 +64,7 @@ export default function LeadsPage({ isSalesRep = false }: { isSalesRep?: boolean
   const { leads, users, currentUser, addLead, assignLead, deleteLead } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState<string>('all');
+  const [sourceFilter, setSourceFilter] = useState<LeadSourceFilter>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -63,8 +76,9 @@ export default function LeadsPage({ isSalesRep = false }: { isSalesRep?: boolean
       lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       lead.company.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = activeFilter === 'all' || lead.status === activeFilter;
+    const matchesSource = leadMatchesSourceFilter(lead.source, sourceFilter);
     const matchesRole = !isSalesRep || lead.assignedTo === currentUserId;
-    return matchesSearch && matchesFilter && matchesRole;
+    return matchesSearch && matchesFilter && matchesSource && matchesRole;
   });
 
   const handleAddLead = (e: React.FormEvent<HTMLFormElement>) => {
@@ -153,11 +167,10 @@ export default function LeadsPage({ isSalesRep = false }: { isSalesRep?: boolean
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-zinc-400">المصدر</label>
                     <select name="source" className="w-full bg-[#09090B] border border-zinc-800 rounded-xl py-2 px-4 text-sm text-white focus:ring-2 focus:ring-[#6366F1]/50 outline-none transition-all">
-                      <option value="فيسبوك">فيسبوك</option>
-                      <option value="إنستجرام">إنستجرام</option>
-                      <option value="الموقع">الموقع الإلكتروني</option>
-                      <option value="يدوي">إضافة يدوية</option>
-                      <option value="أخرى">أخرى</option>
+                      <option value="facebook">Facebook</option>
+                      <option value="instagram">Instagram</option>
+                      <option value="google">Google</option>
+                      <option value="يدوي">يدوي</option>
                     </select>
                   </div>
                   <div className="space-y-1.5">
@@ -202,7 +215,8 @@ export default function LeadsPage({ isSalesRep = false }: { isSalesRep?: boolean
       </div>
 
       <div className="bg-[#18181B] border border-zinc-800 rounded-2xl shadow-xl overflow-hidden p-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        <div className="flex flex-col gap-3 mb-8">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
             <input
@@ -223,6 +237,21 @@ export default function LeadsPage({ isSalesRep = false }: { isSalesRep?: boolean
                 }`}
               >
                 {filter === 'all' ? 'الكل' : getStatusLabel(filter)}
+              </button>
+            ))}
+          </div>
+          </div>
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
+            {SOURCE_FILTERS.map((filter) => (
+              <button
+                key={filter.id}
+                type="button"
+                onClick={() => setSourceFilter(filter.id)}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all border whitespace-nowrap ${
+                  sourceFilter === filter.id ? 'bg-[#1877F2] text-white border-[#1877F2]' : 'bg-[#09090B] text-zinc-500 border-zinc-800 hover:text-white'
+                }`}
+              >
+                {filter.label}
               </button>
             ))}
           </div>
@@ -260,7 +289,7 @@ export default function LeadsPage({ isSalesRep = false }: { isSalesRep?: boolean
                       title={lead.source}
                       className="text-[10px] leading-snug bg-zinc-800 text-zinc-200 px-2 py-1 rounded-lg font-bold line-clamp-2 block whitespace-normal"
                     >
-                      {lead.source}
+                      {leadSourceDisplayLabel(lead.source)}
                     </span>
                   </td>
                   <td className="px-6 py-4">

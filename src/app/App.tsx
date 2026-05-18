@@ -62,6 +62,11 @@ import { getSupabase } from '@/lib/supabase/client';
 import { mapUserFromRow } from '@/lib/supabase/postgrestMappers';
 import { isServerDataMode } from '@/config/dataSource';
 import { expenseSubmitterDisplay } from '@/lib/expenseSubmitterDisplay';
+import {
+  leadMatchesSourceFilter,
+  leadSourceDisplayLabel,
+  type LeadSourceFilter,
+} from '@/lib/leadSource';
 import { patchMyPasswordApi } from '@/lib/api/authPasswordApi';
 import PageViewsHub from './components/PageViewsHub';
 
@@ -3550,6 +3555,7 @@ const LeadsWorkspace = () => {
   const { leads, users, invoices, expenses, shootBookings, equipmentBookings, meetingBookings, manualCustomers, currentUser, addLead, addManualCustomer, assignLead, updateLeadStatus, deleteLead } = useData();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'الكل' | LeadStatus>('الكل');
+  const [sourceFilter, setSourceFilter] = useState<LeadSourceFilter>('all');
   const [assignedFilter, setAssignedFilter] = useState<'all' | 'mine' | 'unassigned'>('all');
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [repUserFilterId, setRepUserFilterId] = useState('');
@@ -3677,6 +3683,10 @@ const LeadsWorkspace = () => {
       );
     }
 
+    if (currentUser.role !== 'محاسب' && sourceFilter !== 'all') {
+      result = result.filter((l) => leadMatchesSourceFilter(l.source, sourceFilter));
+    }
+
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(l =>
@@ -3688,7 +3698,7 @@ const LeadsWorkspace = () => {
     }
 
     return result;
-  }, [leads, invoices, currentUser, assignedFilter, statusFilter, overdueOnly, repUserFilterId, search]);
+  }, [leads, invoices, currentUser, assignedFilter, statusFilter, sourceFilter, overdueOnly, repUserFilterId, search]);
 
   const handleCreateLead = () => {
     const budget = Number(leadForm.budget);
@@ -4035,6 +4045,20 @@ const LeadsWorkspace = () => {
           </select>)}
 
           {entityMode === 'leads' && currentUser?.role !== 'محاسب' && (<select
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value as LeadSourceFilter)}
+            className="bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-sm"
+          >
+            <option value="all">كل المصادر</option>
+            <option value="facebook">Facebook</option>
+            <option value="instagram">Instagram</option>
+            <option value="google">Google</option>
+            <option value="linkedin">LinkedIn</option>
+            <option value="email">Email</option>
+            <option value="manual">يدوي</option>
+          </select>)}
+
+          {entityMode === 'leads' && currentUser?.role !== 'محاسب' && (<select
             value={assignedFilter}
             onChange={(e) => setAssignedFilter(e.target.value as 'all' | 'mine' | 'unassigned')}
             className="bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-sm"
@@ -4123,7 +4147,7 @@ const LeadsWorkspace = () => {
                       <p>{lead.phone}</p>
                       <p className="text-xs text-zinc-400 mt-1">{lead.budget.toLocaleString()} ج.م</p>
                       {isSalesManagerLeadDistribution && (
-                        <p className="text-[11px] text-zinc-500 mt-1">{lead.source}</p>
+                        <p className="text-[11px] text-zinc-500 mt-1">{leadSourceDisplayLabel(lead.source)}</p>
                       )}
                       {isSalesManagerLeadDistribution && canManageAssignment && (
                         <button
@@ -4304,7 +4328,13 @@ const LeadsWorkspace = () => {
                 <input value={leadForm.phone} onChange={(e) => setLeadForm(prev => ({ ...prev, phone: e.target.value }))} placeholder="رقم الهاتف" className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
                 <input value={leadForm.email} onChange={(e) => setLeadForm(prev => ({ ...prev, email: e.target.value }))} placeholder="البريد الإلكتروني (اختياري)" className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
                 <input type="number" min={1} value={leadForm.budget} onChange={(e) => setLeadForm(prev => ({ ...prev, budget: e.target.value }))} placeholder="الميزانية المتوقعة" className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
-                <input value={leadForm.source} onChange={(e) => setLeadForm(prev => ({ ...prev, source: e.target.value }))} placeholder="المصدر" className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
+                <select value={leadForm.source} onChange={(e) => setLeadForm(prev => ({ ...prev, source: e.target.value }))} className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm">
+                  <option value="يدوي">يدوي</option>
+                  <option value="facebook">facebook</option>
+                  <option value="instagram">instagram</option>
+                  <option value="google">google</option>
+                  <option value="linkedin">linkedin</option>
+                </select>
 
                 <select value={leadForm.companySize} onChange={(e) => setLeadForm(prev => ({ ...prev, companySize: e.target.value as Lead['companySize'] }))} className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm">
                   <option value="صغير">صغير</option>
