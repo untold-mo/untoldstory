@@ -10781,9 +10781,9 @@ const LoginPage = () => {
             <img src={SYSTEM_LOGO} alt={SYSTEM_NAME} className="w-full h-full object-cover" />
           </div>
           <h1 className="text-3xl font-black text-white mb-2">{SYSTEM_NAME}</h1>
-          <p className="text-zinc-400 font-bold text-xs">
-            {supabaseMode ? t('login.subtitleSupabase') : t('login.subtitleApi')}
-          </p>
+          {!supabaseMode && (
+            <p className="text-zinc-400 font-bold text-xs">{t('login.subtitleApi')}</p>
+          )}
         </div>
 
 

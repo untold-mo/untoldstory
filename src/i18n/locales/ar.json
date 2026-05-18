@@ -98,7 +98,6 @@
     "submit": "دخول",
     "submitting": "جاري الدخول…",
     "hint": "استخدم بيانات الموظف المسجّلة في النظام",
-    "subtitleSupabase": "تسجيل الدخول عبر Supabase (مستخدم Authentication + صف في جدول الموظفين)",
     "subtitleApi": "تسجيل الدخول — عبر خادم التطبيق",
     "welcome": "أهلاً بك يا {{name}}"
   },

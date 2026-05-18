@@ -98,7 +98,6 @@
     "submit": "Sign in",
     "submitting": "Signing in…",
     "hint": "Use your employee credentials registered in the system",
-    "subtitleSupabase": "Sign in via Supabase (Authentication user + employees table row)",
     "subtitleApi": "Sign in via application server",
     "welcome": "Welcome, {{name}}"
   },
