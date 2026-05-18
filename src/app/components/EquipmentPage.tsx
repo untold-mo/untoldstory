@@ -14,6 +14,7 @@ import {
 import { motion as Motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 import { useData } from '../context/DataContext';
 
 const COLORS = ['#6366F1', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
@@ -21,6 +22,7 @@ const COLORS = ['#6366F1', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'
 const DEFAULT_CATEGORIES = ['كاميرات', 'مثبتات', 'إضاءة', 'صوت', 'مونتاج', 'عام'];
 
 export default function EquipmentPage() {
+  const { t } = useTranslation();
   const { equipmentItems, addEquipmentItem, removeEquipmentItem, currentUser } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -33,7 +35,7 @@ export default function EquipmentPage() {
 
   const handleAddEquipment = () => {
     if (!canManageEquipment) {
-      toast.error('إضافة المعدات للمالك أو المحاسب أو مدير الإنتاج فقط');
+      toast.error(t('equipmentPage.addForbidden'));
       return;
     }
     const name = addForm.name.trim();
@@ -41,17 +43,17 @@ export default function EquipmentPage() {
     const totalQuantity = Math.max(1, Math.floor(Number(addForm.quantity) || 1));
     const ok = addEquipmentItem({ name, category, totalQuantity });
     if (!ok) {
-      toast.error('تأكد من الاسم والفئة، أو أن المعدة غير مكررة بنفس الاسم');
+      toast.error(t('equipmentPage.duplicateError'));
       return;
     }
-    toast.success('تمت إضافة المعدة');
+    toast.success(t('equipmentPage.addSuccess'));
     setAddForm({ name: '', category: 'كاميرات', quantity: '1' });
     setAddOpen(false);
   };
 
   const handleDeleteEquipment = (id: string, name: string) => {
     if (!canManageEquipment) {
-      toast.error('حذف المعدات للمالك أو المحاسب أو مدير الإنتاج فقط');
+      toast.error(t('equipmentPage.deleteForbidden'));
       return;
     }
     if (!window.confirm(`حذف «${name}» نهائياً من قائمة المعدات؟`)) return;
@@ -99,9 +101,9 @@ export default function EquipmentPage() {
     <div className="space-y-8 pb-12">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-white mb-2">المعدات</h2>
+          <h2 className="text-3xl font-bold text-white mb-2">{t('equipmentPage.pageTitle')}</h2>
           <p className="text-zinc-400">
-            للحذف: اضغط ⋮ على بطاقة المعدة ثم «حذف المعدة» (المالك / المحاسب / مدير الإنتاج)
+            {t('equipmentPage.pageSubtitle')}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -115,10 +117,10 @@ export default function EquipmentPage() {
               className="flex items-center justify-center gap-2 bg-[#6366F1] text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-[#5254E2] transition-all shadow-lg shadow-[#6366F1]/20"
             >
               <Plus className="h-5 w-5" />
-              <span>إضافة معدة</span>
+              <span>{t('equipmentPage.addButton')}</span>
             </button>
           ) : (
-            <span className="text-xs text-zinc-500 px-2">الإضافة للمالك / المحاسب / مدير الإنتاج</span>
+            <span className="text-xs text-zinc-500 px-2">{t('equipmentPage.addRoleHint')}</span>
           )}
         </div>
       </div>
@@ -136,27 +138,27 @@ export default function EquipmentPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <h3 id="add-equipment-title" className="text-lg font-bold text-white mb-1">
-              إضافة معدة جديدة
+              {t('equipmentPage.addTitle')}
             </h3>
-            <p className="text-xs text-zinc-400 mb-5">تُحفظ في النظام وتظهر في حجوزات المعدات</p>
+            <p className="text-xs text-zinc-400 mb-5">{t('equipmentPage.addModalHint')}</p>
             <div className="space-y-4">
               <div>
-                <label className="block text-[10px] font-bold text-zinc-500 mb-1">اسم المعدة *</label>
+                <label className="block text-[10px] font-bold text-zinc-500 mb-1">{t('equipmentPage.nameLabel')}</label>
                 <input
                   value={addForm.name}
                   onChange={(e) => setAddForm((p) => ({ ...p, name: e.target.value }))}
-                  placeholder="مثال: Sony A7IV"
+                  placeholder={t('equipmentPage.namePlaceholder')}
                   className="w-full bg-[#09090B] border border-zinc-800 rounded-xl px-3 py-2.5 text-sm text-white"
                   autoFocus
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-zinc-500 mb-1">الفئة *</label>
+                <label className="block text-[10px] font-bold text-zinc-500 mb-1">{t('equipmentPage.categoryLabel')}</label>
                 <input
                   list="equipment-categories"
                   value={addForm.category}
                   onChange={(e) => setAddForm((p) => ({ ...p, category: e.target.value }))}
-                  placeholder="كاميرات / إضاءة …"
+                  placeholder={t('equipmentPage.categoryPlaceholder')}
                   className="w-full bg-[#09090B] border border-zinc-800 rounded-xl px-3 py-2.5 text-sm text-white"
                 />
                 <datalist id="equipment-categories">
@@ -166,7 +168,7 @@ export default function EquipmentPage() {
                 </datalist>
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-zinc-500 mb-1">الكمية</label>
+                <label className="block text-[10px] font-bold text-zinc-500 mb-1">{t('equipmentPage.quantityLabel')}</label>
                 <input
                   type="number"
                   min={1}
@@ -182,14 +184,14 @@ export default function EquipmentPage() {
                 onClick={handleAddEquipment}
                 className="flex-1 rounded-xl bg-[#6366F1] py-2.5 text-sm font-bold text-white hover:bg-[#5254E2]"
               >
-                حفظ المعدة
+                {t('equipmentPage.saveEquipment')}
               </button>
               <button
                 type="button"
                 onClick={() => setAddOpen(false)}
                 className="rounded-xl border border-zinc-700 px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800"
               >
-                إلغاء
+                {t('common.cancel')}
               </button>
             </div>
           </div>
@@ -198,7 +200,7 @@ export default function EquipmentPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {categoryStats.length === 0 ? (
-          <div className="col-span-full text-center text-zinc-500 text-sm py-6 bg-[#18181B] border border-zinc-800 rounded-xl">لا توجد فئات بعد.</div>
+          <div className="col-span-full text-center text-zinc-500 text-sm py-6 bg-[#18181B] border border-zinc-800 rounded-xl">{t('equipmentPage.noCategories')}</div>
         ) : (
           categoryStats.map(([label, count], i) => {
             const Icon = iconFor(label);
@@ -213,7 +215,7 @@ export default function EquipmentPage() {
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
             <input
               type="text"
-              placeholder="ابحث عن معدة (الاسم أو الفئة)..."
+              placeholder={t('equipmentPage.searchPlaceholder')}
               className="w-full bg-[#09090B] border border-zinc-800 rounded-xl py-2 pr-10 pl-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50 transition-all"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -223,7 +225,7 @@ export default function EquipmentPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map((item) => {
-            const statusLabel = item.active ? 'متاح' : 'غير نشط';
+            const statusLabel = item.active ? t('equipmentPage.available') : t('equipmentPage.inactive');
             const statusClass = item.active ? 'bg-[#10B981]/20 text-[#10B981] border-[#10B981]/30' : 'bg-zinc-800 text-zinc-400 border-zinc-700';
             return (
               <Motion.div key={item.id} layout className="group bg-[#09090B] border border-zinc-800 rounded-2xl overflow-hidden hover:border-zinc-700 transition-all">
@@ -239,7 +241,7 @@ export default function EquipmentPage() {
                     <div>
                       <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1">{item.category}</p>
                       <h3 className="text-base font-bold text-white mb-1">{item.name}</h3>
-                      <p className="text-xs text-zinc-500 font-medium">الكمية: {item.totalQuantity}</p>
+                      <p className="text-xs text-zinc-500 font-medium">{t('equipmentPage.quantityLabel')}: {item.totalQuantity}</p>
                     </div>
                     {canManageEquipment ? (
                       <div className="relative shrink-0" ref={openMenuId === item.id ? menuRef : null}>
@@ -272,7 +274,7 @@ export default function EquipmentPage() {
                               }}
                             >
                               <Trash2 className="h-4 w-4 shrink-0 opacity-90" />
-                              حذف المعدة
+                              {t('equipmentPage.deleteEquipment')}
                             </button>
                           </div>
                         ) : null}
@@ -283,7 +285,7 @@ export default function EquipmentPage() {
                   <div className="flex items-center justify-between pt-4 border-t border-zinc-800/50">
                     <div className="flex items-center gap-2">
                       <div className={`h-2 w-2 rounded-full ${item.active ? 'bg-[#10B981]' : 'bg-zinc-600'}`} />
-                      <span className="text-xs text-zinc-400 font-medium">{item.active ? 'نشط في النظام' : 'معطّل'}</span>
+                      <span className="text-xs text-zinc-400 font-medium">{item.active ? t('equipmentPage.activeInSystem') : t('equipmentPage.disabled')}</span>
                     </div>
                     <span className="text-[11px] font-bold text-zinc-600">أُضيف {formatArDate(item.createdAt)}</span>
                   </div>

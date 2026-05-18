@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 import type { LeadCategory, User } from '../context/DataContext';
 import { normalizeRepSkillLabel, REP_SKILL_PRESETS, splitRepSkills } from '@/lib/repSkills';
+import { useAppDirection } from '../hooks/useAppDirection';
 
 type Props = {
   rep: User;
@@ -17,6 +19,8 @@ export function RepSkillsEditor({
   updateUserSkills,
   presets = REP_SKILL_PRESETS,
 }: Props) {
+  const { t } = useTranslation();
+  const { dir } = useAppDirection();
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const skills = rep.skills || [];
@@ -28,10 +32,10 @@ export function RepSkillsEditor({
     try {
       const ok = await updateUserSkills(rep.id, unique);
       if (!ok) {
-        toast.error('تعذر حفظ المهارات على السيرفر');
+        toast.error(t('repSkills.saveFailed'));
         return false;
       }
-      toast.success('تم تحديث مهارات المندوب');
+      toast.success(t('repSkills.saveSuccess'));
       return true;
     } finally {
       setSaving(false);
@@ -53,11 +57,11 @@ export function RepSkillsEditor({
     if (!canEdit || saving) return;
     const label = normalizeRepSkillLabel(draft);
     if (!label) {
-      toast.error('اكتب اسم المهارة أولاً');
+      toast.error(t('repSkills.nameRequired'));
       return;
     }
     if (skills.includes(label)) {
-      toast.info('المهارة موجودة مسبقاً لهذا المندوب');
+      toast.info(t('repSkills.alreadyExists'));
       setDraft('');
       return;
     }
@@ -68,8 +72,8 @@ export function RepSkillsEditor({
   };
 
   return (
-    <div className="space-y-3" dir="rtl">
-      <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">التخصصات والمهارات:</p>
+    <div className="space-y-3" dir={dir}>
+      <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">{t('repSkills.heading')}</p>
       <div className="flex flex-wrap gap-2">
         {presets.map((skill) => {
           const isSelected = skills.includes(skill);
@@ -101,7 +105,7 @@ export function RepSkillsEditor({
                 disabled={saving}
                 onClick={() => removeSkill(skill)}
                 className="p-0.5 rounded-md hover:bg-violet-500/30 disabled:opacity-50"
-                aria-label={`حذف ${skill}`}
+                aria-label={t('repSkills.deleteAria', { skill })}
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -121,7 +125,7 @@ export function RepSkillsEditor({
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             disabled={saving}
-            placeholder="مهارة جديدة (مثال: سيارات فاخرة، EQ…)"
+            placeholder={t('repSkills.placeholder')}
             className="flex-1 min-w-[180px] bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-violet-400/50"
           />
           <button
@@ -130,7 +134,7 @@ export function RepSkillsEditor({
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-50"
           >
             <Plus className="w-4 h-4" />
-            إضافة مهارة
+            {t('repSkills.addSkill')}
           </button>
         </form>
       )}

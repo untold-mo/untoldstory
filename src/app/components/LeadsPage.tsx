@@ -13,7 +13,11 @@ import {
 import { motion as Motion, AnimatePresence } from 'motion/react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 import { useData, Lead, LeadStatus, DeleteLeadResult } from '../context/DataContext';
+import type { TFunction } from 'i18next';
+import { getLeadStatusLabel } from '@/lib/i18nLabels';
+import { useAppDirection } from '../hooks/useAppDirection';
 import {
   leadMatchesSourceFilter,
   leadSourceDisplayLabel,
@@ -56,11 +60,14 @@ function getStatusStyle(status: string) {
   }
 }
 
-function getStatusLabel(status: string) {
-  return status;
+function getStatusLabel(status: string, t: TFunction) {
+  if (status === 'all') return t('common.all');
+  return getLeadStatusLabel(status, t);
 }
 
 export default function LeadsPage({ isSalesRep = false }: { isSalesRep?: boolean }) {
+  const { t } = useTranslation();
+  const { dir } = useAppDirection();
   const { leads, users, currentUser, addLead, assignLead, deleteLead } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState<string>('all');
@@ -84,7 +91,7 @@ export default function LeadsPage({ isSalesRep = false }: { isSalesRep?: boolean
   const handleAddLead = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!(currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات')) {
-      toast.error('يتطلب إضافة ليد صلاحية المالك أو مدير المبيعات — سجّل من النظام الرئيسي');
+      toast.error(t('leadsLegacy.addForbidden'));
       return;
     }
     const formData = new FormData(e.currentTarget);
@@ -101,42 +108,42 @@ export default function LeadsPage({ isSalesRep = false }: { isSalesRep?: boolean
       category: 'سوشيال ميديا',
     });
     setIsAddModalOpen(false);
-    toast.success('تم إرسال طلب إضافة الليد');
+    toast.success(t('leadsLegacy.addSuccess'));
   };
 
   const handleAssign = (userId: string) => {
     if (!selectedLead) return;
     if (!(currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات')) {
-      toast.error('صلاحية التعيين للمالك أو مدير المبيعات فقط');
+      toast.error(t('leadsLegacy.assignForbidden'));
       return;
     }
     assignLead(selectedLead.id, userId);
     setIsAssignModalOpen(false);
     setSelectedLead(null);
-    toast.success('تم تعيين الليد للموظف');
+    toast.success(t('leadsLegacy.assignSuccess'));
   };
 
   const salesReps = users.filter((u) => u.role === 'مندوب');
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-8 pb-12" dir={dir}>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-white mb-2">{isSalesRep ? 'الليدز الخاصة بي' : 'إدارة جميع الليدز'}</h2>
-          <p className="text-zinc-400">متابعة العملاء المحتملين وتحديث حالات التواصل</p>
+          <h2 className="text-3xl font-bold text-white mb-2">{isSalesRep ? t('leadsLegacy.myLeads') : t('leadsLegacy.allLeads')}</h2>
+          <p className="text-zinc-400">{t('leads.subtitleDefault')}</p>
         </div>
         <Dialog.Root open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
           <Dialog.Trigger asChild>
             <button className="flex items-center justify-center gap-2 bg-[#6366F1] text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-[#5254E2] transition-all shadow-lg shadow-[#6366F1]/20">
               <Plus className="h-5 w-5" />
-              <span>إضافة ليد جديد</span>
+              <span>{t('leadsLegacy.addLead')}</span>
             </button>
           </Dialog.Trigger>
           <Dialog.Portal>
             <Dialog.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 animate-in fade-in duration-200" />
             <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-[#18181B] border border-zinc-800 rounded-2xl shadow-2xl p-6 z-50 animate-in zoom-in-95 duration-200 focus:outline-none">
               <div className="flex items-center justify-between mb-6">
-                <Dialog.Title className="text-xl font-bold text-white">إضافة ليد جديد</Dialog.Title>
+                <Dialog.Title className="text-xl font-bold text-white">{t('leadsLegacy.addLead')}</Dialog.Title>
                 <Dialog.Description className="sr-only">استخدم هذا النموذج لإضافة عميل محتمل جديد إلى النظام.</Dialog.Description>
                 <Dialog.Close className="text-zinc-500 hover:text-white transition-colors">
                   <X className="h-5 w-5" />
@@ -190,23 +197,23 @@ export default function LeadsPage({ isSalesRep = false }: { isSalesRep?: boolean
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <LeadStatCard title="إجمالي الليدز" value={leads.length.toString()} trend="+3" icon={Target} color="text-blue-500" />
+        <LeadStatCard title={t('leadsLegacy.totalLeads')} value={leads.length.toString()} trend="+3" icon={Target} color="text-blue-500" />
         <LeadStatCard
-          title="جديد"
+          title={t('leadsLegacy.newLeads')}
           value={leads.filter((l) => l.status === 'جديد').length.toString()}
           trend="-2"
           icon={Clock}
           color="text-yellow-500"
         />
         <LeadStatCard
-          title="مغلق (فوز)"
+          title={t('leadsLegacy.wonClosed')}
           value={leads.filter((l) => l.status === 'مغلق - فوز').length.toString()}
           trend="+1"
           icon={CheckCircle2}
           color="text-[#10B981]"
         />
         <LeadStatCard
-          title="إجمالي الميزانيات"
+          title={t('leadsLegacy.totalBudgets')}
           value={leads.reduce((acc, curr) => acc + (Number(curr.budget) || 0), 0).toLocaleString()}
           trend="+2%"
           icon={TrendingUp}
@@ -221,7 +228,7 @@ export default function LeadsPage({ isSalesRep = false }: { isSalesRep?: boolean
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
             <input
               type="text"
-              placeholder="البحث عن ليد أو شركة..."
+              placeholder={t('leadsLegacy.searchPlaceholder')}
               className="w-full bg-[#09090B] border border-zinc-800 rounded-xl py-2 pr-10 pl-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50 transition-all"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -236,7 +243,7 @@ export default function LeadsPage({ isSalesRep = false }: { isSalesRep?: boolean
                   activeFilter === filter ? 'bg-[#6366F1] text-white border-[#6366F1]' : 'bg-[#09090B] text-zinc-500 border-zinc-800 hover:text-white'
                 }`}
               >
-                {filter === 'all' ? 'الكل' : getStatusLabel(filter)}
+                {filter === 'all' ? t('common.all') : getStatusLabel(filter, t)}
               </button>
             ))}
           </div>
@@ -294,7 +301,7 @@ export default function LeadsPage({ isSalesRep = false }: { isSalesRep?: boolean
                   </td>
                   <td className="px-6 py-4">
                     <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold ${getStatusStyle(lead.status)}`}>
-                      {getStatusLabel(lead.status)}
+                      {getStatusLabel(lead.status, t)}
                     </div>
                   </td>
                   <td className="px-6 py-4 text-sm font-bold text-zinc-300">{(Number(lead.budget) || 0).toLocaleString()} ج.م</td>

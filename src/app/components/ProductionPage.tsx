@@ -13,7 +13,9 @@ import {
 import { motion as Motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 import { useData } from '../context/DataContext';
+import { useAppDirection } from '../hooks/useAppDirection';
 
 type ProdFilter = 'الكل' | 'جاري' | 'مجدول' | 'مكتمل' | 'معلق';
 
@@ -38,9 +40,9 @@ function statusToFilter(status: string | undefined): ProdFilter {
   return 'جاري';
 }
 
-function formatArDate(iso: string) {
+function formatLocaleDate(iso: string, locale: string) {
   try {
-    return new Date(iso).toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' });
+    return new Date(iso).toLocaleDateString(locale, { day: 'numeric', month: 'short' });
   } catch {
     return iso;
   }
@@ -49,6 +51,8 @@ function formatArDate(iso: string) {
 const NAV_INTENT_KEY = 'prod_system_nav_intent';
 
 export default function ProductionPage() {
+  const { t } = useTranslation();
+  const { dateLocale, dir } = useAppDirection();
   const { currentUser, shootBookings, equipmentBookings, meetingBookings, removeShootBooking, removeEquipmentBooking, removeMeetingBooking } = useData();
   const [filter, setFilter] = useState<ProdFilter>('الكل');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -78,7 +82,7 @@ export default function ProductionPage() {
   const goBookingsTab = () => {
     localStorage.setItem(NAV_INTENT_KEY, JSON.stringify({ tab: 'bookings' }));
     window.dispatchEvent(new CustomEvent('prod-system-nav-intent'));
-    toast.info('انتقل إلى تبويب «الحجوزات» لإضافة جلسة تصوير');
+    toast.info(t('productionPage.goBookingsToast'));
   };
 
   const cards = useMemo<ProdCard[]>(() => {
@@ -89,11 +93,11 @@ export default function ProductionPage() {
         title: `تصوير — ${b.customerName}`,
         client: b.customerName,
         statusKey: statusToFilter(b.status),
-        date: formatArDate(b.date),
+        date: formatLocaleDate(b.date, dateLocale),
         time: b.time,
         location: b.location,
         team: b.repName,
-        type: 'تصوير',
+        type: t('productionPage.typeShoot'),
       });
     }
     for (const b of equipmentBookings) {
@@ -102,11 +106,11 @@ export default function ProductionPage() {
         title: `${b.equipmentName} ×${b.quantity}`,
         client: b.customerName,
         statusKey: statusToFilter(b.status),
-        date: `${formatArDate(b.fromDate)} – ${formatArDate(b.toDate)}`,
+        date: `${formatLocaleDate(b.fromDate, dateLocale)} – ${formatLocaleDate(b.toDate, dateLocale)}`,
         time: '—',
         location: b.notes || '—',
         team: b.repName,
-        type: 'معدات',
+        type: t('productionPage.typeEquipment'),
       });
     }
     for (const b of meetingBookings) {
@@ -115,15 +119,23 @@ export default function ProductionPage() {
         title: b.title,
         client: b.leadId ? `ليد ${b.leadId.slice(0, 6)}…` : '—',
         statusKey: statusToFilter(b.status),
-        date: formatArDate(b.date),
+        date: formatLocaleDate(b.date, dateLocale),
         time: b.startTime,
-        location: b.location || (b.venueType === 'داخل_المقر' ? 'داخل المقر' : 'خارج المقر'),
+        location: b.location || (b.venueType === 'داخل_المقر' ? t('productionPage.venueInternal') : t('productionPage.venueExternal')),
         team: b.repName,
-        type: 'اجتماع',
+        type: t('productionPage.typeMeeting'),
       });
     }
     return out.sort((a, b) => b.id.localeCompare(a.id));
-  }, [scopedShoot, equipmentBookings, meetingBookings]);
+  }, [scopedShoot, equipmentBookings, meetingBookings, dateLocale, t]);
+
+  const filterLabels: Record<ProdFilter, string> = {
+    'الكل': t('productionPage.filterAll'),
+    'جاري': t('productionPage.filterActive'),
+    'مجدول': t('productionPage.filterScheduled'),
+    'مكتمل': t('productionPage.filterDone'),
+    'معلق': t('productionPage.filterPending'),
+  };
 
   const visible = useMemo(() => {
     if (filter === 'الكل') return cards;
@@ -137,11 +149,11 @@ export default function ProductionPage() {
   };
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-8 pb-12" dir={dir}>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-white mb-2">جدول الإنتاج</h2>
-          <p className="text-zinc-400">حجوزات التصوير والمعدات والاجتماعات من الباك اند</p>
+          <h2 className="text-3xl font-bold text-white mb-2">{t('productionPage.title')}</h2>
+          <p className="text-zinc-400">{t('screens.bookings.subtitleDefault')}</p>
         </div>
         <div className="flex items-center gap-3">
           <button type="button" className="p-2.5 bg-[#18181B] border border-zinc-800 rounded-xl text-zinc-400 hover:text-white transition-all">
@@ -153,7 +165,7 @@ export default function ProductionPage() {
             className="flex items-center justify-center gap-2 bg-[#6366F1] text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-[#5254E2] transition-all shadow-lg shadow-[#6366F1]/20"
           >
             <Plus className="h-5 w-5" />
-            <span>جلسة جديدة</span>
+            <span>{t('productionPage.newSession')}</span>
           </button>
         </div>
       </div>
@@ -168,7 +180,7 @@ export default function ProductionPage() {
               filter === status ? 'bg-[#6366F1] text-white border-[#6366F1]' : 'bg-[#18181B] text-zinc-400 border-zinc-800 hover:border-zinc-700'
             }`}
           >
-            {status}
+            {filterLabels[status]}
           </button>
         ))}
       </div>

@@ -12,13 +12,18 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 import { useData } from '../context/DataContext';
+import { getRoleLabel } from '@/lib/i18nLabels';
+import { useAppDirection } from '../hooks/useAppDirection';
 
 function browserNotificationsSupported(): boolean {
   return typeof window !== 'undefined' && 'Notification' in window && typeof Notification.requestPermission === 'function';
 }
 
 export default function SettingsPage() {
+  const { t } = useTranslation();
+  const { dir } = useAppDirection();
   const { currentUser, logout, updateEmployeeProfile, desktopNotifyWhenVisible, setDesktopNotifyWhenVisible } = useData();
   const [browserNotifyPerm, setBrowserNotifyPerm] = useState<NotificationPermission | 'unsupported'>(() =>
     browserNotificationsSupported() ? Notification.permission : 'unsupported',
@@ -51,12 +56,12 @@ export default function SettingsPage() {
 
   const handleSave = async () => {
     if (!currentUser) {
-      toast.error('سجّل الدخول من النظام الرئيسي أولاً');
+      toast.error(t('settingsProfile.loginFirst'));
       return;
     }
     const trimmed = name.trim();
     if (!trimmed) {
-      toast.error('أدخل الاسم كاملاً');
+      toast.error(t('settingsProfile.nameRequired'));
       return;
     }
     const nextAvatar = avatarUrl.trim();
@@ -64,7 +69,7 @@ export default function SettingsPage() {
     const nameUnchanged = trimmed === (currentUser.name || '').trim();
     const avatarUnchanged = nextAvatar === prevAvatar;
     if (nameUnchanged && avatarUnchanged) {
-      toast.message('لا توجد تغييرات للحفظ');
+      toast.message(t('settingsProfile.noChanges'));
       return;
     }
     const patch: { name: string; avatar?: string } = { name: trimmed };
@@ -72,8 +77,8 @@ export default function SettingsPage() {
       patch.avatar = nextAvatar?.trim() || undefined;
     }
     const ok = await updateEmployeeProfile(currentUser.id, patch);
-    if (ok) toast.success('تم حفظ الملف الشخصي');
-    else toast.error('تعذر الحفظ — تحقق من الاتصال أو الصلاحيات');
+    if (ok) toast.success(t('settingsProfile.saveSuccess'));
+    else toast.error(t('settingsProfile.saveFailed'));
   };
 
   const handleCancel = () => {
@@ -84,24 +89,24 @@ export default function SettingsPage() {
 
   const handleLogout = () => {
     logout();
-    toast.success('تم تسجيل الخروج');
+    toast.success(t('common.logoutDone'));
   };
 
-  const roleLabel = currentUser?.role || '—';
+  const roleLabel = currentUser?.role ? getRoleLabel(currentUser.role, t) : '—';
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 pb-12">
+    <div className="max-w-4xl mx-auto space-y-8 pb-12" dir={dir}>
       <div>
-        <h2 className="text-3xl font-bold text-white mb-2">الإعدادات</h2>
-        <p className="text-zinc-400">عرض الحساب الحالي من السياق (JWT / قاعدة البيانات)</p>
+        <h2 className="text-3xl font-bold text-white mb-2">{t('settingsProfile.title')}</h2>
+        <p className="text-zinc-400">{t('settings.languageHint')}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
         <div className="md:col-span-1 space-y-2">
-          <SettingTab icon={User} label="الملف الشخصي" active />
+          <SettingTab icon={User} label={t('settingsProfile.tabProfile')} active />
           <SettingTab
             icon={Bell}
-            label="الإشعارات"
+            label={t('settingsProfile.tabNotifications')}
             onClick={() =>
               document.getElementById('settings-desktop-notifications')?.scrollIntoView({
                 behavior: 'smooth',
