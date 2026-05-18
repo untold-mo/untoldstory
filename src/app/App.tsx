@@ -3548,13 +3548,29 @@ const PriceQuoteSubmitModal = ({
 
 // --- Leads Workspace ---
 
-const LEADS_PAGE_SIZE = 25;
+const LEADS_PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
+const LEADS_PAGE_SIZE_STORAGE_KEY = 'prod_system_leads_page_size';
+
+function readLeadsPageSize(): number {
+  try {
+    const raw = localStorage.getItem(LEADS_PAGE_SIZE_STORAGE_KEY);
+    const n = Number(raw);
+    if ((LEADS_PAGE_SIZE_OPTIONS as readonly number[]).includes(n)) return n;
+  } catch {
+    /* ignore */
+  }
+  return 25;
+}
 
 const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void }) => {
-  const { leads, users, invoices, expenses, priceQuotes, shootBookings, equipmentBookings, meetingBookings, manualCustomers, currentUser, addLead, addManualCustomer, assignLead, updateLeadStatus, deleteLead } = useData();
+  const { leads, users, invoices, expenses, priceQuotes, shootBookings, equipmentBookings, meetingBookings, manualCustomers, currentUser, addLead, addManualCustomer, assignLead, assignLeadsBulk, updateLeadStatus, deleteLead } = useData();
   const { openLeadUpdate, canUpdateLead, LeadRepUpdateModal } = useLeadRepUpdate();
   const [search, setSearch] = useState('');
   const [leadsPage, setLeadsPage] = useState(1);
+  const [leadsPageSize, setLeadsPageSize] = useState(readLeadsPageSize);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(() => new Set());
+  const [bulkAssignRepId, setBulkAssignRepId] = useState('');
+  const [bulkAssigning, setBulkAssigning] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'الكل' | LeadStatus>('الكل');
   const [sourceFilter, setSourceFilter] = useState<LeadSourceFilter>('all');
   const [assignedFilter, setAssignedFilter] = useState<'all' | 'mine' | 'unassigned'>('all');
@@ -3741,15 +3757,94 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
     return result;
   }, [leads, invoices, priceQuotes, currentUser, assignedFilter, statusFilter, sourceFilter, overdueOnly, repUserFilterId, search]);
 
-  const leadsPageCount = Math.max(1, Math.ceil(visibleLeads.length / LEADS_PAGE_SIZE));
+  const leadsPageCount = Math.max(1, Math.ceil(visibleLeads.length / leadsPageSize));
   const paginatedLeads = useMemo(() => {
-    const start = (leadsPage - 1) * LEADS_PAGE_SIZE;
-    return visibleLeads.slice(start, start + LEADS_PAGE_SIZE);
-  }, [visibleLeads, leadsPage]);
+    const start = (leadsPage - 1) * leadsPageSize;
+    return visibleLeads.slice(start, start + leadsPageSize);
+  }, [visibleLeads, leadsPage, leadsPageSize]);
+
+  const pageLeadIds = useMemo(() => paginatedLeads.map((l) => l.id), [paginatedLeads]);
+  const allPageLeadsSelected =
+    pageLeadIds.length > 0 && pageLeadIds.every((id) => selectedLeadIds.has(id));
+  const somePageLeadsSelected =
+    pageLeadIds.some((id) => selectedLeadIds.has(id)) && !allPageLeadsSelected;
+
+  const toggleLeadSelection = (leadId: string) => {
+    setSelectedLeadIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(leadId)) next.delete(leadId);
+      else next.add(leadId);
+      return next;
+    });
+  };
+
+  const toggleSelectCurrentPage = () => {
+    setSelectedLeadIds((prev) => {
+      const next = new Set(prev);
+      if (allPageLeadsSelected) {
+        pageLeadIds.forEach((id) => next.delete(id));
+      } else {
+        pageLeadIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const selectAllVisibleLeads = () => {
+    setSelectedLeadIds(new Set(visibleLeads.map((l) => l.id)));
+  };
+
+  const clearLeadSelection = () => {
+    setSelectedLeadIds(new Set());
+    setBulkAssignRepId('');
+  };
+
+  const handleBulkAssign = async () => {
+    if (!bulkAssignRepId) {
+      toast.error('اختر مندوباً أولاً');
+      return;
+    }
+    const ids = Array.from(selectedLeadIds);
+    if (ids.length === 0) return;
+    const rep = reps.find((r) => r.id === bulkAssignRepId);
+    if (!rep) {
+      toast.error('المندوب غير موجود');
+      return;
+    }
+    const yes = window.confirm(`تعيين ${ids.length} ليد للمندوب «${rep.name}»؟`);
+    if (!yes) return;
+    setBulkAssigning(true);
+    try {
+      const ok = await assignLeadsBulk(ids, bulkAssignRepId);
+      if (ok === 0) {
+        toast.error('تعذر تعيين الليدز المحددة');
+        return;
+      }
+      if (ok < ids.length) {
+        toast.warning(`تم تعيين ${ok} من ${ids.length} ليد`);
+      } else {
+        toast.success(`تم تعيين ${ok} ليد للمندوب ${rep.name}`);
+      }
+      clearLeadSelection();
+    } finally {
+      setBulkAssigning(false);
+    }
+  };
+
+  const handleLeadsPageSizeChange = (size: number) => {
+    setLeadsPageSize(size);
+    setLeadsPage(1);
+    try {
+      localStorage.setItem(LEADS_PAGE_SIZE_STORAGE_KEY, String(size));
+    } catch {
+      /* ignore */
+    }
+  };
 
   useEffect(() => {
     setLeadsPage(1);
-  }, [search, statusFilter, sourceFilter, assignedFilter, overdueOnly, repUserFilterId, entityMode, currentUser?.id]);
+    setSelectedLeadIds(new Set());
+  }, [search, statusFilter, sourceFilter, assignedFilter, overdueOnly, repUserFilterId, entityMode, currentUser?.id, leadsPageSize]);
 
   useEffect(() => {
     if (leadsPage > leadsPageCount) setLeadsPage(leadsPageCount);
@@ -4284,12 +4379,68 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
         )}
       </div>
 
+      {entityMode === 'leads' && canManageAssignment && selectedLeadIds.size > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-[#7C6BFF]/35 bg-[#7C6BFF]/10 p-4">
+          <span className="text-sm font-black text-white">محدد: {selectedLeadIds.size}</span>
+          <button
+            type="button"
+            onClick={clearLeadSelection}
+            className="px-3 py-1.5 rounded-xl text-xs font-black border border-white/20 text-zinc-200 hover:bg-white/10"
+          >
+            إلغاء التحديد
+          </button>
+          {selectedLeadIds.size < visibleLeads.length && (
+            <button
+              type="button"
+              onClick={selectAllVisibleLeads}
+              className="px-3 py-1.5 rounded-xl text-xs font-black border border-indigo-400/40 text-indigo-200 hover:bg-indigo-500/15"
+            >
+              تحديد كل النتائج ({visibleLeads.length})
+            </button>
+          )}
+          <select
+            value={bulkAssignRepId}
+            onChange={(e) => setBulkAssignRepId(e.target.value)}
+            className="bg-[#0F1528] border border-white/15 rounded-xl px-3 py-2 text-xs min-w-[160px]"
+          >
+            <option value="">اختر مندوباً…</option>
+            {reps.map((rep) => (
+              <option key={rep.id} value={rep.id}>
+                {rep.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            disabled={!bulkAssignRepId || bulkAssigning}
+            onClick={() => void handleBulkAssign()}
+            className="px-4 py-2 rounded-xl text-xs font-black bg-[#7C6BFF] text-white disabled:opacity-50"
+          >
+            {bulkAssigning ? 'جاري التعيين…' : `تعيين ${selectedLeadIds.size} ليد`}
+          </button>
+        </div>
+      )}
+
       <div className="bg-white/[0.04] border border-white/10 rounded-[3rem] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-right min-w-[950px]">
             <thead>
               {entityMode === 'leads' ? (
                 <tr className="bg-[#0B1020]/80">
+                  {canManageAssignment && (
+                    <th className="p-5 w-12">
+                      <input
+                        type="checkbox"
+                        checked={allPageLeadsSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = somePageLeadsSelected;
+                        }}
+                        onChange={toggleSelectCurrentPage}
+                        aria-label="تحديد كل ليدز الصفحة"
+                        className="h-4 w-4 rounded border-white/30 bg-[#0F1528] accent-[#7C6BFF]"
+                      />
+                    </th>
+                  )}
                   <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">العميل</th>
                   <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">التفاصيل</th>
                   <th className="p-5 text-[10px] uppercase tracking-widest text-zinc-400">التصنيف</th>
@@ -4312,7 +4463,21 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
               {entityMode === 'leads' ? paginatedLeads.map((lead) => {
                 const assignedRep = users.find(u => u.id === lead.assignedTo);
                 return (
-                  <tr key={lead.id} className="hover:bg-white/[0.03] transition-colors">
+                  <tr
+                    key={lead.id}
+                    className={`hover:bg-white/[0.03] transition-colors ${selectedLeadIds.has(lead.id) ? 'bg-[#7C6BFF]/10' : ''}`}
+                  >
+                    {canManageAssignment && (
+                      <td className="p-5 w-12">
+                        <input
+                          type="checkbox"
+                          checked={selectedLeadIds.has(lead.id)}
+                          onChange={() => toggleLeadSelection(lead.id)}
+                          aria-label={`تحديد ${lead.name}`}
+                          className="h-4 w-4 rounded border-white/30 bg-[#0F1528] accent-[#7C6BFF]"
+                        />
+                      </td>
+                    )}
                     <td className="p-5">
                       <p className="font-black text-white">{lead.name}</p>
                       <p className="text-xs text-zinc-400 mt-1">{lead.company}</p>
@@ -4485,32 +4650,50 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
           </div>
         )}
 
-        {entityMode === 'leads' && visibleLeads.length > LEADS_PAGE_SIZE && (
+        {entityMode === 'leads' && visibleLeads.length > 0 && (
           <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-white/10 bg-[#0B1020]/50 flex-wrap">
-            <p className="text-xs text-zinc-400">
-              عرض {(leadsPage - 1) * LEADS_PAGE_SIZE + 1}–{Math.min(leadsPage * LEADS_PAGE_SIZE, visibleLeads.length)} من {visibleLeads.length}
-            </p>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={leadsPage <= 1}
-                onClick={() => setLeadsPage((p) => Math.max(1, p - 1))}
-                className="px-3 py-1.5 rounded-xl text-xs font-black border border-white/15 bg-white/5 disabled:opacity-40"
-              >
-                السابق
-              </button>
-              <span className="text-xs text-zinc-300 font-bold px-2">
-                {leadsPage} / {leadsPageCount}
-              </span>
-              <button
-                type="button"
-                disabled={leadsPage >= leadsPageCount}
-                onClick={() => setLeadsPage((p) => Math.min(leadsPageCount, p + 1))}
-                className="px-3 py-1.5 rounded-xl text-xs font-black border border-white/15 bg-white/5 disabled:opacity-40"
-              >
-                التالي
-              </button>
+            <div className="flex items-center gap-3 flex-wrap">
+              <p className="text-xs text-zinc-400">
+                عرض {(leadsPage - 1) * leadsPageSize + 1}–{Math.min(leadsPage * leadsPageSize, visibleLeads.length)} من {visibleLeads.length}
+              </p>
+              <label className="flex items-center gap-2 text-xs text-zinc-400">
+                <span className="font-bold">في الصفحة:</span>
+                <select
+                  value={leadsPageSize}
+                  onChange={(e) => handleLeadsPageSizeChange(Number(e.target.value))}
+                  className="bg-[#0F1528] border border-white/15 rounded-lg px-2 py-1 text-xs text-zinc-200"
+                >
+                  {LEADS_PAGE_SIZE_OPTIONS.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
+            {leadsPageCount > 1 && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={leadsPage <= 1}
+                  onClick={() => setLeadsPage((p) => Math.max(1, p - 1))}
+                  className="px-3 py-1.5 rounded-xl text-xs font-black border border-white/15 bg-white/5 disabled:opacity-40"
+                >
+                  السابق
+                </button>
+                <span className="text-xs text-zinc-300 font-bold px-2">
+                  {leadsPage} / {leadsPageCount}
+                </span>
+                <button
+                  type="button"
+                  disabled={leadsPage >= leadsPageCount}
+                  onClick={() => setLeadsPage((p) => Math.min(leadsPageCount, p + 1))}
+                  className="px-3 py-1.5 rounded-xl text-xs font-black border border-white/15 bg-white/5 disabled:opacity-40"
+                >
+                  التالي
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

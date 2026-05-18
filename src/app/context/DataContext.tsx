@@ -1108,6 +1108,7 @@ interface DataContextType {
   reviewLeadActivity: (leadId: string, activityId: string, decision: 'approved' | 'rejected', comment?: string) => boolean;
   setLeadFollowUp: (leadId: string, followUpAt?: string) => void;
   assignLead: (leadId: string, userId?: string) => void;
+  assignLeadsBulk: (leadIds: string[], userId?: string) => Promise<number>;
   deleteLead: (leadId: string) => Promise<DeleteLeadResult>;
   updateUserSkills: (userId: string, skills: string[]) => Promise<boolean>;
   addEmployee: (employee: {
@@ -5264,6 +5265,75 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       entityId: leadId,
       details: userId ? `المندوب: ${user?.name || userId}` : 'بدون مندوب',
     });
+  };
+
+  const assignLeadsBulk = async (leadIds: string[], userId?: string): Promise<number> => {
+    if (!(currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات')) return 0;
+    const user = users.find((u) => u.id === userId);
+    if (userId && (!user || user.role !== 'مندوب')) return 0;
+    const uniqueIds = [...new Set(leadIds.map((id) => String(id).trim()).filter(Boolean))];
+    if (uniqueIds.length === 0) return 0;
+
+    if (isServerDataMode()) {
+      let ok = 0;
+      for (const leadId of uniqueIds) {
+        try {
+          const updated = await serverPatchLead(leadId, {
+            assignedTo: userId || null,
+            appendActivity: {
+              action: userId ? `تعيين المندوب: ${user?.name || ''}` : 'إلغاء تعيين المندوب',
+            },
+          });
+          setLeads((prev) => prev.map((l) => (l.id === leadId ? updated : l)));
+          ok += 1;
+        } catch {
+          /* skip failed row */
+        }
+      }
+      if (ok > 0) {
+        addAuditEvent({
+          action: userId ? 'تعيين جماعي لليدز' : 'إلغاء تعيين جماعي لليدز',
+          entityType: 'lead',
+          details: userId
+            ? `${ok} ليد → ${user?.name || userId}`
+            : `إلغاء تعيين ${ok} ليد`,
+        });
+      }
+      return ok;
+    }
+
+    const idSet = new Set(uniqueIds);
+    let ok = 0;
+    setLeads((prev) =>
+      prev.map((lead) => {
+        if (!idSet.has(lead.id)) return lead;
+        ok += 1;
+        const newActivity: Activity = {
+          id: Math.random().toString(36).substr(2, 9),
+          leadId: lead.id,
+          action: userId ? `تعيين المندوب: ${user?.name}` : 'إلغاء تعيين المندوب',
+          userId: currentUser?.id || 'sys',
+          userName: currentUser?.name || 'النظام',
+          createdAt: new Date().toISOString(),
+        };
+        return {
+          ...lead,
+          assignedTo: userId || undefined,
+          updatedAt: new Date().toISOString(),
+          timeline: [newActivity, ...lead.timeline],
+        };
+      }),
+    );
+    if (ok > 0) {
+      addAuditEvent({
+        action: userId ? 'تعيين جماعي لليدز' : 'إلغاء تعيين جماعي لليدز',
+        entityType: 'lead',
+        details: userId
+          ? `${ok} ليد → ${user?.name || userId}`
+          : `إلغاء تعيين ${ok} ليد`,
+      });
+    }
+    return ok;
   };
 
   const deleteLead = async (leadId: string): Promise<DeleteLeadResult> => {
@@ -9522,7 +9592,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <DataContext.Provider value={{ 
       leads, users, manualCustomers, invoices, priceQuotes, accountingPolicy, expenses, currentUser, setCurrentUser: setCurrentUserPublic, addLead, bulkAddLeads, 
-      updateLeadStatus, logLeadInteraction, reviewLeadActivity, setLeadFollowUp, assignLead, deleteLead, updateUserSkills, addEmployee, addManualCustomer, updateEmployeeSalary, updateEmployeeProfile, ownerSetEmployeePassword, removeEmployee, getLeadScore, refreshSLA, logout, addInvoice,
+      updateLeadStatus, logLeadInteraction, reviewLeadActivity, setLeadFollowUp, assignLead, assignLeadsBulk, deleteLead, updateUserSkills, addEmployee, addManualCustomer, updateEmployeeSalary, updateEmployeeProfile, ownerSetEmployeePassword, removeEmployee, getLeadScore, refreshSLA, logout, addInvoice,
       updateInvoiceStatus, recordInvoiceCollection, addPriceQuote, productionPriceQuote, reassignPricingRequest, approvePriceQuote, rejectPriceQuote, ownerReturnPriceQuoteToProduction, repRecordClientAcceptance, repRecordClientRejection, updateAccountingPolicy, addExpense, updateExpenseStatus, approveExpense, rejectExpense,
       getRepSnapshots, monthlyTargets, updateMonthlyTarget, getPerformanceAlerts, getSlaHeatmap,
       closedMonths, closeMonth, reopenMonth, isMonthClosed,
