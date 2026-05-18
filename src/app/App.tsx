@@ -3563,7 +3563,7 @@ function readLeadsPageSize(): number {
 }
 
 const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void }) => {
-  const { leads, users, invoices, expenses, priceQuotes, shootBookings, equipmentBookings, meetingBookings, manualCustomers, currentUser, addLead, addManualCustomer, assignLead, assignLeadsBulk, updateLeadStatus, deleteLead } = useData();
+  const { leads, users, invoices, expenses, priceQuotes, shootBookings, equipmentBookings, meetingBookings, manualCustomers, currentUser, addLead, addManualCustomer, assignLead, assignLeadsBulk, updateLeadStatus, deleteLead, deleteLeadsBulk } = useData();
   const { openLeadUpdate, canUpdateLead, LeadRepUpdateModal } = useLeadRepUpdate();
   const [search, setSearch] = useState('');
   const [leadsPage, setLeadsPage] = useState(1);
@@ -3573,6 +3573,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
   selectedLeadIdsRef.current = selectedLeadIds;
   const [bulkAssignRepId, setBulkAssignRepId] = useState('');
   const [bulkAssigning, setBulkAssigning] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'الكل' | LeadStatus>('الكل');
   const [sourceFilter, setSourceFilter] = useState<LeadSourceFilter>('all');
   const [assignedFilter, setAssignedFilter] = useState<'all' | 'mine' | 'unassigned'>('all');
@@ -3857,6 +3858,44 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
       return;
     }
     assignLead(sourceLeadId, userId);
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedLeadIdsRef.current);
+    if (ids.length === 0) return;
+    const yes = window.confirm(
+      ids.length === 1
+        ? 'حذف الليد المحدد نهائياً؟ لا يمكن التراجع.'
+        : `حذف ${ids.length} ليد نهائياً؟ لا يمكن التراجع.`,
+    );
+    if (!yes) return;
+    setBulkDeleting(true);
+    try {
+      const result = await deleteLeadsBulk(ids);
+      if (client360Lead && ids.includes(client360Lead.id)) {
+        setClient360Lead(null);
+      }
+      if (result.deleted === 0) {
+        if (result.blocked > 0) {
+          toast.error('لا يمكن الحذف: ليدز مرتبطة بفواتير أو عروض أسعار');
+        } else {
+          toast.error('تعذر حذف الليدز المحددة');
+        }
+        return;
+      }
+      if (result.blocked > 0 || result.failed > 0) {
+        toast.warning(
+          `تم حذف ${result.deleted} ليد` +
+            (result.blocked ? ` — تخطي ${result.blocked} مرتبط` : '') +
+            (result.failed ? ` — فشل ${result.failed}` : ''),
+        );
+      } else {
+        toast.success(`تم حذف ${result.deleted} ليد`);
+      }
+      clearLeadSelection();
+    } finally {
+      setBulkDeleting(false);
+    }
   };
 
   const handleLeadsPageSizeChange = (size: number) => {
@@ -4410,7 +4449,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
       {entityMode === 'leads' && canManageAssignment && selectedLeadIds.size > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-[#7C6BFF]/35 bg-[#7C6BFF]/10 p-4">
           <span className="text-sm font-black text-white">
-            محدد: {selectedLeadIds.size} — التعيين يشمل كل الليدز المحددة
+            محدد: {selectedLeadIds.size} — التعيين والحذف يشملان كل الليدز المحددة
           </span>
           <button
             type="button"
@@ -4442,11 +4481,20 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
           </select>
           <button
             type="button"
-            disabled={!bulkAssignRepId || bulkAssigning}
+            disabled={!bulkAssignRepId || bulkAssigning || bulkDeleting}
             onClick={() => void handleBulkAssign()}
             className="px-4 py-2 rounded-xl text-xs font-black bg-[#7C6BFF] text-white disabled:opacity-50"
           >
             {bulkAssigning ? 'جاري التعيين…' : `تعيين ${selectedLeadIds.size} ليد`}
+          </button>
+          <button
+            type="button"
+            disabled={bulkAssigning || bulkDeleting}
+            onClick={() => void handleBulkDelete()}
+            className="px-4 py-2 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-500 text-white disabled:opacity-50 inline-flex items-center gap-1.5"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            {bulkDeleting ? 'جاري الحذف…' : `حذف ${selectedLeadIds.size} ليد`}
           </button>
         </div>
       )}

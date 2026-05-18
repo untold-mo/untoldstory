@@ -85,6 +85,12 @@ export type LeadStatus = 'جديد' | 'قيد التواصل' | 'عرض سعر' 
 
 /** نتيجة محاولة حذف ليد — للرسائل في الواجهة */
 export type DeleteLeadResult = 'deleted' | 'forbidden' | 'blocked' | 'failed';
+
+export type BulkDeleteLeadsResult = {
+  deleted: number;
+  blocked: number;
+  failed: number;
+};
 export type LeadCategory = 'إنجليزي' | 'شركات كبرى' | 'شركات صغيرة' | 'إعلانات' | 'سوشيال ميديا';
 
 export interface Activity {
@@ -1110,6 +1116,7 @@ interface DataContextType {
   assignLead: (leadId: string, userId?: string) => void;
   assignLeadsBulk: (leadIds: string[], userId?: string) => Promise<number>;
   deleteLead: (leadId: string) => Promise<DeleteLeadResult>;
+  deleteLeadsBulk: (leadIds: string[]) => Promise<BulkDeleteLeadsResult>;
   updateUserSkills: (userId: string, skills: string[]) => Promise<boolean>;
   addEmployee: (employee: {
     name: string;
@@ -5378,6 +5385,32 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return 'deleted';
   };
 
+  const deleteLeadsBulk = async (leadIds: string[]): Promise<BulkDeleteLeadsResult> => {
+    const empty = { deleted: 0, blocked: 0, failed: 0 };
+    if (!(currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات')) return empty;
+    const uniqueIds = [...new Set(leadIds.map((id) => String(id).trim()).filter(Boolean))];
+    if (uniqueIds.length === 0) return empty;
+
+    let deleted = 0;
+    let blocked = 0;
+    let failed = 0;
+    for (const leadId of uniqueIds) {
+      const result = await deleteLead(leadId);
+      if (result === 'deleted') deleted += 1;
+      else if (result === 'blocked') blocked += 1;
+      else failed += 1;
+    }
+
+    if (deleted > 0) {
+      addAuditEvent({
+        action: 'حذف جماعي لليدز',
+        entityType: 'lead',
+        details: `تم حذف ${deleted} ليد${blocked ? ` — تخطي ${blocked} مرتبط بفواتير/عروض` : ''}${failed ? ` — فشل ${failed}` : ''}`,
+      });
+    }
+    return { deleted, blocked, failed };
+  };
+
   const updateUserSkills = async (userId: string, skills: string[]): Promise<boolean> => {
     if (!(currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات')) return false;
     if (isServerDataMode()) {
@@ -9596,7 +9629,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <DataContext.Provider value={{ 
       leads, users, manualCustomers, invoices, priceQuotes, accountingPolicy, expenses, currentUser, setCurrentUser: setCurrentUserPublic, addLead, bulkAddLeads, 
-      updateLeadStatus, logLeadInteraction, reviewLeadActivity, setLeadFollowUp, assignLead, assignLeadsBulk, deleteLead, updateUserSkills, addEmployee, addManualCustomer, updateEmployeeSalary, updateEmployeeProfile, ownerSetEmployeePassword, removeEmployee, getLeadScore, refreshSLA, logout, addInvoice,
+      updateLeadStatus, logLeadInteraction, reviewLeadActivity, setLeadFollowUp, assignLead, assignLeadsBulk, deleteLead, deleteLeadsBulk, updateUserSkills, addEmployee, addManualCustomer, updateEmployeeSalary, updateEmployeeProfile, ownerSetEmployeePassword, removeEmployee, getLeadScore, refreshSLA, logout, addInvoice,
       updateInvoiceStatus, recordInvoiceCollection, addPriceQuote, productionPriceQuote, reassignPricingRequest, approvePriceQuote, rejectPriceQuote, ownerReturnPriceQuoteToProduction, repRecordClientAcceptance, repRecordClientRejection, updateAccountingPolicy, addExpense, updateExpenseStatus, approveExpense, rejectExpense,
       getRepSnapshots, monthlyTargets, updateMonthlyTarget, getPerformanceAlerts, getSlaHeatmap,
       closedMonths, closeMonth, reopenMonth, isMonthClosed,
