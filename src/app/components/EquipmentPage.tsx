@@ -13,18 +13,50 @@ import {
 } from 'lucide-react';
 import { motion as Motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { useData } from '../context/DataContext';
 
 const COLORS = ['#6366F1', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
 
+const DEFAULT_CATEGORIES = ['كاميرات', 'مثبتات', 'إضاءة', 'صوت', 'مونتاج', 'عام'];
+
 export default function EquipmentPage() {
-  const { equipmentItems, removeEquipmentItem, currentUser } = useData();
+  const { equipmentItems, addEquipmentItem, removeEquipmentItem, currentUser } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addForm, setAddForm] = useState({ name: '', category: 'كاميرات', quantity: '1' });
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   const canManageEquipment =
     currentUser?.role === 'مالك' || currentUser?.role === 'محاسب' || currentUser?.role === 'مدير إنتاج';
+
+  const handleAddEquipment = () => {
+    if (!canManageEquipment) {
+      toast.error('إضافة المعدات للمالك أو المحاسب أو مدير الإنتاج فقط');
+      return;
+    }
+    const name = addForm.name.trim();
+    const category = addForm.category.trim();
+    const totalQuantity = Math.max(1, Math.floor(Number(addForm.quantity) || 1));
+    const ok = addEquipmentItem({ name, category, totalQuantity });
+    if (!ok) {
+      toast.error('تأكد من الاسم والفئة، أو أن المعدة غير مكررة بنفس الاسم');
+      return;
+    }
+    toast.success('تمت إضافة المعدة');
+    setAddForm({ name: '', category: 'كاميرات', quantity: '1' });
+    setAddOpen(false);
+  };
+
+  const handleDeleteEquipment = (id: string, name: string) => {
+    if (!canManageEquipment) {
+      toast.error('حذف المعدات للمالك أو المحاسب أو مدير الإنتاج فقط');
+      return;
+    }
+    if (!window.confirm(`حذف «${name}» نهائياً من قائمة المعدات؟`)) return;
+    removeEquipmentItem(id);
+  };
 
   useEffect(() => {
     if (!openMenuId) return;
@@ -68,18 +100,101 @@ export default function EquipmentPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold text-white mb-2">المعدات</h2>
-          <p className="text-zinc-400">قائمة المعدات من workspace-state / الخادم</p>
+          <p className="text-zinc-400">
+            للحذف: اضغط ⋮ على بطاقة المعدة ثم «حذف المعدة» (المالك / المحاسب / مدير الإنتاج)
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <button type="button" className="p-2.5 bg-[#18181B] border border-zinc-800 rounded-xl text-zinc-400 hover:text-white transition-all">
             <History className="h-5 w-5" />
           </button>
-          <button type="button" className="flex items-center justify-center gap-2 bg-[#6366F1] text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-[#5254E2] transition-all shadow-lg shadow-[#6366F1]/20">
-            <Plus className="h-5 w-5" />
-            <span>إضافة معدة</span>
-          </button>
+          {canManageEquipment ? (
+            <button
+              type="button"
+              onClick={() => setAddOpen(true)}
+              className="flex items-center justify-center gap-2 bg-[#6366F1] text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-[#5254E2] transition-all shadow-lg shadow-[#6366F1]/20"
+            >
+              <Plus className="h-5 w-5" />
+              <span>إضافة معدة</span>
+            </button>
+          ) : (
+            <span className="text-xs text-zinc-500 px-2">الإضافة للمالك / المحاسب / مدير الإنتاج</span>
+          )}
         </div>
       </div>
+
+      {addOpen && canManageEquipment ? (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-equipment-title"
+          onClick={() => setAddOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-zinc-700 bg-[#18181B] p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="add-equipment-title" className="text-lg font-bold text-white mb-1">
+              إضافة معدة جديدة
+            </h3>
+            <p className="text-xs text-zinc-400 mb-5">تُحفظ في النظام وتظهر في حجوزات المعدات</p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-500 mb-1">اسم المعدة *</label>
+                <input
+                  value={addForm.name}
+                  onChange={(e) => setAddForm((p) => ({ ...p, name: e.target.value }))}
+                  placeholder="مثال: Sony A7IV"
+                  className="w-full bg-[#09090B] border border-zinc-800 rounded-xl px-3 py-2.5 text-sm text-white"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-500 mb-1">الفئة *</label>
+                <input
+                  list="equipment-categories"
+                  value={addForm.category}
+                  onChange={(e) => setAddForm((p) => ({ ...p, category: e.target.value }))}
+                  placeholder="كاميرات / إضاءة …"
+                  className="w-full bg-[#09090B] border border-zinc-800 rounded-xl px-3 py-2.5 text-sm text-white"
+                />
+                <datalist id="equipment-categories">
+                  {DEFAULT_CATEGORIES.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-500 mb-1">الكمية</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={addForm.quantity}
+                  onChange={(e) => setAddForm((p) => ({ ...p, quantity: e.target.value }))}
+                  className="w-full bg-[#09090B] border border-zinc-800 rounded-xl px-3 py-2.5 text-sm text-white"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                type="button"
+                onClick={handleAddEquipment}
+                className="flex-1 rounded-xl bg-[#6366F1] py-2.5 text-sm font-bold text-white hover:bg-[#5254E2]"
+              >
+                حفظ المعدة
+              </button>
+              <button
+                type="button"
+                onClick={() => setAddOpen(false)}
+                className="rounded-xl border border-zinc-700 px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {categoryStats.length === 0 ? (
