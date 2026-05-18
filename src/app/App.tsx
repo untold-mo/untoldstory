@@ -90,6 +90,7 @@ import { useTranslation } from 'react-i18next';
 // --- Shared Components ---
 const SYSTEM_NAME = 'The Untold Story System';
 const SYSTEM_LOGO = '/brand/the-untold-story-logo.png';
+const WELCOME_WORDMARK = '/brand/the-untold-story-wordmark.png';
 const ALERT_HIGH_EXPENSE = 50000;
 const ALERT_MAX_OVERDUE_LEADS = 5;
 const NAV_INTENT_KEY = 'prod_system_nav_intent';
@@ -10487,7 +10488,6 @@ const NavItems = ({ role, active, onChange, allowedTabs }: any) => {
 };
 
 const WelcomeGate = ({ onUnlock }: { onUnlock: () => void }) => {
-  const { t } = useTranslation();
   const { dir } = useAppDirection();
   const [tapCount, setTapCount] = useState(0);
 
@@ -10500,39 +10500,24 @@ const WelcomeGate = ({ onUnlock }: { onUnlock: () => void }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#080B13] font-['Cairo'] flex flex-col items-center justify-center p-8 relative overflow-hidden" dir={dir}>
+    <div className="min-h-screen bg-black font-['Cairo'] flex flex-col items-center justify-center p-8 relative overflow-hidden" dir={dir}>
       <LanguageSwitcher compact className="absolute top-4 end-4 z-20" />
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-[-15%] right-[-10%] w-[55%] h-[55%] rounded-full bg-rose-500/15 blur-[120px]" />
-        <div className="absolute bottom-[-20%] left-[-15%] w-[50%] h-[50%] rounded-full bg-[#7C6BFF]/12 blur-[100px]" />
-      </div>
-      <div className="relative z-10 flex flex-col items-center text-center max-w-lg">
-        <p className="text-[11px] font-black uppercase tracking-[0.45em] text-zinc-500 mb-6">welcome</p>
-        <h1 className="text-4xl sm:text-5xl md:text-6xl font-black text-white tracking-tight mb-2">
-          untold<span className="text-transparent bg-clip-text bg-gradient-to-r from-rose-300 to-[#A99FFF]">stories</span>
-        </h1>
-        <p className="text-zinc-500 text-sm font-bold mb-10">Untold Stories</p>
-        {/* منطقة ضغط سرية: لا إطار، لا وميض، شبه مختفية — المعرف فقط يعلم المكان */}
+      <div className="relative z-10 flex flex-col items-center justify-center text-center w-full max-w-2xl">
+        <img
+          src={WELCOME_WORDMARK}
+          alt="The Untold Story"
+          className="w-full max-w-[min(92vw,520px)] h-auto object-contain select-none"
+          draggable={false}
+        />
         <button
           type="button"
           onClick={onSecretTap}
-          className="relative mt-6 flex h-[3.25rem] w-[3.25rem] shrink-0 cursor-default items-center justify-center rounded-full border-0 bg-transparent p-0 text-inherit shadow-none outline-none ring-0 focus:outline-none focus-visible:ring-0 active:opacity-100"
-          aria-hidden
-          tabIndex={-1}
+          className="mt-10 flex h-14 w-14 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 outline-none focus:outline-none active:scale-95 transition-transform"
+          aria-label="فتح تسجيل الدخول"
         >
-          <span
-            className="pointer-events-none select-none text-[1.05rem] leading-none opacity-[0.14] grayscale saturate-50"
-            role="presentation"
-          >
+          <span className="select-none text-4xl leading-none" role="presentation">
             😄
           </span>
-        </button>
-        <button
-          type="button"
-          onClick={onUnlock}
-          className="mt-10 text-sm font-bold text-zinc-400 underline decoration-zinc-600 underline-offset-4 transition-colors hover:text-white"
-        >
-          {t('welcome.continueLogin')}
         </button>
       </div>
     </div>
