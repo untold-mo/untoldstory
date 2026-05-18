@@ -205,8 +205,8 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
         <div className="mt-6 bg-blue-500/10 border border-blue-500/20 p-5 rounded-2xl flex items-start gap-3 text-blue-300">
           <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <p className="text-xs font-bold leading-relaxed">
-            يدعم ملفك مباشرة بدون عناوين: العمود A = الاسم، C = الموديل/الاهتمام (Mercedes, EQE…)، D = الجوال.
-            أو ملف بصف عناوين (اسم، شركة، موبايل، بريد…) بالعربي أو الإنجليزي.
+            شيت Expo / سيارات: Client Name، Client number، Client Interested in (عمود أو عمودين) — يُتجاهل
+            source و Lead From و Date of Phone Call. أو ملف عربي/إنجليزي بعناوين: اسم، موبايل، اهتمام.
           </p>
         </div>
 

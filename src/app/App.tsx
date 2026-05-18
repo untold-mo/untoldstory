@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { 
   LayoutDashboard, Users, Briefcase, Settings, Bell, Search, Plus, Phone, Mail, 
   MoreVertical, Filter, ArrowUpRight, Target, UserPlus, Trophy, Clock, LogOut, 
-  Menu, X, ChevronRight, MessageSquare, CheckCircle2, TrendingUp, Building2, Home,
+  Menu, X, ChevronRight, ChevronLeft, MessageSquare, CheckCircle2, TrendingUp, Building2, Home,
   DollarSign, ShieldCheck, Lock, Wallet, Receipt, FileUp, PieChart as PieIcon, 
   BarChart3, Calendar, Layers, Zap, Star, AlertCircle, FileText, Banknote, Trash2,
   XCircle, ArrowLeftRight
@@ -82,6 +82,10 @@ import { useLeadRepUpdate } from './components/LeadRepUpdateModal';
 import { BulkLeadsUploadModal } from './components/BulkLeadsUploadModal';
 import { RepSkillsEditor } from './components/RepSkillsEditor';
 import { REP_SKILL_PRESETS } from '@/lib/repSkills';
+import { LanguageSwitcher } from './components/LanguageSwitcher';
+import { useAppDirection } from './hooks/useAppDirection';
+import { getNavLabel } from '@/lib/navLabels';
+import { useTranslation } from 'react-i18next';
 
 // --- Shared Components ---
 const SYSTEM_NAME = 'The Untold Story System';
@@ -4792,6 +4796,7 @@ const SalesManagerSettings = ({
     workflowRulesSettings,
     updateWorkflowRulesSettings,
   } = useData();
+  const { t } = useTranslation();
   const reps = users.filter(u => u.role === 'مندوب');
   const salesManager = users.find(u => u.role === 'مدير مبيعات');
   const restoreInputRef = useRef<HTMLInputElement | null>(null);
@@ -5165,6 +5170,9 @@ const SalesManagerSettings = ({
                 Premium 3D
               </button>
             </div>
+          </div>
+          <div className="pt-4 border-t border-white/10">
+            <LanguageSwitcher />
           </div>
         </div>
       )}
@@ -10144,59 +10152,58 @@ const SeoModuleHub = () => {
 };
 
 const NavItems = ({ role, active, onChange, allowedTabs }: any) => {
-  const common = [
-    { id: 'home', label: 'الرئيسية', icon: Home },
-    { id: 'dashboard', label: 'لوحة التحكم', icon: LayoutDashboard },
+  const { t } = useTranslation();
+
+  const owner = [
+    { id: 'home', icon: Home },
+    { id: 'approvals', icon: ShieldCheck },
+    { id: 'owner-dash', icon: LayoutDashboard },
+    { id: 'bookings', icon: Calendar },
+    { id: 'team-performance', icon: BarChart3 },
+    { id: 'leads', icon: Users },
+    { id: 'accountant', icon: Receipt },
+    { id: 'settings', icon: Settings },
+    { id: 'linked-views', icon: Layers },
+    { id: 'seo', icon: TrendingUp },
   ];
 
   const manager = [
-    ...common,
-    { id: 'leads', label: 'كافة الليدز', icon: Users },
-    { id: 'manager-reps', label: 'فريق المبيعات', icon: UserPlus },
-    { id: 'bookings', label: 'الحجوزات', icon: Calendar },
-    { id: 'team-performance', label: 'مراقبة المناديب', icon: BarChart3 },
-    { id: 'linked-views', label: 'عروض البيانات', icon: Layers },
-  ];
-
-  const owner = [
-    { id: 'home', label: 'الرئيسية', icon: Home },
-    { id: 'approvals', label: 'مركز الاعتمادات', icon: ShieldCheck },
-    { id: 'owner-dash', label: 'نظرة عامة', icon: LayoutDashboard },
-    { id: 'bookings', label: 'الحجوزات', icon: Calendar },
-    { id: 'team-performance', label: 'مراقبة الفريق', icon: BarChart3 },
-    { id: 'leads', label: 'كافة الليدز', icon: Users },
-    { id: 'accountant', label: 'الإدارة المالية', icon: Receipt },
-    { id: 'settings', label: 'إعدادات النظام', icon: Settings },
-    { id: 'linked-views', label: 'عروض البيانات', icon: Layers },
-    { id: 'seo', label: 'SEO Intelligence', icon: TrendingUp },
+    { id: 'home', icon: Home },
+    { id: 'dashboard', icon: LayoutDashboard },
+    { id: 'leads', icon: Users },
+    { id: 'manager-reps', icon: UserPlus },
+    { id: 'bookings', icon: Calendar },
+    { id: 'team-performance', icon: BarChart3 },
+    { id: 'linked-views', icon: Layers },
   ];
 
   const accountant = [
-    { id: 'home', label: 'الرئيسية', icon: Home },
-    { id: 'accountant', label: 'الفواتير', icon: Receipt },
-    { id: 'bookings', label: 'الحجوزات', icon: Calendar },
-    { id: 'leads', label: 'العملاء', icon: Users },
-    { id: 'linked-views', label: 'عروض البيانات', icon: Layers },
+    { id: 'home', icon: Home },
+    { id: 'accountant', icon: Receipt },
+    { id: 'bookings', icon: Calendar },
+    { id: 'leads', icon: Users },
+    { id: 'linked-views', icon: Layers },
   ];
 
   const productionManager = [
-    { id: 'home', label: 'الرئيسية', icon: Home },
-    { id: 'production', label: 'تمويل الإنتاج', icon: Briefcase },
-    { id: 'bookings', label: 'الحجوزات', icon: Calendar },
-    { id: 'leads', label: 'العملاء', icon: Users },
+    { id: 'home', icon: Home },
+    { id: 'production', icon: Briefcase },
+    { id: 'bookings', icon: Calendar },
+    { id: 'leads', icon: Users },
   ];
 
   const rep = [
-    { id: 'home', label: 'الرئيسية', icon: Home },
-    { id: 'dashboard', label: 'مهامي', icon: Clock },
-    { id: 'bookings', label: 'الحجوزات', icon: Calendar },
-    { id: 'leads', label: 'عملائي', icon: Users },
-    { id: 'performance', label: 'أدائي', icon: Trophy },
-    { id: 'linked-views', label: 'عروض البيانات', icon: Layers },
+    { id: 'home', icon: Home },
+    { id: 'dashboard', icon: Clock },
+    { id: 'bookings', icon: Calendar },
+    { id: 'leads', icon: Users },
+    { id: 'performance', icon: Trophy },
+    { id: 'linked-views', icon: Layers },
   ];
 
   const items = (role === 'مالك' ? owner : role === 'مدير مبيعات' ? manager : role === 'محاسب' ? accountant : role === 'مدير إنتاج' ? productionManager : rep)
-    .filter((item) => allowedTabs.includes(item.id));
+    .filter((item) => allowedTabs.includes(item.id))
+    .map((item) => ({ ...item, label: getNavLabel(item.id, role, t) }));
 
   return (
     <>
@@ -10218,25 +10225,9 @@ const NavItems = ({ role, active, onChange, allowedTabs }: any) => {
   );
 };
 
-/** عناوين التبويبات لشريط الجوال (الشريط الجانبي مخفي تحت lg بدون بديل سابقاً) */
-const TAB_TITLE_AR: Record<string, string> = {
-  home: 'الرئيسية',
-  dashboard: 'لوحة التحكم',
-  approvals: 'مركز الاعتمادات',
-  'owner-dash': 'نظرة عامة',
-  bookings: 'الحجوزات',
-  'team-performance': 'مراقبة الفريق',
-  leads: 'كافة الليدز',
-  accountant: 'الإدارة المالية',
-  settings: 'إعدادات النظام',
-  seo: 'SEO',
-  production: 'تمويل الإنتاج',
-  'manager-reps': 'فريق المبيعات',
-  performance: 'أدائي',
-  'linked-views': 'عروض البيانات',
-};
-
 const WelcomeGate = ({ onUnlock }: { onUnlock: () => void }) => {
+  const { t } = useTranslation();
+  const { dir } = useAppDirection();
   const [tapCount, setTapCount] = useState(0);
 
   const onSecretTap = () => {
@@ -10248,7 +10239,8 @@ const WelcomeGate = ({ onUnlock }: { onUnlock: () => void }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#080B13] font-['Cairo'] flex flex-col items-center justify-center p-8 relative overflow-hidden" dir="rtl">
+    <div className="min-h-screen bg-[#080B13] font-['Cairo'] flex flex-col items-center justify-center p-8 relative overflow-hidden" dir={dir}>
+      <LanguageSwitcher compact className="absolute top-4 end-4 z-20" />
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-[-15%] right-[-10%] w-[55%] h-[55%] rounded-full bg-rose-500/15 blur-[120px]" />
         <div className="absolute bottom-[-20%] left-[-15%] w-[50%] h-[50%] rounded-full bg-[#7C6BFF]/12 blur-[100px]" />
@@ -10279,7 +10271,7 @@ const WelcomeGate = ({ onUnlock }: { onUnlock: () => void }) => {
           onClick={onUnlock}
           className="mt-10 text-sm font-bold text-zinc-400 underline decoration-zinc-600 underline-offset-4 transition-colors hover:text-white"
         >
-          المتابعة إلى تسجيل الدخول
+          {t('welcome.continueLogin')}
         </button>
       </div>
     </div>
@@ -10319,6 +10311,8 @@ function mapSupabaseAuthErrorForLogin(raw: string): string {
 
 const LoginPage = () => {
   const { setCurrentUser, addAuditEvent } = useData();
+  const { t } = useTranslation();
+  const { dir } = useAppDirection();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -10375,7 +10369,7 @@ const LoginPage = () => {
           entityType: 'system',
           details: `${user.name} (${user.role})`,
         });
-        toast.success(`أهلاً بك يا ${user.name}`);
+        toast.success(t('login.welcome', { name: user.name }));
         return;
       }
 
@@ -10409,7 +10403,7 @@ const LoginPage = () => {
         entityType: 'system',
         details: `${user.name} (${user.role})`,
       });
-      toast.success(`أهلاً بك يا ${user.name}`);
+      toast.success(t('login.welcome', { name: user.name }));
     } catch {
       if (isSupabaseDirectMode()) {
         setError('تعذر الاتصال بـ Supabase. تأكد من VITE_SUPABASE_URL و VITE_SUPABASE_ANON_KEY في ملف .env.local');
@@ -10422,7 +10416,8 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="system-theme premium-login-shell cinematic-production min-h-screen bg-[#080B13] grid place-items-center p-6 font-['Cairo'] relative overflow-hidden" dir="rtl">
+    <div className="system-theme premium-login-shell cinematic-production min-h-screen bg-[#080B13] grid place-items-center p-6 font-['Cairo'] relative overflow-hidden" dir={dir}>
+      <LanguageSwitcher compact className="absolute top-4 end-4 z-20" />
       <div className="premium-login-orb premium-login-orb-a absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-[#7C6BFF]/20 blur-[150px] rounded-full" />
       <div className="premium-login-orb premium-login-orb-b absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] bg-indigo-500/10 blur-[150px] rounded-full" />
 
@@ -10435,16 +10430,14 @@ const LoginPage = () => {
           </div>
           <h1 className="text-3xl font-black text-white mb-2">{SYSTEM_NAME}</h1>
           <p className="text-zinc-400 font-bold text-xs">
-            {supabaseMode
-              ? 'تسجيل الدخول عبر Supabase (مستخدم Authentication + صف في جدول الموظفين)'
-              : 'تسجيل الدخول — عبر خادم التطبيق'}
+            {supabaseMode ? t('login.subtitleSupabase') : t('login.subtitleApi')}
           </p>
         </div>
 
 
-        <form onSubmit={handleSubmit} className="space-y-4 text-right">
+        <form onSubmit={handleSubmit} className="space-y-4 text-start">
           <div>
-            <label className="block text-xs font-black text-zinc-500 mb-1">البريد الإلكتروني</label>
+            <label className="block text-xs font-black text-zinc-500 mb-1">{t('login.email')}</label>
             <input
               type="email"
               autoComplete="email"
@@ -10457,7 +10450,7 @@ const LoginPage = () => {
             />
           </div>
           <div>
-            <label className="block text-xs font-black text-zinc-500 mb-1">كلمة المرور</label>
+            <label className="block text-xs font-black text-zinc-500 mb-1">{t('login.password')}</label>
             <input
               type="password"
               autoComplete="current-password"
@@ -10477,7 +10470,7 @@ const LoginPage = () => {
             disabled={loading}
             className="w-full rounded-2xl bg-[#7C6BFF] hover:bg-[#6B5CE6] text-white font-black py-3.5 transition-colors disabled:opacity-50"
           >
-            {loading ? 'جاري الدخول…' : 'دخول'}
+            {loading ? t('login.submitting') : t('login.submit')}
           </button>
         </form>
       </div>
@@ -10553,6 +10546,9 @@ const Root = () => {
     desktopNotifyWhenVisible,
     setDesktopNotifyWhenVisible,
   } = useData();
+  const { t } = useTranslation();
+  const { dir, isRtl } = useAppDirection();
+  const roleLabel = (role: User['role']) => t(`roles.${role}`);
   const [activeTab, setActiveTab] = useState('home');
   const [tabHistory, setTabHistory] = useState<string[]>([]);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
@@ -11236,7 +11232,7 @@ const Root = () => {
   }
 
   return (
-    <div className={`system-theme ${uiVisualMode === 'premium' ? 'premium-shell cinematic-production' : 'ui-classic'} ${isNotificationsOpen ? 'notifications-open' : ''} ${roleClass} tab-${activeTab} flex min-h-screen bg-[#080B13] text-slate-100 font-['Cairo'] overflow-x-hidden`} dir="rtl">
+    <div className={`system-theme ${uiVisualMode === 'premium' ? 'premium-shell cinematic-production' : 'ui-classic'} ${isNotificationsOpen ? 'notifications-open' : ''} ${roleClass} tab-${activeTab} flex min-h-screen bg-[#080B13] text-slate-100 font-['Cairo'] overflow-x-hidden`} dir={dir}>
       <BulkLeadsUploadModal isOpen={isBulkModalOpen} onClose={() => setIsBulkModalOpen(false)} />
       {personalTodoDueAlarm && personalTodoDueAlarm.length > 0
         ? createPortal(
@@ -11246,9 +11242,9 @@ const Root = () => {
               aria-modal="true"
               aria-labelledby="personal-todo-alarm-title"
             >
-              <div className="w-full max-w-md rounded-2xl border border-rose-400/50 bg-[#0f1528] shadow-[0_24px_80px_rgba(0,0,0,0.55)] p-6 text-right ring-2 ring-rose-500/30">
+              <div className="w-full max-w-md rounded-2xl border border-rose-400/50 bg-[#0f1528] shadow-[0_24px_80px_rgba(0,0,0,0.55)] p-6 text-start ring-2 ring-rose-500/30">
                 <p id="personal-todo-alarm-title" className="text-lg font-black text-rose-100 mb-2">
-                  حان موعد المهمة
+                  {t('personalTodo.dueTitle')}
                 </p>
                 <ul className="space-y-3 mb-6 max-h-[40vh] overflow-y-auto custom-scrollbar">
                   {personalTodoDueAlarm.map((t) => (
@@ -11268,14 +11264,14 @@ const Root = () => {
                     onClick={() => void playPersonalTodoDueBeep()}
                     className="w-full py-2.5 rounded-xl border border-amber-400/40 bg-amber-500/15 text-amber-100 text-sm font-bold hover:bg-amber-500/25 transition-colors"
                   >
-                    تشغيل الصوت مرة أخرى
+                    {t('personalTodo.playSoundAgain')}
                   </button>
                   <button
                     type="button"
                     onClick={() => setPersonalTodoDueAlarm(null)}
                     className="w-full py-3 rounded-xl bg-gradient-to-r from-rose-500/40 to-rose-400/25 border border-rose-300/50 text-rose-50 font-black text-sm hover:from-rose-500/55 hover:to-rose-400/35 transition-all"
                   >
-                    حسناً
+                    {t('common.ok')}
                   </button>
                 </div>
               </div>
@@ -11285,7 +11281,7 @@ const Root = () => {
         : null}
 
       {/* Sidebar */}
-      <aside className="premium-sidebar-shell w-72 shrink-0 border-l border-white/10 bg-[#0C1120] sticky top-0 h-screen hidden lg:flex flex-col p-8 z-[100]">
+      <aside className="premium-sidebar-shell w-72 shrink-0 border-e border-white/10 bg-[#0C1120] sticky top-0 h-screen hidden lg:flex flex-col p-8 z-[100]">
         <div className="flex items-center gap-4 mb-12 px-2">
           <div className="w-12 h-12 bg-black rounded-2xl flex items-center justify-center shadow-xl shadow-black/40 overflow-hidden border border-white/10">
             <img src={SYSTEM_LOGO} alt={SYSTEM_NAME} className="w-full h-full object-cover" />
@@ -11300,19 +11296,19 @@ const Root = () => {
              <img src={currentUser.avatar} className="w-10 h-10 rounded-xl border-2 border-white/20" alt="" />
              <div className="min-w-0">
                <p className="text-sm font-bold truncate">{currentUser.name}</p>
-               <p className="text-[10px] text-zinc-400 uppercase">{currentUser.role}</p>
+               <p className="text-[10px] text-zinc-400 uppercase">{roleLabel(currentUser.role)}</p>
              </div>
            </div>
           <button
             type="button"
             onClick={() => {
               logout();
-              toast.info('تم تسجيل الخروج');
+              toast.info(t('common.logoutDone'));
             }}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-rose-500 hover:bg-rose-500/10 font-bold transition-all"
           >
              <LogOut className="w-5 h-5" />
-             <span>تسجيل الخروج</span>
+             <span>{t('common.logout')}</span>
            </button>
         </div>
       </aside>
@@ -11327,13 +11323,13 @@ const Root = () => {
               aria-label="إغلاق القائمة"
               onClick={() => setIsSidebarOpen(false)}
             />
-            <aside className="fixed top-0 bottom-0 right-0 z-[70] flex w-[min(20rem,92vw)] max-w-full flex-col border-l border-white/10 bg-[#0C1120] p-6 shadow-2xl lg:hidden">
+            <aside className="fixed top-0 bottom-0 end-0 z-[70] flex w-[min(20rem,92vw)] max-w-full flex-col border-e border-white/10 bg-[#0C1120] p-6 shadow-2xl lg:hidden">
               <div className="mb-6 flex shrink-0 items-center justify-between gap-3">
                 <div className="flex min-w-0 flex-1 items-center gap-3">
                   <img src={currentUser.avatar} className="h-10 w-10 shrink-0 rounded-xl border border-white/15" alt="" />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-bold">{currentUser.name}</p>
-                    <p className="text-[10px] text-zinc-400">{currentUser.role}</p>
+                    <p className="text-[10px] text-zinc-400">{roleLabel(currentUser.role)}</p>
                   </div>
                 </div>
                 <button
@@ -11354,12 +11350,12 @@ const Root = () => {
                   onClick={() => {
                     setIsSidebarOpen(false);
                     logout();
-                    toast.info('تم تسجيل الخروج');
+                    toast.info(t('common.logoutDone'));
                   }}
                   className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 font-bold text-rose-500 transition-colors hover:bg-rose-500/10"
                 >
                   <LogOut className="h-5 w-5" />
-                  <span>تسجيل الخروج</span>
+                  <span>{t('common.logout')}</span>
                 </button>
               </div>
             </aside>
@@ -11374,23 +11370,23 @@ const Root = () => {
             type="button"
             onClick={() => setIsSidebarOpen(true)}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/[0.06] text-white hover:border-[#7C6BFF]/40"
-            aria-label="فتح قائمة التنقل"
+            aria-label={t('nav.openMenu')}
           >
             <Menu className="h-5 w-5" />
           </button>
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">التنقل</p>
-            <p className="truncate text-sm font-black text-white">{TAB_TITLE_AR[activeTab] || activeTab}</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">{t('nav.navigation')}</p>
+            <p className="truncate text-sm font-black text-white">{getNavLabel(activeTab, currentUser.role, t)}</p>
           </div>
           <button
             type="button"
             onClick={() => {
               logout();
-              toast.info('تم تسجيل الخروج');
+              toast.info(t('common.logoutDone'));
             }}
-            title="تسجيل الخروج"
+            title={t('common.logout')}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-rose-400/35 bg-rose-500/15 text-rose-100 hover:bg-rose-500/25"
-            aria-label="تسجيل الخروج"
+            aria-label={t('common.logout')}
           >
             <LogOut className="h-5 w-5" />
           </button>
@@ -11399,32 +11395,33 @@ const Root = () => {
         {(
         <header className="premium-header-shell relative z-[90] flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
           <div>
-            <h1 className="text-3xl font-black text-white">مرحباً، {currentUser.name.split(' ')[0]} 👋</h1>
-            <p className="text-zinc-400 font-bold mt-1 uppercase text-xs tracking-widest">إليك آخر التحديثات في نظامك اليوم</p>
+            <h1 className="text-3xl font-black text-white">{t('header.greeting', { name: currentUser.name.split(' ')[0] })}</h1>
+            <p className="text-zinc-400 font-bold mt-1 uppercase text-xs tracking-widest">{t('header.subtitle')}</p>
           </div>
           <div className="flex items-center gap-2.5 flex-wrap">
+            <LanguageSwitcher compact />
             {activeTab !== 'home' && (
               <>
                 <button
                   onClick={() => setIsCommandOpen(true)}
-                  title="بحث سريع"
+                  title={t('header.quickSearch')}
                   className="premium-top-action group relative h-12 w-12 sm:w-auto sm:px-4 rounded-xl bg-gradient-to-b from-white/[0.08] to-white/[0.03] border border-white/15 text-zinc-100 hover:border-rose-300/40 hover:shadow-[0_10px_24px_rgba(244,63,94,0.15)] transition-all text-sm font-black leading-tight shrink-0 inline-flex items-center justify-center gap-2"
                 >
                   <Search className="w-4 h-4" />
-                  <span className="hidden lg:inline">بحث سريع /</span>
+                  <span className="hidden lg:inline">{t('header.quickSearchSlash')}</span>
                   <span className="lg:hidden pointer-events-none absolute left-1/2 -translate-x-1/2 top-[110%] whitespace-nowrap rounded-lg border border-white/15 bg-[#0B1020]/95 px-2 py-1 text-[10px] text-zinc-100 opacity-0 group-hover:opacity-100 transition-opacity z-30">
-                    بحث سريع
+                    {t('header.quickSearch')}
                   </span>
                 </button>
                 <button
                   onClick={handleGoBackTab}
-                  title="رجوع للصفحة السابقة"
+                  title={t('header.goBack')}
                   className="premium-top-action group relative h-12 w-12 sm:w-auto sm:px-4 rounded-xl bg-gradient-to-b from-white/[0.08] to-white/[0.03] border border-white/15 text-zinc-100 hover:border-rose-300/40 hover:shadow-[0_10px_24px_rgba(244,63,94,0.15)] transition-all text-sm font-black leading-tight shrink-0 inline-flex items-center justify-center gap-2"
                 >
-                  <ChevronRight className="w-4 h-4" />
-                  <span className="hidden lg:inline">رجوع للصفحة السابقة</span>
+                  {isRtl ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+                  <span className="hidden lg:inline">{t('header.goBack')}</span>
                   <span className="lg:hidden pointer-events-none absolute left-1/2 -translate-x-1/2 top-[110%] whitespace-nowrap rounded-lg border border-white/15 bg-[#0B1020]/95 px-2 py-1 text-[10px] text-zinc-100 opacity-0 group-hover:opacity-100 transition-opacity z-30">
-                    رجوع
+                    {t('common.back')}
                   </span>
                 </button>
               </>
@@ -11433,13 +11430,13 @@ const Root = () => {
               <button
                 type="button"
                 onClick={() => setIsBulkModalOpen(true)}
-                title="رفع Excel / CSV"
+                title={t('common.uploadExcel')}
                 className="premium-top-action group relative h-12 w-12 sm:w-auto sm:px-5 bg-gradient-to-b from-white/[0.08] to-white/[0.03] text-zinc-100 rounded-xl font-bold inline-flex items-center justify-center gap-2.5 hover:border-rose-300/40 hover:shadow-[0_10px_24px_rgba(244,63,94,0.15)] transition-all border border-white/15 shrink-0"
               >
                 <FileUp className="w-5 h-5 text-[#A99FFF]" />
-                <span className="hidden lg:inline">رفع Excel</span>
+                <span className="hidden lg:inline">{t('common.uploadExcel')}</span>
                 <span className="lg:hidden pointer-events-none absolute left-1/2 -translate-x-1/2 top-[110%] whitespace-nowrap rounded-lg border border-white/15 bg-[#0B1020]/95 px-2 py-1 text-[10px] text-zinc-100 opacity-0 group-hover:opacity-100 transition-opacity z-30">
-                  رفع Excel
+                  {t('common.uploadExcel')}
                 </span>
               </button>
             )}
@@ -11467,12 +11464,12 @@ const Root = () => {
                     return opening;
                   });
                 }}
-                title="التنبيهات"
+                title={t('header.notifications')}
                 className="premium-top-action group relative h-12 w-12 flex items-center justify-center bg-gradient-to-b from-white/[0.08] to-white/[0.03] border border-white/15 rounded-xl hover:border-rose-300/40 hover:shadow-[0_10px_24px_rgba(244,63,94,0.15)] transition-all"
               >
                 <Bell className="w-6 h-6 text-zinc-300" />
                 <span className="lg:hidden pointer-events-none absolute left-1/2 -translate-x-1/2 top-[110%] whitespace-nowrap rounded-lg border border-white/15 bg-[#0B1020]/95 px-2 py-1 text-[10px] text-zinc-100 opacity-0 group-hover:opacity-100 transition-opacity z-30">
-                  التنبيهات
+                  {t('header.notifications')}
                 </span>
               </button>
               {isNotificationsOpen && createPortal(
@@ -11558,15 +11555,15 @@ const Root = () => {
               type="button"
               onClick={() => {
                 logout();
-                toast.info('تم تسجيل الخروج');
+                toast.info(t('common.logoutDone'));
               }}
-              title="تسجيل الخروج"
+              title={t('common.logout')}
               className="premium-top-action premium-top-danger group relative h-12 w-12 sm:w-auto sm:px-5 rounded-xl bg-gradient-to-r from-rose-500/30 to-rose-400/10 border border-rose-400/45 text-rose-100 hover:from-rose-500/40 hover:to-rose-300/20 hover:shadow-[0_10px_28px_rgba(244,63,94,0.35)] transition-all duration-300 font-bold inline-flex items-center justify-center gap-2 shrink-0"
             >
               <LogOut className="w-4 h-4" />
-              <span className="hidden lg:inline">تسجيل الخروج</span>
+              <span className="hidden lg:inline">{t('common.logout')}</span>
               <span className="lg:hidden pointer-events-none absolute left-1/2 -translate-x-1/2 top-[110%] whitespace-nowrap rounded-lg border border-white/15 bg-[#0B1020]/95 px-2 py-1 text-[10px] text-zinc-100 opacity-0 group-hover:opacity-100 transition-opacity z-30">
-                تسجيل الخروج
+                {t('common.logout')}
               </span>
             </button>
           </div>
@@ -11620,8 +11617,8 @@ const Root = () => {
             </div>
             <div className="bg-gradient-to-br from-white/[0.10] via-white/[0.04] to-rose-500/[0.06] border border-white/15 rounded-3xl p-5 backdrop-blur-xl shadow-[0_14px_34px_rgba(0,0,0,0.3)]">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[11px] text-zinc-500 tracking-widest font-black">مهامي الشخصية</p>
-                <span className="text-[11px] text-zinc-500">{personalTodos.filter(t => !t.done).length} مفتوحة</span>
+                <p className="text-[11px] text-zinc-500 tracking-widest font-black">{t('header.personalTasks')}</p>
+                <span className="text-[11px] text-zinc-500">{t('personalTodo.openCount', { count: personalTodos.filter((item) => !item.done).length })}</span>
               </div>
               <input value={todoInput} onChange={(e) => setTodoInput(e.target.value)} placeholder="نص المهمة..." className="w-full bg-black/20 border border-white/15 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-rose-300/45 transition-all mb-2" />
               <div className="flex flex-wrap items-center gap-2 mb-2">

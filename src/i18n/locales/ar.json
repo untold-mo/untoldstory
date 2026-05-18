@@ -1,0 +1,91 @@
+{
+  "language": {
+    "label": "لغة الواجهة",
+    "ar": "العربية",
+    "en": "English",
+    "switched": "تم تغيير اللغة"
+  },
+  "common": {
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "delete": "حذف",
+    "close": "إغلاق",
+    "back": "رجوع",
+    "search": "بحث",
+    "logout": "تسجيل الخروج",
+    "logoutDone": "تم تسجيل الخروج",
+    "loading": "جاري التحميل…",
+    "ok": "حسناً",
+    "add": "إضافة",
+    "import": "استيراد",
+    "uploadExcel": "رفع Excel"
+  },
+  "roles": {
+    "مالك": "مالك",
+    "مدير مبيعات": "مدير مبيعات",
+    "مندوب": "مندوب",
+    "محاسب": "محاسب",
+    "مدير إنتاج": "مدير إنتاج"
+  },
+  "nav": {
+    "home": "الرئيسية",
+    "dashboard": "لوحة التحكم",
+    "approvals": "مركز الاعتمادات",
+    "owner-dash": "نظرة عامة",
+    "bookings": "الحجوزات",
+    "team-performance": "مراقبة الفريق",
+    "leads": "كافة الليدز",
+    "accountant": "الإدارة المالية",
+    "settings": "إعدادات النظام",
+    "seo": "SEO Intelligence",
+    "production": "تمويل الإنتاج",
+    "manager-reps": "فريق المبيعات",
+    "performance": "أدائي",
+    "linked-views": "عروض البيانات",
+    "repDashboard": "مهامي",
+    "repLeads": "عملائي",
+    "repPerformance": "أدائي",
+    "accountantInvoices": "الفواتير",
+    "accountantLeads": "العملاء",
+    "managerLeads": "كافة الليدز",
+    "managerTeam": "مراقبة المناديب",
+    "navigation": "التنقل",
+    "openMenu": "فتح قائمة التنقل",
+    "closeMenu": "إغلاق القائمة"
+  },
+  "header": {
+    "greeting": "مرحباً، {{name}} 👋",
+    "subtitle": "إليك آخر التحديثات في نظامك اليوم",
+    "quickSearch": "بحث سريع",
+    "quickSearchSlash": "بحث سريع /",
+    "goBack": "رجوع للصفحة السابقة",
+    "notifications": "الإشعارات",
+    "personalTasks": "مهام شخصية",
+    "openTasks": "{{count}} مفتوحة"
+  },
+  "welcome": {
+    "continueLogin": "المتابعة إلى تسجيل الدخول"
+  },
+  "login": {
+    "title": "تسجيل الدخول",
+    "email": "البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "submit": "دخول",
+    "submitting": "جاري الدخول…",
+    "hint": "استخدم بيانات الموظف المسجّلة في النظام",
+    "subtitleSupabase": "تسجيل الدخول عبر Supabase (مستخدم Authentication + صف في جدول الموظفين)",
+    "subtitleApi": "تسجيل الدخول — عبر خادم التطبيق",
+    "welcome": "أهلاً بك يا {{name}}"
+  },
+  "personalTodo": {
+    "dueTitle": "حان موعد المهمة",
+    "playSoundAgain": "تشغيل الصوت مرة أخرى",
+    "addTask": "إضافة المهمة",
+    "noTasks": "لا توجد مهام.",
+    "openCount": "{{count}} مفتوحة"
+  },
+  "settings": {
+    "languageSection": "اللغة والعرض",
+    "languageHint": "يغيّر لغة القوائم والعناوين الرئيسية. بعض الشاشات التفصيلية قد تبقى بالعربية مؤقتاً."
+  }
+}

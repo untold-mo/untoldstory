@@ -4,6 +4,7 @@ import App from './app/App';
 import LeadsImportRoute from './app/pages/LeadsImportRoute';
 import { ErrorBoundary } from './app/ErrorBoundary';
 import './styles/index.css';
+import './i18n';
 
 function AppRouter() {
   return (

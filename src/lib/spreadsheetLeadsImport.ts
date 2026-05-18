@@ -25,6 +25,21 @@ const LEAD_CATEGORIES: LeadCategory[] = [
   'سوشيال ميديا',
 ];
 
+/** أعمدة تُستورد فقط — باقي أعمدة الشيت (مصدر، تاريخ، Lead From…) تُتجاهل */
+const IMPORT_COLUMN_KEYS = new Set([
+  'name',
+  'phone',
+  'email',
+  'company',
+  'interest',
+  'budget',
+  'category',
+  'company_size',
+  'first_name',
+  'last_name',
+  'job_title',
+]);
+
 function normalizeAsciiHeader(h: string): string {
   return String(h || '')
     .trim()
@@ -39,13 +54,21 @@ export function mapSpreadsheetHeaderKey(raw: string): string {
   const lower = t.toLowerCase();
   const ascii = normalizeAsciiHeader(t);
 
-  if (/^(الاسم|اسم|اسم_العميل|اسم العميل|العميل)$/.test(t) || /^(name|full_name|fullname|lead_name|contact_name)$/.test(ascii)) {
+  if (
+    /^(الاسم|اسم|اسم_العميل|اسم العميل|العميل)$/.test(t) ||
+    /^(name|full_name|fullname|lead_name|contact_name|client_name)$/.test(ascii) ||
+    /client\s*name/.test(lower)
+  ) {
     return 'name';
   }
   if (/^(الشركة|شركة|اسم الشركة|المنشأة)$/.test(t) || /^(company|company_name|organization|business_name|account_name)$/.test(ascii)) {
     return 'company';
   }
-  if (/^(الموبايل|الجوال|الهاتف|موبايل|جوال|تليفون|تلفون|رقم)$/.test(t) || /^(phone|mobile|phone_number|mobile_phone|work_phone|phonenumber)$/.test(ascii)) {
+  if (
+    /^(الموبايل|الجوال|الهاتف|موبايل|جوال|تليفون|تلفون|رقم)$/.test(t) ||
+    /^(phone|mobile|phone_number|mobile_phone|work_phone|phonenumber|client_number)$/.test(ascii) ||
+    /client\s*(number|phone|mobile)/.test(lower)
+  ) {
     return 'phone';
   }
   if (/^(البريد|الإيميل|ايميل|إيميل|بريد)$/.test(t) || /^(email|email_address|work_email|business_email|emailaddress)$/.test(ascii)) {
@@ -69,11 +92,25 @@ export function mapSpreadsheetHeaderKey(raw: string): string {
   if (/^(المسمى|الوظيفة|المسمى الوظيفي)$/.test(t) || /^(job_title|title|position)$/.test(ascii)) {
     return 'job_title';
   }
-  if (/^(الاهتمام|اهتمام|الموديل|موديل|السيارة|سيارة|المنتج)$/.test(t) || /^(interest|product|model|car|vehicle)$/.test(ascii)) {
+  if (
+    /^(الاهتمام|اهتمام|الموديل|موديل|السيارة|سيارة|المنتج)$/.test(t) ||
+    /^(interest|product|model|car|vehicle|client_interested_in)$/.test(ascii) ||
+    /client\s*interested|interested\s*in/.test(lower)
+  ) {
     return 'interest';
   }
 
-  return ascii || `col_${t.slice(0, 12)}`;
+  if (
+    /^source$/.test(ascii) ||
+    /^lead_from$/.test(ascii) ||
+    /date_of_phone/.test(ascii) ||
+    /date\s*of\s*call/.test(lower) ||
+    /^lead\s*from$/.test(lower)
+  ) {
+    return '_skip';
+  }
+
+  return '_skip';
 }
 
 /** يحافظ على صفر بداية أرقام الجوال بعد قراءة Excel كرقم */
@@ -105,6 +142,7 @@ function looksLikeHeaderRow(row: string[]): boolean {
     'email',
     'company',
     'interest',
+    'client',
     'الاسم',
     'الجوال',
     'الموبايل',
@@ -183,9 +221,14 @@ function sheetMatrixToObjects(matrix: string[][]): Record<string, string>[] {
     const obj: Record<string, string> = { _fileRow: String(r + 1) };
     for (let c = 0; c < keys.length; c++) {
       const key = keys[c];
-      if (!key) continue;
+      if (!key || key === '_skip' || !IMPORT_COLUMN_KEYS.has(key)) continue;
       const val = String(line[c] ?? '').trim();
-      if (val) obj[key] = obj[key] ? `${obj[key]} ${val}` : val;
+      if (!val) continue;
+      if (key === 'phone') {
+        obj.phone = normalizeSpreadsheetPhone(val);
+        continue;
+      }
+      obj[key] = obj[key] ? `${obj[key]} · ${val}` : val;
     }
     if (obj.phone) obj.phone = normalizeSpreadsheetPhone(obj.phone);
     out.push(obj);
@@ -274,7 +317,7 @@ export function parseSpreadsheetObjects(objects: Record<string, string>[]): Spre
     const interest = pick(raw, ['interest', 'product', 'model']);
     let company = pick(raw, ['company']);
     const jobTitle = pick(raw, ['job_title']);
-    if (!company && interest) company = interest;
+    if (!company && interest) company = interest.replace(/\s*·\s*/g, ' / ');
     if (!company && jobTitle) company = jobTitle;
 
     if (!name) name = company || `عميل صف ${rowNum}`;

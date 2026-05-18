@@ -1,0 +1,91 @@
+{
+  "language": {
+    "label": "Interface language",
+    "ar": "العربية",
+    "en": "English",
+    "switched": "Language updated"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "close": "Close",
+    "back": "Back",
+    "search": "Search",
+    "logout": "Log out",
+    "logoutDone": "Signed out",
+    "loading": "Loading…",
+    "ok": "OK",
+    "add": "Add",
+    "import": "Import",
+    "uploadExcel": "Upload Excel"
+  },
+  "roles": {
+    "مالك": "Owner",
+    "مدير مبيعات": "Sales manager",
+    "مندوب": "Sales rep",
+    "محاسب": "Accountant",
+    "مدير إنتاج": "Production manager"
+  },
+  "nav": {
+    "home": "Home",
+    "dashboard": "Dashboard",
+    "approvals": "Approvals hub",
+    "owner-dash": "Overview",
+    "bookings": "Bookings",
+    "team-performance": "Team performance",
+    "leads": "All leads",
+    "accountant": "Finance",
+    "settings": "System settings",
+    "seo": "SEO Intelligence",
+    "production": "Production funding",
+    "manager-reps": "Sales team",
+    "performance": "My performance",
+    "linked-views": "Data views",
+    "repDashboard": "My tasks",
+    "repLeads": "My clients",
+    "repPerformance": "My performance",
+    "accountantInvoices": "Invoices",
+    "accountantLeads": "Clients",
+    "managerLeads": "All leads",
+    "managerTeam": "Rep monitoring",
+    "navigation": "Navigation",
+    "openMenu": "Open navigation menu",
+    "closeMenu": "Close menu"
+  },
+  "header": {
+    "greeting": "Hello, {{name}} 👋",
+    "subtitle": "Here is what is happening in your workspace today",
+    "quickSearch": "Quick search",
+    "quickSearchSlash": "Quick search /",
+    "goBack": "Back to previous page",
+    "notifications": "Notifications",
+    "personalTasks": "Personal tasks",
+    "openTasks": "{{count}} open"
+  },
+  "welcome": {
+    "continueLogin": "Continue to sign in"
+  },
+  "login": {
+    "title": "Sign in",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "hint": "Use your employee credentials registered in the system",
+    "subtitleSupabase": "Sign in via Supabase (Authentication user + employees table row)",
+    "subtitleApi": "Sign in via application server",
+    "welcome": "Welcome, {{name}}"
+  },
+  "personalTodo": {
+    "dueTitle": "Task due now",
+    "playSoundAgain": "Play sound again",
+    "addTask": "Add task",
+    "noTasks": "No tasks yet.",
+    "openCount": "{{count}} open"
+  },
+  "settings": {
+    "languageSection": "Language & display",
+    "languageHint": "Changes menu and main headings. Some detail screens may stay partially localized."
+  }
+}
