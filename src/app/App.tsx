@@ -11607,7 +11607,7 @@ const Root = () => {
   }
 
   return (
-    <div className={`system-theme ${uiVisualMode === 'premium' ? 'premium-shell cinematic-production' : 'ui-classic'} ${isNotificationsOpen ? 'notifications-open' : ''} ${roleClass} tab-${activeTab} flex min-h-screen bg-[#080B13] text-slate-100 font-['Cairo'] overflow-x-hidden`} dir={dir}>
+    <div className={`system-theme ${uiVisualMode === 'premium' ? 'premium-shell cinematic-production' : 'ui-classic'} ${isNotificationsOpen ? 'notifications-open' : ''} ${roleClass} tab-${activeTab} flex h-screen max-h-screen bg-[#080B13] text-slate-100 font-['Cairo'] overflow-hidden`} dir={dir}>
       <BulkLeadsUploadModal isOpen={isBulkModalOpen} onClose={() => setIsBulkModalOpen(false)} />
       {personalTodoDueAlarm && personalTodoDueAlarm.length > 0
         ? createPortal(
@@ -11656,7 +11656,7 @@ const Root = () => {
         : null}
 
       {/* Sidebar */}
-      <aside className="premium-sidebar-shell w-72 shrink-0 border-e border-white/10 bg-[#0C1120] sticky top-0 h-screen hidden lg:flex flex-col p-8 z-[100]">
+      <aside className="premium-sidebar-shell w-72 shrink-0 self-start border-e border-white/10 bg-[#0C1120] sticky top-0 h-screen max-h-screen hidden lg:flex flex-col p-8 z-[100]">
         <div className="flex items-center gap-4 mb-12 px-2">
           <div className="w-12 h-12 bg-black rounded-2xl flex items-center justify-center shadow-xl shadow-black/40 overflow-hidden border border-white/10">
             <img src={SYSTEM_LOGO} alt={SYSTEM_NAME} className="w-full h-full object-cover" />
@@ -11739,7 +11739,7 @@ const Root = () => {
         )}
 
       {/* Main Content */}
-      <main className="premium-main-layer flex-1 p-6 lg:p-12 max-w-[1600px] mx-auto w-full overflow-hidden">
+      <main className="premium-main-layer flex-1 min-h-0 p-6 lg:p-12 max-w-[1600px] mx-auto w-full overflow-y-auto overflow-x-hidden custom-scrollbar">
         <div className="sticky top-0 z-[95] isolate -mx-6 -mt-6 mb-4 flex items-center gap-3 border-b border-white/10 bg-[#0C1120]/95 px-4 py-3 backdrop-blur-md lg:hidden">
           <button
             type="button"
