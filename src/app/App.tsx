@@ -1846,7 +1846,7 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
                 </div>
               </div>
             ))}
-            {pendingMonthReopenRequests.length === 0 && <p className="text-xs text-zinc-500">لا توجد طلبات حالياً.</p>}
+            {pendingMonthReopenRequests.length === 0 && <p className="text-xs text-zinc-500">{t('financeExtra.noReopenRequests')}</p>}
           </div>
         )}
       </div>
@@ -4067,12 +4067,12 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
       sourceLabel: customerForm.sourceLabel,
     });
     if (!ok) {
-      toast.error('تعذر إضافة العميل. صلاحية المالك/المحاسب فقط مع اسم صحيح');
+      toast.error(t('settingsToasts.customerAddForbidden'));
       return;
     }
     setCustomerForm({ name: '', company: '', phone: '', email: '', sourceLabel: 'يدوي' });
     setIsAddLeadOpen(false);
-    toast.success('تم إضافة العميل بنجاح');
+    toast.success(t('settingsToasts.customerAdded'));
   };
 
   const customerStatementInvoices = useMemo(() => {
@@ -5087,6 +5087,7 @@ const SalesManagerSettings = ({
     updateWorkflowRulesSettings,
   } = useData();
   const { t } = useTranslation();
+  const { dateLocale } = useAppDirection();
   const reps = useMemo(() => {
     const seen = new Set<string>();
     return users.filter((u) => u.role === 'مندوب').filter((u) => {
@@ -5149,7 +5150,7 @@ const SalesManagerSettings = ({
       }
       const token = localStorage.getItem('prod_system_jwt');
       if (!token) {
-        toast.error('لا يوجد توكن جلسة — سجّل الدخول أولاً');
+        toast.error(t('settingsToasts.backupNoToken'));
         return;
       }
       const base = getApiBaseUrl();
@@ -5236,9 +5237,9 @@ const SalesManagerSettings = ({
         link.download = `backup-server-snapshot-${new Date().toISOString().slice(0, 10)}.json`;
         link.click();
         URL.revokeObjectURL(url);
-        toast.success('تم تنزيل لقطة من السيرفر');
+        toast.success(t('settingsToasts.backupServerOk'));
       } catch {
-        toast.error('تعذر تنزيل لقطة السيرفر');
+        toast.error(t('settingsToasts.backupServerFailed'));
       }
       return;
     }
@@ -5257,7 +5258,7 @@ const SalesManagerSettings = ({
     link.download = `backup-pro-system-${new Date().toISOString().slice(0, 10)}.json`;
     link.click();
     URL.revokeObjectURL(url);
-    toast.success('تم تنزيل نسخة احتياطية للنظام');
+    toast.success(t('settingsToasts.backupLocalOk'));
   };
 
   const restoreSystemData = (file: File) => {
@@ -5280,10 +5281,10 @@ const SalesManagerSettings = ({
             localStorage.setItem(key, value);
           }
         });
-        toast.success('تم استرجاع النسخة الاحتياطية. سيتم إعادة تحميل النظام.');
+        toast.success(t('settingsWork.restoreSuccess'));
         setTimeout(() => window.location.reload(), 700);
       } catch {
-        toast.error('ملف النسخة غير صالح');
+        toast.error(t('settingsWork.invalidBackupFile'));
       }
     };
     reader.readAsText(file);
@@ -5292,14 +5293,14 @@ const SalesManagerSettings = ({
   const handleLogoUpload = (file: File) => {
     const maxBytes = 2 * 1024 * 1024;
     if (file.size > maxBytes) {
-      toast.error('حجم اللوجو كبير. الحد الأقصى 2MB');
+      toast.error(t('settingsWork.logoTooLarge'));
       return;
     }
     const reader = new FileReader();
     reader.onload = () => {
       const logoDataUrl = String(reader.result || '');
       updatePrintBrandingSettings({ logoDataUrl });
-      toast.success('تم تحديث لوجو التقارير');
+      toast.success(t('settingsWork.logoUpdated'));
     };
     reader.readAsDataURL(file);
   };
@@ -5307,7 +5308,7 @@ const SalesManagerSettings = ({
   const handleEmployeeAvatarUpload = (file: File, userId?: string) => {
     const maxBytes = 2 * 1024 * 1024;
     if (file.size > maxBytes) {
-      toast.error('حجم الصورة كبير. الحد الأقصى 2MB');
+      toast.error(t('settingsWork.imageTooLarge'));
       return;
     }
     const reader = new FileReader();
@@ -5323,7 +5324,7 @@ const SalesManagerSettings = ({
       } else {
         setNewEmployee((prev) => ({ ...prev, avatar: avatarDataUrl }));
       }
-      toast.success('تم رفع الصورة بنجاح');
+      toast.success(t('settingsWork.avatarUploaded'));
     };
     reader.readAsDataURL(file);
   };
@@ -5347,15 +5348,15 @@ const SalesManagerSettings = ({
     const emailTrim = newEmployee.loginEmail.trim().toLowerCase();
     const pwd = newEmployee.password.trim();
     if (!isServerDataMode()) {
-      toast.error('غير متاح — تأكد من بناء الواجهة للإنتاج أو ضبط VITE_DATA_SOURCE=server');
+      toast.error(t('settingsToasts.buildRequired'));
       return;
     }
     if (!emailTrim || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) {
-      toast.error('أدخل بريداً صالحاً لتسجيل الدخول');
+      toast.error(t('settingsToasts.emailRequired'));
       return;
     }
     if (pwd.length > 0 && pwd.length < 8) {
-      toast.error('كلمة المرور ٨ أحرف فأكثر، أو اتركها فارغة');
+      toast.error(t('settingsToasts.passwordMinOrEmpty'));
       return;
     }
     const ok = await addEmployee({
@@ -5375,7 +5376,7 @@ const SalesManagerSettings = ({
     const draft = employeeEdits[userId] ?? buildEmployeeRowDraft(employee);
     const emailTrim = (draft.email || '').trim().toLowerCase();
     if (canEditBranding && emailTrim && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) {
-      toast.error('صيغة البريد غير صالحة');
+      toast.error(t('settingsToasts.emailInvalid'));
       return;
     }
     const salaryParsed = Math.max(0, Math.round(Number(String(draft.baseSalary).replace(/,/g, '')) || 0));
@@ -5389,7 +5390,7 @@ const SalesManagerSettings = ({
     if (!ok) {
       return;
     }
-    toast.success('تم تحديث بيانات الموظف');
+    toast.success(t('settingsToasts.employeeUpdated'));
   };
 
   const handleDeleteEmployee = async (userId: string, name: string) => {
@@ -5397,17 +5398,17 @@ const SalesManagerSettings = ({
     if (!yes) return;
     const ok = await removeEmployee(userId);
     if (!ok) return;
-    toast.success('تم حذف الموظف');
+    toast.success(t('settingsToasts.employeeDeleted'));
   };
 
   const handleSaveEmployeePassword = async (userId: string) => {
     const d = employeePwDraft[userId];
     if (!d?.pw || d.pw.length < 8) {
-      toast.error('كلمة المرور ٨ أحرف أو أكثر');
+      toast.error(t('settingsToasts.passwordMin8'));
       return;
     }
     if (d.pw !== d.pw2) {
-      toast.error('تأكيد كلمة المرور غير متطابق');
+      toast.error(t('settingsWork.passwordMismatch'));
       return;
     }
     const yes = window.confirm('تأكيد تعيين كلمة مرور جديدة لهذا الموظف؟ سيستخدمها في تسجيل الدخول القادم.');
@@ -5424,15 +5425,15 @@ const SalesManagerSettings = ({
 
   const handleChangeOwnerPassword = async () => {
     if (!isServerDataMode()) {
-      toast.error('متاح في وضع السيرفر فقط');
+      toast.error(t('settingsToasts.serverOnly'));
       return;
     }
     if (ownerPwdNew.length < 8) {
-      toast.error('كلمة المرور الجديدة ٨ أحرف أو أكثر');
+      toast.error(t('settingsWork.newPasswordMin8'));
       return;
     }
     if (ownerPwdNew !== ownerPwdConfirm) {
-      toast.error('تأكيد كلمة المرور غير متطابق');
+      toast.error(t('settingsWork.passwordMismatch'));
       return;
     }
     setOwnerPwdSaving(true);
@@ -5441,9 +5442,9 @@ const SalesManagerSettings = ({
       setOwnerPwdCurrent('');
       setOwnerPwdNew('');
       setOwnerPwdConfirm('');
-      toast.success('تم تحديث كلمة مرور حساب المالك');
+      toast.success(t('settingsWork.passwordUpdated'));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'تعذر تحديث كلمة المرور');
+      toast.error(e instanceof Error ? e.message : t('settingsWork.passwordUpdateFailed'));
     } finally {
       setOwnerPwdSaving(false);
     }
@@ -5459,8 +5460,8 @@ const SalesManagerSettings = ({
         <div className="bg-slate-900/40 border border-slate-800 p-6 rounded-[2rem] space-y-4">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <h3 className="text-lg font-black">مظهر النظام</h3>
-              <p className="text-xs text-zinc-400 mt-1">اختر بين الشكل الكلاسيكي أو الشكل السينمائي ثلاثي الأبعاد.</p>
+              <h3 className="text-lg font-black">{t('settingsWork.visualModeTitle')}</h3>
+              <p className="text-xs text-zinc-400 mt-1">{t('settingsWork.visualModeHint')}</p>
             </div>
             <div className="inline-flex items-center gap-2 bg-[#0F1528]/80 border border-white/10 rounded-2xl p-1.5">
               <button
@@ -5468,14 +5469,14 @@ const SalesManagerSettings = ({
                 onClick={() => onVisualModeChange?.('classic')}
                 className={`px-3 py-2 rounded-xl text-xs font-black transition-all ${visualMode === 'classic' ? 'bg-white/15 text-white border border-white/20' : 'text-zinc-300 hover:text-white'}`}
               >
-                Classic
+                {t('settingsWork.classic')}
               </button>
               <button
                 type="button"
                 onClick={() => onVisualModeChange?.('premium')}
                 className={`px-3 py-2 rounded-xl text-xs font-black transition-all ${visualMode === 'premium' ? 'bg-[#7C6BFF] text-white border border-[#A99FFF]/45' : 'text-zinc-300 hover:text-white'}`}
               >
-                Premium 3D
+                {t('settingsWork.premium')}
               </button>
             </div>
           </div>
@@ -5490,10 +5491,10 @@ const SalesManagerSettings = ({
           <div>
             <h3 className="text-lg font-black flex items-center gap-2">
               <Lock className="w-5 h-5 text-amber-300/90" />
-              كلمة مرور حساب المالك
+              {t('settingsWork.ownerPasswordTitle')}
             </h3>
             <p className="text-xs text-zinc-400 mt-1">
-              غيّر كلمة مرور تسجيل الدخول لحسابك (بريد المالك). يُشترط إدخال كلمة المرور الحالية قبل تعيين الجديدة.
+              {t('settingsWork.ownerPasswordHint')}
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -5502,7 +5503,7 @@ const SalesManagerSettings = ({
               autoComplete="current-password"
               value={ownerPwdCurrent}
               onChange={(e) => setOwnerPwdCurrent(e.target.value)}
-              placeholder="كلمة المرور الحالية"
+              placeholder={t('settingsWork.currentPassword')}
               className="bg-[#0F1528] border border-white/10 rounded-xl px-3 py-2 text-sm"
             />
             <input
@@ -5510,7 +5511,7 @@ const SalesManagerSettings = ({
               autoComplete="new-password"
               value={ownerPwdNew}
               onChange={(e) => setOwnerPwdNew(e.target.value)}
-              placeholder="كلمة المرور الجديدة (٨+ أحرف)"
+              placeholder={t('settingsWork.newPassword')}
               className="bg-[#0F1528] border border-white/10 rounded-xl px-3 py-2 text-sm"
             />
             <input
@@ -5518,7 +5519,7 @@ const SalesManagerSettings = ({
               autoComplete="new-password"
               value={ownerPwdConfirm}
               onChange={(e) => setOwnerPwdConfirm(e.target.value)}
-              placeholder="تأكيد الجديدة"
+              placeholder={t('settingsWork.confirmPassword')}
               className="bg-[#0F1528] border border-white/10 rounded-xl px-3 py-2 text-sm"
             />
           </div>
@@ -5528,7 +5529,7 @@ const SalesManagerSettings = ({
             onClick={handleChangeOwnerPassword}
             className="px-4 py-2 rounded-xl text-sm font-black border border-amber-400/40 bg-amber-500/15 text-amber-100 hover:bg-amber-500/25 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
-            {ownerPwdSaving ? 'جاري الحفظ…' : 'حفظ كلمة المرور'}
+            {ownerPwdSaving ? t('settingsWork.saving') : t('settingsWork.savePassword')}
           </button>
         </div>
       )}
@@ -5537,19 +5538,17 @@ const SalesManagerSettings = ({
         <div className="bg-slate-900/40 border border-slate-800 p-6 rounded-[2rem] space-y-4">
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
             <div>
-              <h3 className="text-lg font-black">مصادر الليدز (n8n)</h3>
+              <h3 className="text-lg font-black">{t('settingsWork.leadSourcesTitle')}</h3>
               <p className="text-xs text-zinc-400 mt-1">
-                Facebook و Instagram و Gmail و LinkedIn و Google تُستورد عبر workflows على n8n مباشرة إلى Supabase.
+                {t('settingsWork.leadSourcesHint')}
               </p>
             </div>
             <div className="text-xs text-zinc-300 bg-white/5 px-3 py-2 rounded-xl border border-white/10 shrink-0">
-              المدير المستلم: <span className="font-black">{salesManager?.name || 'غير محدد'}</span>
+              {t('settingsWork.recipientManager')} <span className="font-black">{salesManager?.name || t('common.unassigned')}</span>
             </div>
           </div>
           <div className="rounded-xl border border-indigo-500/25 bg-indigo-500/10 px-4 py-3 text-[11px] text-indigo-100/90 leading-relaxed">
-            Workflows في مجلد <span className="font-mono text-indigo-200">n8n/</span>: Meta، Gmail، Google Sheets.
-            عيّن <span className="font-mono">SUPABASE_URL</span> و <span className="font-mono">SUPABASE_SERVICE_ROLE_KEY</span>
-            واختياريًا <span className="font-mono">DEFAULT_ASSIGNED_TO_ID</span> لتعيين الليدز لمدير المبيعات.
+            {t('settingsWork.n8nFolderNote')}
           </div>
           <div className="flex items-center gap-3 text-xs flex-wrap">
             <button
@@ -5557,7 +5556,7 @@ const SalesManagerSettings = ({
               onClick={() => updateLeadIngestionSettings({ autoRouteToManager: !leadIngestionSettings.autoRouteToManager })}
               className={`px-3 py-2 rounded-xl border font-bold transition-all ${leadIngestionSettings.autoRouteToManager ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-200' : 'bg-white/5 border-white/10 text-zinc-300'}`}
             >
-              التحويل التلقائي لمدير المبيعات: {leadIngestionSettings.autoRouteToManager ? 'مفعل' : 'متوقف'}
+              {t('settingsWork.autoRouteLabel')} {leadIngestionSettings.autoRouteToManager ? t('settingsWork.autoRouteOn') : t('settingsWork.autoRouteOff')}
             </button>
             {salesManager && (
               <button
@@ -5565,14 +5564,14 @@ const SalesManagerSettings = ({
                 onClick={() => updateLeadIngestionSettings({ managerUserId: salesManager.id })}
                 className="px-3 py-2 rounded-xl border border-white/15 bg-white/5 hover:border-white/30 transition-all"
               >
-                تثبيت المدير الحالي كمستلم
+                {t('settingsWork.pinCurrentManager')}
               </button>
             )}
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 space-y-2">
-            <p className="text-sm font-black text-zinc-200">إشعار العميل (Webhook)</p>
+            <p className="text-sm font-black text-zinc-200">{t('settingsWork.clientWebhookTitle')}</p>
             <p className="text-[11px] text-zinc-500">
-              عند اعتماد عرض السعر أو موافقة العميل — workflow: n8n/client-notify.workflow.json
+              {t('settingsWork.clientWebhookHint')}
             </p>
             <input
               type="url"
@@ -5588,49 +5587,49 @@ const SalesManagerSettings = ({
       {canEditBranding && (
         <div className="bg-slate-900/40 border border-slate-800 p-6 rounded-[2rem] space-y-5">
           <div>
-            <h3 className="text-lg font-black">Enterprise Controls</h3>
-            <p className="text-xs text-zinc-400 mt-1">إعدادات متقدمة لسير العمل، جودة البيانات، ومصفوفة تصعيد SLA.</p>
+            <h3 className="text-lg font-black">{t('settingsWork.enterpriseTitle')}</h3>
+            <p className="text-xs text-zinc-400 mt-1">{t('settingsWork.enterpriseHint')}</p>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 space-y-3">
-              <p className="font-black text-sm">Workflow Rules</p>
+              <p className="font-black text-sm">{t('settingsWork.workflowRulesTitle')}</p>
               <button type="button" onClick={() => updateWorkflowRulesSettings({ quoteRequiresOwnerApproval: !workflowRulesSettings.quoteRequiresOwnerApproval })} className={`w-full px-3 py-2 rounded-xl text-xs font-black border transition-all ${workflowRulesSettings.quoteRequiresOwnerApproval ? 'bg-indigo-500/20 border-indigo-400/40 text-indigo-200' : 'bg-white/5 border-white/10 text-zinc-300'}`}>
-                اعتماد المالك لعروض السعر: {workflowRulesSettings.quoteRequiresOwnerApproval ? 'إجباري' : 'مرن (مدير مبيعات/مالك)'}
+                {t('settingsWork.quoteOwnerApproval')} {workflowRulesSettings.quoteRequiresOwnerApproval ? t('settingsWork.quoteApprovalRequired') : t('settingsWork.quoteApprovalFlexible')}
               </button>
               <button type="button" onClick={() => updateWorkflowRulesSettings({ externalMeetingRequiresOwnerApproval: !workflowRulesSettings.externalMeetingRequiresOwnerApproval })} className={`w-full px-3 py-2 rounded-xl text-xs font-black border transition-all ${workflowRulesSettings.externalMeetingRequiresOwnerApproval ? 'bg-indigo-500/20 border-indigo-400/40 text-indigo-200' : 'bg-white/5 border-white/10 text-zinc-300'}`}>
-                اعتماد مالك للاجتماعات الخارجية: {workflowRulesSettings.externalMeetingRequiresOwnerApproval ? 'مفعل' : 'متوقف'}
+                {t('settingsWork.externalMeetingApproval')} {workflowRulesSettings.externalMeetingRequiresOwnerApproval ? t('settingsWork.enabled') : t('settingsWork.disabled')}
               </button>
               <button type="button" onClick={() => updateWorkflowRulesSettings({ expenseRequiresOwnerApproval: !workflowRulesSettings.expenseRequiresOwnerApproval })} className={`w-full px-3 py-2 rounded-xl text-xs font-black border transition-all ${workflowRulesSettings.expenseRequiresOwnerApproval ? 'bg-indigo-500/20 border-indigo-400/40 text-indigo-200' : 'bg-white/5 border-white/10 text-zinc-300'}`}>
-                اعتماد مالك للمصروفات: {workflowRulesSettings.expenseRequiresOwnerApproval ? 'مفعل' : 'اعتماد تلقائي'}
+                {t('settingsWork.expenseOwnerApproval')} {workflowRulesSettings.expenseRequiresOwnerApproval ? t('settingsWork.enabled') : t('settingsWork.expenseAutoApprove')}
               </button>
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 space-y-3">
-              <p className="font-black text-sm">SLA Escalation Matrix</p>
-              <label className="block text-xs text-zinc-300">تحذير بعد (دقيقة)</label>
+              <p className="font-black text-sm">{t('settingsWork.slaMatrixTitle')}</p>
+              <label className="block text-xs text-zinc-300">{t('settingsWork.slaWarningAfter')}</label>
               <input type="number" min={5} value={slaEscalationSettings.warningAfterMinutes} onChange={(e) => updateSlaEscalationSettings({ warningAfterMinutes: Number(e.target.value) || 5 })} className="w-full bg-[#0F1528] border border-white/10 rounded-xl px-3 py-2 text-xs" />
-              <label className="block text-xs text-zinc-300">حرج بعد (دقيقة)</label>
+              <label className="block text-xs text-zinc-300">{t('settingsWork.slaCriticalAfter')}</label>
               <input type="number" min={10} value={slaEscalationSettings.criticalAfterMinutes} onChange={(e) => updateSlaEscalationSettings({ criticalAfterMinutes: Number(e.target.value) || 10 })} className="w-full bg-[#0F1528] border border-white/10 rounded-xl px-3 py-2 text-xs" />
-              <label className="block text-xs text-zinc-300">مرشح إعادة توزيع بعد (ساعات)</label>
+              <label className="block text-xs text-zinc-300">{t('settingsWork.slaReassignAfter')}</label>
               <input type="number" min={0} value={slaEscalationSettings.autoReassignAfterHours} onChange={(e) => updateSlaEscalationSettings({ autoReassignAfterHours: Number(e.target.value) || 0 })} className="w-full bg-[#0F1528] border border-white/10 rounded-xl px-3 py-2 text-xs" />
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 space-y-3">
-              <p className="font-black text-sm">Lead Data Quality</p>
+              <p className="font-black text-sm">{t('settingsWork.leadQualityTitle')}</p>
               <button type="button" onClick={() => updateLeadDataQualitySettings({ rejectDuplicateLeads: !leadDataQualitySettings.rejectDuplicateLeads })} className={`w-full px-3 py-2 rounded-xl text-xs font-black border transition-all ${leadDataQualitySettings.rejectDuplicateLeads ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-200' : 'bg-white/5 border-white/10 text-zinc-300'}`}>
-                رفض الليد المكرر: {leadDataQualitySettings.rejectDuplicateLeads ? 'ON' : 'OFF'}
+                {t('settingsWork.rejectDuplicateLeads')} {leadDataQualitySettings.rejectDuplicateLeads ? 'ON' : 'OFF'}
               </button>
               <button type="button" onClick={() => updateLeadDataQualitySettings({ duplicatePhone: !leadDataQualitySettings.duplicatePhone })} className={`w-full px-3 py-2 rounded-xl text-xs font-black border transition-all ${leadDataQualitySettings.duplicatePhone ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-200' : 'bg-white/5 border-white/10 text-zinc-300'}`}>
-                مطابقة التكرار برقم الهاتف: {leadDataQualitySettings.duplicatePhone ? 'ON' : 'OFF'}
+                {t('settingsWork.matchDuplicatePhone')} {leadDataQualitySettings.duplicatePhone ? 'ON' : 'OFF'}
               </button>
               <button type="button" onClick={() => updateLeadDataQualitySettings({ duplicateEmail: !leadDataQualitySettings.duplicateEmail })} className={`w-full px-3 py-2 rounded-xl text-xs font-black border transition-all ${leadDataQualitySettings.duplicateEmail ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-200' : 'bg-white/5 border-white/10 text-zinc-300'}`}>
-                مطابقة التكرار بالإيميل: {leadDataQualitySettings.duplicateEmail ? 'ON' : 'OFF'}
+                {t('settingsWork.matchDuplicateEmail')} {leadDataQualitySettings.duplicateEmail ? 'ON' : 'OFF'}
               </button>
               <button type="button" onClick={() => updateLeadDataQualitySettings({ requireCompany: !leadDataQualitySettings.requireCompany })} className={`w-full px-3 py-2 rounded-xl text-xs font-black border transition-all ${leadDataQualitySettings.requireCompany ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-200' : 'bg-white/5 border-white/10 text-zinc-300'}`}>
-                الشركة حقل إجباري: {leadDataQualitySettings.requireCompany ? 'ON' : 'OFF'}
+                {t('settingsWork.companyRequired')} {leadDataQualitySettings.requireCompany ? 'ON' : 'OFF'}
               </button>
               <button type="button" onClick={() => updateLeadDataQualitySettings({ requireBudget: !leadDataQualitySettings.requireBudget })} className={`w-full px-3 py-2 rounded-xl text-xs font-black border transition-all ${leadDataQualitySettings.requireBudget ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-200' : 'bg-white/5 border-white/10 text-zinc-300'}`}>
-                الميزانية حقل إجباري: {leadDataQualitySettings.requireBudget ? 'ON' : 'OFF'}
+                {t('settingsWork.budgetRequired')} {leadDataQualitySettings.requireBudget ? 'ON' : 'OFF'}
               </button>
             </div>
           </div>
@@ -5639,9 +5638,9 @@ const SalesManagerSettings = ({
 
       <div className="bg-slate-900/40 border border-slate-800 p-6 rounded-[2rem]">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <h3 className="text-lg font-black">إدارة الموظفين حسب الأدوار</h3>
+          <h3 className="text-lg font-black">{t('settingsWork.employeesByRoleTitle')}</h3>
           {canEditBranding && (
-            <div className="text-xs text-zinc-400">صلاحيات الإدارة الكاملة للمالك فقط (إضافة/تعديل/حذف)</div>
+            <div className="text-xs text-zinc-400">{t('settingsWork.ownerOnlyAdminHint')}</div>
           )}
         </div>
         {canEditBranding && (
@@ -5651,7 +5650,7 @@ const SalesManagerSettings = ({
                 value={newEmployee.name}
                 onChange={(e) => setNewEmployee((p) => ({ ...p, name: e.target.value }))}
                 className="bg-[#0F1528] border border-white/10 rounded-xl px-3 py-2 text-sm"
-                placeholder="اسم الموظف"
+                placeholder={t('settingsWork.employeeNamePh')}
               />
               <select
                 value={newEmployee.role}
@@ -5667,7 +5666,7 @@ const SalesManagerSettings = ({
                 className="bg-[#0F1528] border border-white/10 rounded-xl px-3 py-2 text-sm"
               >
                 {roleOptions.map((r) => (
-                  <option key={r} value={r}>{r}</option>
+                  <option key={r} value={r}>{getRoleLabel(r, t)}</option>
                 ))}
               </select>
               <input
@@ -5679,7 +5678,7 @@ const SalesManagerSettings = ({
                   setNewEmployee((p) => ({ ...p, baseSalary: e.target.value.replace(/[^\d]/g, '') }))
                 }
                 className="bg-[#0F1528] border border-white/10 rounded-xl px-3 py-2 text-sm"
-                placeholder="راتب أساسي"
+                placeholder={t('settingsWork.baseSalaryPh')}
               />
               <input
                 type="email"
@@ -5687,7 +5686,7 @@ const SalesManagerSettings = ({
                 value={newEmployee.loginEmail}
                 onChange={(e) => setNewEmployee((p) => ({ ...p, loginEmail: e.target.value }))}
                 className="bg-[#0F1528] border border-white/10 rounded-xl px-3 py-2 text-sm"
-                placeholder="البريد لتسجيل الدخول"
+                placeholder={t('settingsWork.loginEmailPh')}
               />
               <input
                 type="password"
@@ -5695,10 +5694,10 @@ const SalesManagerSettings = ({
                 value={newEmployee.password}
                 onChange={(e) => setNewEmployee((p) => ({ ...p, password: e.target.value }))}
                 className="bg-[#0F1528] border border-white/10 rounded-xl px-3 py-2 text-sm"
-                placeholder="كلمة المرور (اختياري • ٨+)"
+                placeholder={t('settingsWork.passwordOptionalPh')}
               />
               <label className="px-3 py-2 rounded-xl text-sm border border-white/10 bg-[#0F1528] text-zinc-200 cursor-pointer text-center flex items-center justify-center min-h-[42px]">
-                رفع صورة
+                {t('settingsWork.uploadPhoto')}
                 <input
                   type="file"
                   accept="image/*"
@@ -5714,7 +5713,7 @@ const SalesManagerSettings = ({
                 {newEmployee.avatar ? (
                   <img src={newEmployee.avatar} alt="" className="w-10 h-10 rounded-lg object-cover" />
                 ) : (
-                  <span className="text-[11px] text-zinc-500 px-2">بدون صورة</span>
+                  <span className="text-[11px] text-zinc-500 px-2">{t('settingsWork.noPhoto')}</span>
                 )}
               </div>
               <button
@@ -5722,7 +5721,7 @@ const SalesManagerSettings = ({
                 onClick={handleCreateEmployee}
                 className="px-4 py-2 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 font-black text-sm xl:col-span-1"
               >
-                إضافة موظف وحساب
+                {t('settingsWork.addEmployeeAccount')}
               </button>
             </div>
           </div>
@@ -5731,16 +5730,16 @@ const SalesManagerSettings = ({
           <table className="w-full min-w-[1280px] text-right">
             <thead>
               <tr className="bg-[#0B1020]/80">
-                <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">الاسم</th>
-                <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">بريد الدخول</th>
-                <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">الدور</th>
-                <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">الصورة</th>
-                <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">الراتب الأساسي</th>
-                <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">حالة مهارات التوزيع</th>
+                <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">{t('settingsWork.colName')}</th>
+                <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">{t('settingsWork.colLoginEmail')}</th>
+                <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">{t('settingsWork.colRole')}</th>
+                <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">{t('settingsWork.colPhoto')}</th>
+                <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">{t('settingsWork.colBaseSalary')}</th>
+                <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">{t('settingsWork.colSkillsStatus')}</th>
                 {canEditBranding && (
-                  <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400 min-w-[170px]">باسورد جديد</th>
+                  <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400 min-w-[170px]">{t('settingsWork.colNewPassword')}</th>
                 )}
-                {canEditBranding && <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">إجراءات المالك</th>}
+                {canEditBranding && <th className="p-3 text-[10px] uppercase tracking-widest text-zinc-400">{t('settingsWork.colOwnerActions')}</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
@@ -5810,7 +5809,7 @@ const SalesManagerSettings = ({
                         >
                           {roleOptions.map((r) => (
                             <option key={r} value={r}>
-                              {r}
+                              {getRoleLabel(r, t)}
                             </option>
                           ))}
                         </select>
@@ -5823,7 +5822,7 @@ const SalesManagerSettings = ({
                         <div className="flex items-center gap-2">
                           <img src={draft.avatar || employee.avatar} alt="" className="w-9 h-9 rounded-lg object-cover border border-white/15" />
                           <label className="px-2 py-1 rounded-lg text-[11px] border border-white/15 bg-[#0F1528] cursor-pointer">
-                            رفع
+                            {t('settingsWork.uploadShort')}
                             <input
                               type="file"
                               accept="image/*"
@@ -5862,16 +5861,16 @@ const SalesManagerSettings = ({
                             className="bg-[#0F1528] border border-white/10 rounded-lg px-2 py-1.5 text-[11px] font-mono w-full min-w-0"
                             placeholder="0"
                           />
-                          <span className="text-[10px] text-zinc-500 shrink-0">ج.م</span>
+                          <span className="text-[10px] text-zinc-500 shrink-0">{t('common.currency')}</span>
                         </div>
                       ) : (
-                        `${(employee.baseSalary || 0).toLocaleString('ar-EG')} ج.م`
+                        `${(employee.baseSalary || 0).toLocaleString(dateLocale)} ${t('common.currency')}`
                       )}
                     </td>
                     <td className="p-3 text-xs text-zinc-300">
                       {employee.role === 'مندوب'
-                        ? (employee.skills.length > 0 ? `جاهز (${employee.skills.length} مهارة)` : 'يحتاج تحديد مهارات')
-                        : 'غير مطلوب'}
+                        ? (employee.skills.length > 0 ? t('settingsWork.skillsReady', { count: employee.skills.length }) : t('settingsWork.skillsNeeded'))
+                        : t('settingsWork.skillsNotRequired')}
                     </td>
                     {canEditBranding && (
                       <td className="p-3 align-top">
@@ -5889,7 +5888,7 @@ const SalesManagerSettings = ({
                                   [employee.id]: { pw: e.target.value, pw2: prev[employee.id]?.pw2 ?? '' },
                                 }))
                               }
-                              placeholder="جديدة (٨+)"
+                              placeholder={t('settingsWork.newPasswordShortPh')}
                               className="bg-[#0F1528] border border-white/10 rounded-lg px-2 py-1.5 text-[11px] w-full"
                             />
                             <input
@@ -5902,7 +5901,7 @@ const SalesManagerSettings = ({
                                   [employee.id]: { pw: prev[employee.id]?.pw ?? '', pw2: e.target.value },
                                 }))
                               }
-                              placeholder="تأكيد"
+                              placeholder={t('settingsWork.confirmPasswordShortPh')}
                               className="bg-[#0F1528] border border-white/10 rounded-lg px-2 py-1.5 text-[11px] w-full"
                             />
                             <button
@@ -5910,7 +5909,7 @@ const SalesManagerSettings = ({
                               onClick={() => void handleSaveEmployeePassword(employee.id)}
                               className="px-2 py-1.5 rounded-lg text-[11px] font-black border border-amber-400/35 text-amber-100 bg-amber-500/15 hover:bg-amber-500/25 transition-colors"
                             >
-                              حفظ الباسورد
+                              {t('settingsWork.saveEmployeePassword')}
                             </button>
                           </div>
                         )}
@@ -5920,12 +5919,12 @@ const SalesManagerSettings = ({
                       <td className="p-3">
                         {employee.role === 'مالك' || employee.id === currentUser?.id ? (
                           <span className="text-[11px] text-zinc-500">
-                            {employee.id === currentUser?.id ? 'حسابك الحالي — لا يُحذف من الجدول' : 'حساب مالك — لا يُحذف'}
+                            {employee.id === currentUser?.id ? t('settingsWork.ownerRowNote') : t('settingsWork.ownerAccountNote')}
                           </span>
                         ) : (
                           <div className="flex items-center gap-2">
-                            <button type="button" onClick={() => handleSaveEmployee(employee.id)} className="px-2 py-1 rounded-lg text-[11px] border border-emerald-400/30 text-emerald-200 bg-emerald-500/10">حفظ</button>
-                            <button type="button" onClick={() => handleDeleteEmployee(employee.id, employee.name)} className="px-2 py-1 rounded-lg text-[11px] border border-rose-400/30 text-rose-200 bg-rose-500/10">حذف</button>
+                            <button type="button" onClick={() => handleSaveEmployee(employee.id)} className="px-2 py-1 rounded-lg text-[11px] border border-emerald-400/30 text-emerald-200 bg-emerald-500/10">{t('settingsWork.saveRow')}</button>
+                            <button type="button" onClick={() => handleDeleteEmployee(employee.id, employee.name)} className="px-2 py-1 rounded-lg text-[11px] border border-rose-400/30 text-rose-200 bg-rose-500/10">{t('settingsWork.deleteRow')}</button>
                           </div>
                         )}
                       </td>
@@ -6018,11 +6017,11 @@ const SalesManagerSettings = ({
         </div>
       </div>
       <div className="bg-slate-900/40 border border-slate-800 p-8 rounded-[3rem] space-y-4">
-        <h3 className="text-xl font-black">هوية الطباعة والتقارير</h3>
-        <p className="text-sm text-zinc-400">يستخدمها النظام تلقائياً في تقارير PDF الخاصة بالمالك والمحاسب والمندوب.</p>
+        <h3 className="text-xl font-black">{t('settingsWork.printBrandingTitle')}</h3>
+        <p className="text-sm text-zinc-400">{t('settingsWork.printBrandingHint')}</p>
         {!canEditBranding && (
           <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-200">
-            تعديل الهوية متاح للمالك فقط.
+            {t('settingsWork.ownerOnlyBranding')}
           </div>
         )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -6031,10 +6030,10 @@ const SalesManagerSettings = ({
             disabled={!canEditBranding}
             onChange={(e) => updatePrintBrandingSettings({ companyName: e.target.value })}
             className="bg-[#0F1528] border border-white/15 rounded-xl px-3 py-2 text-sm disabled:opacity-60"
-            placeholder="اسم الشركة"
+            placeholder={t('settingsWork.companyName')}
           />
           <div className="flex items-center gap-2 bg-[#0F1528] border border-white/15 rounded-xl px-3 py-2">
-            <span className="text-xs text-zinc-400">اللون الأساسي للتقارير</span>
+            <span className="text-xs text-zinc-400">{t('settingsWork.reportColor')}</span>
             <input
               type="color"
               value={printBrandingSettings.primaryColor || '#4F46E5'}
@@ -6050,14 +6049,14 @@ const SalesManagerSettings = ({
               onClick={() => logoInputRef.current?.click()}
               className="px-3 py-2 rounded-xl text-sm font-black bg-[#0F1528] border border-white/10 disabled:opacity-60"
             >
-              رفع لوجو الشركة
+              {t('settingsWork.uploadLogo')}
             </button>
             {printBrandingSettings.logoDataUrl && canEditBranding && (
               <button
                 onClick={() => updatePrintBrandingSettings({ logoDataUrl: '' })}
                 className="px-3 py-2 rounded-xl text-sm font-black bg-rose-500/20 text-rose-300"
               >
-                حذف اللوجو
+                {t('settingsWork.removeLogo')}
               </button>
             )}
             <input
@@ -6081,7 +6080,7 @@ const SalesManagerSettings = ({
               disabled={!canEditBranding}
               onChange={(e) => updatePrintBrandingSettings({ showPrintDate: e.target.checked })}
             />
-            إظهار تاريخ الطباعة في التقارير
+            {t('settingsWork.showPrintDate')}
           </label>
           <label className="flex items-center gap-2 text-sm bg-[#0F1528] border border-white/15 rounded-xl px-3 py-2">
             <input
@@ -6090,7 +6089,7 @@ const SalesManagerSettings = ({
               disabled={!canEditBranding}
               onChange={(e) => updatePrintBrandingSettings({ showPageNumbers: e.target.checked })}
             />
-            إظهار ترقيم الصفحات
+            {t('settingsWork.showPageNumbers')}
           </label>
         </div>
         <textarea
@@ -6098,14 +6097,14 @@ const SalesManagerSettings = ({
           disabled={!canEditBranding}
           onChange={(e) => updatePrintBrandingSettings({ reportHeader: e.target.value })}
           className="w-full bg-[#0F1528] border border-white/15 rounded-xl px-3 py-2 text-sm min-h-[70px] disabled:opacity-60"
-          placeholder="نص الهيدر في التقارير"
+          placeholder={t('settingsWork.reportHeader')}
         />
         <textarea
           value={printBrandingSettings.reportFooter}
           disabled={!canEditBranding}
           onChange={(e) => updatePrintBrandingSettings({ reportFooter: e.target.value })}
           className="w-full bg-[#0F1528] border border-white/15 rounded-xl px-3 py-2 text-sm min-h-[70px] disabled:opacity-60"
-          placeholder="نص الفوتر في التقارير"
+          placeholder={t('settingsWork.reportFooter')}
         />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <input
@@ -6113,34 +6112,31 @@ const SalesManagerSettings = ({
             disabled={!canEditBranding}
             onChange={(e) => updatePrintBrandingSettings({ signatureName: e.target.value })}
             className="bg-[#0F1528] border border-white/15 rounded-xl px-3 py-2 text-sm disabled:opacity-60"
-            placeholder="اسم المسؤول للتوقيع (اختياري)"
+            placeholder={t('settingsWork.signatureName')}
           />
           <input
             value={printBrandingSettings.signatureTitle || ''}
             disabled={!canEditBranding}
             onChange={(e) => updatePrintBrandingSettings({ signatureTitle: e.target.value })}
             className="bg-[#0F1528] border border-white/15 rounded-xl px-3 py-2 text-sm disabled:opacity-60"
-            placeholder="المسمى الوظيفي للتوقيع (اختياري)"
+            placeholder={t('settingsWork.signatureTitle')}
           />
         </div>
         {printBrandingSettings.logoDataUrl && (
           <div className="bg-[#0B1020]/60 border border-white/10 rounded-xl p-3">
-            <p className="text-xs text-zinc-400 mb-2">معاينة اللوجو</p>
+            <p className="text-xs text-zinc-400 mb-2">{t('settingsWork.logoPreview')}</p>
             <img src={printBrandingSettings.logoDataUrl} alt="company logo" className="h-16 w-auto object-contain" />
           </div>
         )}
       </div>
       <div className="bg-slate-900/40 border border-slate-800 p-8 rounded-[3rem]">
-        <h3 className="text-xl font-black mb-4">نسخ احتياطي واسترجاع</h3>
+        <h3 className="text-xl font-black mb-4">{t('settingsWork.backupTitle')}</h3>
         <p className="text-sm text-zinc-400 mb-5">
-          لضمان أمان البيانات، يمكنك حفظ نسخة من النظام أو استرجاع نسخة سابقة. ملف JSON من الواجهة ليس نسخة احتياطية لقاعدة
-          البيانات: في وضع السيرفر يصدّر لقطة REST للعرض/الأرشفة فقط، وفي الوضع المحلي يصدّر مفاتيح{' '}
-          <code className="text-zinc-300">localStorage</code> التجريبية — للاستعادة الكاملة استخدم نسخ احتياطي لقاعدة البيانات أو
-          سير عمل الاستيراد الرسمي.
+          {t('settingsWork.backupBody')}
         </p>
         <div className="flex flex-wrap items-center gap-3">
-          <button onClick={backupSystemData} className="px-4 py-2 rounded-xl text-sm font-black bg-[#7C6BFF] text-white">تنزيل نسخة احتياطية</button>
-          <button onClick={() => restoreInputRef.current?.click()} className="px-4 py-2 rounded-xl text-sm font-black bg-[#0F1528] border border-white/10 text-zinc-200">استرجاع نسخة</button>
+          <button onClick={backupSystemData} className="px-4 py-2 rounded-xl text-sm font-black bg-[#7C6BFF] text-white">{t('settingsWork.downloadBackup')}</button>
+          <button onClick={() => restoreInputRef.current?.click()} className="px-4 py-2 rounded-xl text-sm font-black bg-[#0F1528] border border-white/10 text-zinc-200">{t('settingsWork.restoreBackup')}</button>
           <input
             ref={restoreInputRef}
             type="file"
@@ -6428,7 +6424,7 @@ const RepProfessionalDashboard = ({ currentUser, onGoToTab }: { currentUser: Use
 
   const closeWon = (lead: Lead) => {
     updateLeadStatus(lead.id, 'مغلق - فوز', 'إغلاق الصفقة من لوحة المندوب');
-    toast.success(`تم إغلاق الصفقة فوز: ${lead.name}`);
+    toast.success(t('settingsToasts.wonClosed', { name: lead.name }));
   };
 
   const closeLost = (lead: Lead) => {
@@ -6446,7 +6442,7 @@ const RepProfessionalDashboard = ({ currentUser, onGoToTab }: { currentUser: Use
     ) || '';
     const reasonCode = reasonMap[picked.trim()];
     if (!reasonCode) {
-      toast.error('لازم تحديد سبب خسارة صحيح قبل الإغلاق.');
+      toast.error(t('settingsToasts.lossReasonRequired'));
       return;
     }
     const qualityChecks = window.prompt(
@@ -6454,7 +6450,7 @@ const RepProfessionalDashboard = ({ currentUser, onGoToTab }: { currentUser: Use
     ) || '';
     const checks = qualityChecks.split(',').map((x) => x.trim().toUpperCase());
     if (checks.length !== 3 || checks.some((x) => x !== 'Y' && x !== 'N')) {
-      toast.error('صيغة التحقق غير صحيحة. استخدم Y,Y,N');
+      toast.error(t('settingsToasts.qaFormatInvalid'));
       return;
     }
     const passedChecks = checks.filter((x) => x === 'Y').length;
@@ -7048,6 +7044,7 @@ const RepProfessionalDashboard = ({ currentUser, onGoToTab }: { currentUser: Use
 
 const RepPerformanceView = ({ currentUser, onGoToTab }: { currentUser: User; onGoToTab?: (tab: string) => void }) => {
   const { t } = useTranslation();
+  const { dateLocale } = useAppDirection();
   const { getRepSnapshots, leads } = useData();
   const snapshot = useMemo(
     () => getRepSnapshots().find(r => r.repId === currentUser.id),
@@ -7125,37 +7122,37 @@ const RepPerformanceView = ({ currentUser, onGoToTab }: { currentUser: User; onG
 
       <div className={`border rounded-[2rem] p-6 flex items-center justify-between gap-4 ${scoreColorClass}`}>
         <div>
-          <p className="text-xs font-black uppercase tracking-widest opacity-80">مؤشر الأداء</p>
+          <p className="text-xs font-black uppercase tracking-widest opacity-80">{t('repPerfView.performanceIndex')}</p>
           <p className="text-3xl font-black">{performanceScore}/100</p>
         </div>
         <div className="text-left">
-          <p className="text-xs opacity-80">التقييم الحالي</p>
+          <p className="text-xs opacity-80">{t('repPerfView.currentRating')}</p>
           <p className="text-xl font-black">{scoreLabel}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-        <StatCard title="التحويل" value={`${snapshot.conversionRate.toFixed(1)}%`} icon={Target} onClick={() => goMyLeads(false)} />
-        <StatCard title="صفقات فوز" value={snapshot.wonDeals} icon={CheckCircle2} onClick={() => goMyLeads(false)} />
-        <StatCard title="صفقات خسارة" value={snapshot.lostDeals} icon={AlertCircle} onClick={() => goMyLeads(false)} />
-        <StatCard title="متوسط الرد" value={`${snapshot.avgResponseMins} دقيقة`} icon={Clock} onClick={() => goMyLeads(true)} />
-        <StatCard title="الإيراد" value={`${snapshot.revenue.toLocaleString()} ج.م`} icon={DollarSign} onClick={() => goMyLeads(false)} />
-        <StatCard title="عمولة تقديرية" value={`${snapshot.estimatedCommission.toLocaleString()} ج.م`} icon={DollarSign} onClick={() => goMyLeads(false)} />
+        <StatCard title={t('repPerfView.conversion')} value={`${snapshot.conversionRate.toFixed(1)}%`} icon={Target} onClick={() => goMyLeads(false)} />
+        <StatCard title={t('repPerfView.wonDeals')} value={snapshot.wonDeals} icon={CheckCircle2} onClick={() => goMyLeads(false)} />
+        <StatCard title={t('repPerfView.lostDeals')} value={snapshot.lostDeals} icon={AlertCircle} onClick={() => goMyLeads(false)} />
+        <StatCard title={t('repPerfView.avgResponse')} value={t('repPerfView.avgResponseUnit', { minutes: snapshot.avgResponseMins })} icon={Clock} onClick={() => goMyLeads(true)} />
+        <StatCard title={t('repPerfView.revenue')} value={`${snapshot.revenue.toLocaleString(dateLocale)} ${t('common.currency')}`} icon={DollarSign} onClick={() => goMyLeads(false)} />
+        <StatCard title={t('repPerfView.estCommission')} value={`${snapshot.estimatedCommission.toLocaleString(dateLocale)} ${t('common.currency')}`} icon={DollarSign} onClick={() => goMyLeads(false)} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard title="تغطية تواصل مؤكد" value={`${snapshot.confirmedContactCoverage.toFixed(1)}%`} icon={ShieldCheck} onClick={() => goMyLeads(false)} />
-        <StatCard title="تواصلات مؤكدة (موثقة)" value={snapshot.confirmedContacts} icon={MessageSquare} onClick={() => goMyLeads(false)} />
-        <StatCard title="جودة التوثيق" value={`${snapshot.documentationQualityScore.toFixed(1)}%`} icon={FileText} onClick={() => goMyLeads(false)} />
+        <StatCard title={t('repPerfView.contactCoverage')} value={`${snapshot.confirmedContactCoverage.toFixed(1)}%`} icon={ShieldCheck} onClick={() => goMyLeads(false)} />
+        <StatCard title={t('repPerfView.confirmedContacts')} value={snapshot.confirmedContacts} icon={MessageSquare} onClick={() => goMyLeads(false)} />
+        <StatCard title={t('repPerfView.documentationQuality')} value={`${snapshot.documentationQualityScore.toFixed(1)}%`} icon={FileText} onClick={() => goMyLeads(false)} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <div className="bg-white/[0.04] border border-white/10 rounded-[3rem] p-6">
-          <h3 className="text-lg font-black mb-4">تقدم أهدافك الشهرية</h3>
+          <h3 className="text-lg font-black mb-4">{t('repPerfView.monthlyGoals')}</h3>
           <div className="space-y-4">
             <div>
               <div className="flex items-center justify-between text-sm mb-2">
-                <span>هدف الليدز المغلقة فوز</span>
+                <span>{t('repPerfView.wonLeadsTarget')}</span>
                 <span className="font-black">{snapshot.wonDeals}/{snapshot.leadsTarget}</span>
               </div>
               <div className="w-full h-2.5 bg-white/10 rounded-full overflow-hidden">
@@ -7164,8 +7161,8 @@ const RepPerformanceView = ({ currentUser, onGoToTab }: { currentUser: User; onG
             </div>
             <div>
               <div className="flex items-center justify-between text-sm mb-2">
-                <span>هدف الإيراد</span>
-                <span className="font-black">{snapshot.revenue.toLocaleString()} / {snapshot.revenueTarget.toLocaleString()} ج.م</span>
+                <span>{t('repPerfView.revenueTarget')}</span>
+                <span className="font-black">{snapshot.revenue.toLocaleString(dateLocale)} / {snapshot.revenueTarget.toLocaleString(dateLocale)} {t('common.currency')}</span>
               </div>
               <div className="w-full h-2.5 bg-white/10 rounded-full overflow-hidden">
                 <div className="h-full bg-emerald-500" style={{ width: `${Math.min(100, snapshot.revenueTargetProgress)}%` }} />
@@ -7175,7 +7172,7 @@ const RepPerformanceView = ({ currentUser, onGoToTab }: { currentUser: User; onG
         </div>
 
         <div className="bg-white/[0.04] border border-white/10 rounded-[3rem] p-6">
-          <h3 className="text-lg font-black mb-4">آخر نشاطاتك على العملاء</h3>
+          <h3 className="text-lg font-black mb-4">{t('repPerfView.recentActivity')}</h3>
           <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar pr-1">
             {lastActions.map((entry, idx) => (
               <button
@@ -7186,22 +7183,21 @@ const RepPerformanceView = ({ currentUser, onGoToTab }: { currentUser: User; onG
               >
                 <p className="text-sm font-bold">{entry.leadName}</p>
                 <p className="text-xs text-zinc-300 mt-1">{entry.action}</p>
-                <p className="text-[11px] text-zinc-500 mt-1">{new Date(entry.createdAt).toLocaleString('ar-EG')}</p>
+                <p className="text-[11px] text-zinc-500 mt-1">{new Date(entry.createdAt).toLocaleString(dateLocale)}</p>
               </button>
             ))}
-            {lastActions.length === 0 && <p className="text-zinc-400 text-sm">لا توجد نشاطات مسجلة بعد.</p>}
+            {lastActions.length === 0 && <p className="text-zinc-400 text-sm">{t('repPerfView.noActivityYet')}</p>}
           </div>
         </div>
       </div>
 
       <div className="bg-white/[0.04] border border-white/10 rounded-[3rem] p-6">
-        <h3 className="text-lg font-black mb-4">تحليل سريع</h3>
+        <h3 className="text-lg font-black mb-4">{t('repPerfView.quickAnalysis')}</h3>
         <p className="text-sm text-zinc-300">
-          عندك {myLeads.length} عميل مسند، منهم {closedWon.length} تم إغلاقهم فوز.
-          {' '}استمر في المتابعة السريعة للعملاء المتأخرين لرفع التحويل والإيراد.
+          {t('repPerfView.analysisBody', { assigned: myLeads.length, won: closedWon.length })}
         </p>
         <p className="text-xs text-zinc-400 mt-3">
-          يتم اعتبار التواصل "مؤكد" فقط عند تسجيل نشاط (مكالمة/واتساب) مع ملاحظة موثقة واضحة.
+          {t('repPerfView.analysisFootnote')}
         </p>
       </div>
     </div>
@@ -7310,15 +7306,16 @@ const ProductionBookingSpendCompact = ({
   accrualExpenseId?: string;
   onSubmit: (k: ProductionBookingSubmitKind, id: string, lines: Omit<BookingSpendLine, 'id' | 'createdAt'>[]) => Promise<boolean>;
 }) => {
+  const { t } = useTranslation();
   const [rows, setRows] = useState([
     { description: '', amount: '', invoiceRef: '', vendor: '' },
   ]);
   return (
     <div className="mt-3 pt-3 border-t border-dashed border-amber-400/35 space-y-2">
-      <p className="text-[11px] font-black text-amber-200/95">مدير الإنتاج: بنود وفواتير قبل طلب المحاسب للسداد</p>
+      <p className="text-[11px] font-black text-amber-200/95">{t('productionFund.bookingSpendHint')}</p>
       {accrualExpenseId ? (
         <p className="text-[10px] text-zinc-500">
-          المصروف الاستحقاقي في الدفاتر:{' '}
+          {t('productionFund.accrualExpenseRef')}{' '}
           <span className="font-mono text-cyan-400">{accrualExpenseId}</span>
         </p>
       ) : null}
@@ -7327,7 +7324,7 @@ const ProductionBookingSpendCompact = ({
           <input
             value={r.description}
             onChange={(e) => setRows((prev) => prev.map((row, i) => (i === idx ? { ...row, description: e.target.value } : row)))}
-            placeholder="الوصف / البيان"
+            placeholder={t('productionFund.descPh')}
             className="sm:col-span-4 bg-[#0B1020] border border-white/10 rounded-lg px-2 py-1.5"
           />
           <input
@@ -7335,19 +7332,19 @@ const ProductionBookingSpendCompact = ({
             min={0}
             value={r.amount}
             onChange={(e) => setRows((prev) => prev.map((row, i) => (i === idx ? { ...row, amount: e.target.value } : row)))}
-            placeholder="مبلغ"
+            placeholder={t('productionFund.amountPh')}
             className="sm:col-span-2 bg-[#0B1020] border border-white/10 rounded-lg px-2 py-1.5"
           />
           <input
             value={r.invoiceRef}
             onChange={(e) => setRows((prev) => prev.map((row, i) => (i === idx ? { ...row, invoiceRef: e.target.value } : row)))}
-            placeholder="مرجع فاتورة"
+            placeholder={t('productionFund.invoiceRefPh')}
             className="sm:col-span-3 bg-[#0B1020] border border-white/10 rounded-lg px-2 py-1.5"
           />
           <input
             value={r.vendor}
             onChange={(e) => setRows((prev) => prev.map((row, i) => (i === idx ? { ...row, vendor: e.target.value } : row)))}
-            placeholder="مورد"
+            placeholder={t('productionFund.vendorPh')}
             className="sm:col-span-2 bg-[#0B1020] border border-white/10 rounded-lg px-2 py-1.5"
           />
           <button
@@ -7355,7 +7352,7 @@ const ProductionBookingSpendCompact = ({
             onClick={() => setRows((prev) => (prev.length <= 1 ? prev : prev.filter((_x, i) => i !== idx)))}
             className="sm:col-span-1 rounded-lg border border-white/15 text-[10px] text-zinc-400 hover:bg-white/5 py-1"
           >
-            حذف
+            {t('productionFund.removeLine')}
           </button>
         </div>
       ))}
@@ -7365,7 +7362,7 @@ const ProductionBookingSpendCompact = ({
           onClick={() => setRows((prev) => [...prev, { description: '', amount: '', invoiceRef: '', vendor: '' }])}
           className="text-[11px] font-black px-2 py-1 rounded-lg bg-white/10 text-zinc-200"
         >
-          + بند
+          {t('productionFund.addLineBtn')}
         </button>
         <button
           type="button"
@@ -7380,26 +7377,26 @@ const ProductionBookingSpendCompact = ({
                 }))
                 .filter((rw) => rw.description && rw.amount > 0);
               if (lines.length === 0) {
-                toast.error('أضف بندًا واحدًا على الأقل مع وصف ومبلغ');
+                toast.error(t('productionFund.bookingLineRequired'));
                 return;
               }
               const sum = lines.reduce((s, x) => s + x.amount, 0);
               const est = Math.max(0, Number(estimatedCost) || 0);
               if (est > 0 && sum > est * 1.05 + 0.01) {
-                toast.error('مجموع البنود أعلى من التقدير بأكثر من 5٪');
+                toast.error(t('productionFund.bookingOverEstimate'));
                 return;
               }
               const ok = await onSubmit(kind, bookingId, lines);
-              if (!ok) toast.error('تعذر الإرسال — تحقق من السيرفر أو أن الحالة «بانتظار تنفيذ إنتاج»');
+              if (!ok) toast.error(t('productionFund.bookingSubmitFailed'));
               else {
-                toast.success('تم تحويل الحجز للمحاسب لسداد الاستحقاق');
+                toast.success(t('productionFund.bookingSubmitSuccess'));
                 setRows([{ description: '', amount: '', invoiceRef: '', vendor: '' }]);
               }
             })();
           }}
           className="text-[11px] font-black px-3 py-1.5 rounded-lg bg-amber-500 text-slate-950"
         >
-          إرسال للمحاسب
+          {t('productionFund.sendToAccountant')}
         </button>
       </div>
     </div>
@@ -7616,7 +7613,7 @@ const BookingCenter = ({ currentUser, onGoToTab }: { currentUser: User; onGoToTa
 
   const handleAddShoot = async () => {
     if (!shootForm.customerName.trim() || !shootForm.date || !shootForm.time || !shootForm.location.trim()) {
-      toast.error('اكمل بيانات حجز التصوير');
+      toast.error(t('bookingsToasts.shootIncomplete'));
       return;
     }
     const result = await addShootBooking({
@@ -7633,13 +7630,13 @@ const BookingCenter = ({ currentUser, onGoToTab }: { currentUser: User; onGoToTa
       return;
     }
     setShootForm({ leadId: '', customerName: '', date: '', time: '', location: '', estimatedCost: '', notes: '' });
-    toast.success('تم إرسال طلب حجز التصوير');
+    toast.success(t('bookingsToasts.shootSent'));
   };
 
   const handleAddEquipment = async () => {
     const quantity = Math.max(1, Number(equipmentForm.quantity) || 1);
     if (!equipmentForm.customerName.trim() || !equipmentForm.equipmentName.trim() || !equipmentForm.fromDate || !equipmentForm.toDate) {
-      toast.error('اكمل بيانات حجز المعدات');
+      toast.error(t('bookingsToasts.equipmentIncomplete'));
       return;
     }
     const ok = await addEquipmentBooking({
@@ -7653,17 +7650,17 @@ const BookingCenter = ({ currentUser, onGoToTab }: { currentUser: User; onGoToTa
       notes: equipmentForm.notes.trim() || undefined,
     });
     if (!ok) {
-      toast.error('تعذر الحجز: يوجد تعارض في نفس الفترة أو الكمية غير كافية');
+      toast.error(t('bookingsToasts.equipmentConflict'));
       return;
     }
     setEquipmentForm({ leadId: '', customerName: '', equipmentName: '', quantity: '1', fromDate: '', toDate: '', estimatedCost: '', notes: '' });
-    toast.success('تم إرسال طلب حجز المعدات');
+    toast.success(t('bookingsToasts.equipmentSent'));
   };
 
   const handleAddMeeting = async () => {
     const duration = Math.max(15, Number(meetingForm.durationMins) || 60);
     if (!meetingForm.title.trim() || !meetingForm.date || !meetingForm.startTime) {
-      toast.error('اكمل بيانات الاجتماع');
+      toast.error(t('bookingsToasts.meetingIncomplete'));
       return;
     }
     const ok = await addMeetingBooking({
@@ -7678,16 +7675,16 @@ const BookingCenter = ({ currentUser, onGoToTab }: { currentUser: User; onGoToTa
       notes: meetingForm.notes.trim() || undefined,
     });
     if (!ok) {
-      toast.error('تعذر الحجز: يوجد اجتماع آخر في نفس التوقيت');
+      toast.error(t('bookingsToasts.meetingConflict'));
       return;
     }
     setMeetingForm({ leadId: '', title: '', date: '', startTime: '', durationMins: '60', venueType: 'داخل_المقر', estimatedCost: '', location: '', notes: '' });
-    toast.success('تم حفظ الاجتماع في التقويم الموحد');
+    toast.success(t('bookingsToasts.meetingSaved'));
   };
 
   const handleAddOther = async () => {
     if (!otherForm.statement.trim()) {
-      toast.error('أدخل البيان (الوصف)');
+      toast.error(t('bookingsToasts.otherDescRequired'));
       return;
     }
     const ok = await addOtherBooking({
@@ -7700,7 +7697,7 @@ const BookingCenter = ({ currentUser, onGoToTab }: { currentUser: User; onGoToTa
       return;
     }
     setOtherForm({ title: '', statement: '', date: '' });
-    toast.success('تم تسجيل الحجز');
+    toast.success(t('bookingsToasts.otherSaved'));
   };
 
   const statusClass = (status: string) =>
@@ -9133,18 +9130,19 @@ function custodyAttachmentHref(a: CustodySpendAttachment): string | null {
 
 /** عرض بنود التسوية للمحاسب مع روابط المرفقات */
 const CustodySettlementReviewBlock = ({ lines }: { lines: CustodySpendLine[] }) => {
-  if (lines.length === 0) return <p className="text-xs text-zinc-500">لا توجد بنود صرف مُرسلة.</p>;
+  const { t } = useTranslation();
+  if (lines.length === 0) return <p className="text-xs text-zinc-500">{t('productionFund.noSpendLines')}</p>;
   return (
     <div className="w-full overflow-x-auto rounded-xl border border-white/10 bg-[#0B1020]/80">
       <table className="w-full text-right text-xs min-w-[640px]">
         <thead>
           <tr className="border-b border-white/10 text-zinc-400">
-            <th className="p-2 font-black">البيان</th>
-            <th className="p-2 font-black">المبلغ</th>
-            <th className="p-2 font-black">الفئة</th>
-            <th className="p-2 font-black">مركز التكلفة</th>
-            <th className="p-2 font-black">ملاحظة</th>
-            <th className="p-2 font-black">المستندات</th>
+            <th className="p-2 font-black">{t('productionFund.colDescription')}</th>
+            <th className="p-2 font-black">{t('productionFund.colAmount')}</th>
+            <th className="p-2 font-black">{t('productionFund.colCategory')}</th>
+            <th className="p-2 font-black">{t('productionFund.colCostCenter')}</th>
+            <th className="p-2 font-black">{t('productionFund.colNote')}</th>
+            <th className="p-2 font-black">{t('productionFund.colDocuments')}</th>
           </tr>
         </thead>
         <tbody>
@@ -9152,11 +9150,11 @@ const CustodySettlementReviewBlock = ({ lines }: { lines: CustodySpendLine[] }) 
             <tr key={line.id} className="border-b border-white/5">
               <td className="p-2 text-zinc-200">{line.title || '—'}</td>
               <td className="p-2 text-emerald-300 font-bold">{Number(line.amount || 0).toLocaleString()}</td>
-              <td className="p-2">{line.category}</td>
+              <td className="p-2">{getExpenseCategoryLabel(line.category, t)}</td>
               <td className="p-2 text-zinc-400">{line.costCenter || '—'}</td>
               <td className="p-2 text-zinc-500 max-w-[160px] break-words">{line.note || '—'}</td>
               <td className="p-2">
-                {(line.attachments?.length ?? 0) === 0 && <span className="text-amber-300/90">بدون مستند</span>}
+                {(line.attachments?.length ?? 0) === 0 && <span className="text-amber-300/90">{t('productionFund.noAttachment')}</span>}
                 {(line.attachments ?? []).map((a) => {
                   const href = custodyAttachmentHref(a);
                   return (
@@ -9164,7 +9162,7 @@ const CustodySettlementReviewBlock = ({ lines }: { lines: CustodySpendLine[] }) 
                       {href ? (
                         <a href={href} download={a.fileName} className="text-[#A99FFF] underline font-bold">{a.fileName}</a>
                       ) : (
-                        <span className="text-zinc-500">{a.fileName} (بلا نسخة محفوظة)</span>
+                        <span className="text-zinc-500">{a.fileName} {t('productionFund.noSavedCopy')}</span>
                       )}
                     </div>
                   );
@@ -9179,6 +9177,8 @@ const CustodySettlementReviewBlock = ({ lines }: { lines: CustodySpendLine[] }) 
 };
 
 const ProductionCustodyDashboard = () => {
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language === 'en' ? 'en-US' : 'ar-EG';
   const {
     currentUser,
     custodyFunds,
@@ -9260,12 +9260,12 @@ const ProductionCustodyDashboard = () => {
   }, [priceQuotes, currentUser?.id, currentUser?.name]);
 
   const quoteStatusLabel: Record<PriceQuote['status'], string> = {
-    'بانتظار التسعير': 'بانتظار التسعير',
-    'قيد اعتماد المالك': 'قيد اعتماد المالك',
-    معتمد: 'معتمد — بانتظار العميل',
-    مرفوض: 'مرفوض من المالك',
-    مكتمل: 'مكتمل',
-    'مغلق - رفض العميل': 'رفض العميل',
+    'بانتظار التسعير': t('productionFund.quoteStatusPricing'),
+    'قيد اعتماد المالك': t('productionFund.quoteStatusOwner'),
+    معتمد: t('productionFund.quoteStatusApproved'),
+    مرفوض: t('productionFund.quoteStatusRejected'),
+    مكتمل: t('productionFund.quoteStatusDone'),
+    'مغلق - رفض العميل': t('productionFund.quoteStatusClientRejected'),
   };
 
   const myPricingArchive = useMemo(() => {
@@ -9396,7 +9396,7 @@ const ProductionCustodyDashboard = () => {
   const attachToLine = (lineId: string, file: File | null) => {
     if (!file) return;
     if (file.size > MAX_CUSTODY_ATTACH_BYTES) {
-      toast.error('حجم الملف كبير؛ اختر ملفاً أصغر (حد أقصى تقريباً ٤٨ ك.ب)');
+      toast.error(t('productionFund.fileTooLarge'));
       return;
     }
     const reader = new FileReader();
@@ -9414,9 +9414,9 @@ const ProductionCustodyDashboard = () => {
           l.id === lineId ? { ...l, attachments: [...(l.attachments ?? []), att] } : l
         )
       );
-      toast.success('تمت إضافة المستند للبند');
+      toast.success(t('productionFund.attachmentAdded'));
     };
-    reader.onerror = () => toast.error('تعذر قراءة الملف');
+    reader.onerror = () => toast.error(t('productionFund.fileReadFailed'));
     reader.readAsDataURL(file);
   };
 
@@ -9460,7 +9460,7 @@ const ProductionCustodyDashboard = () => {
   const attachToExpenseSpendLine = (lineId: string, file: File | null) => {
     if (!file) return;
     if (file.size > MAX_CUSTODY_ATTACH_BYTES) {
-      toast.error('حجم الملف كبير؛ اختر ملفاً أصغر (حد أقصى تقريباً ٤٨ ك.ب)');
+      toast.error(t('productionFund.fileTooLarge'));
       return;
     }
     const reader = new FileReader();
@@ -9478,9 +9478,9 @@ const ProductionCustodyDashboard = () => {
           l.id === lineId ? { ...l, attachments: [...(l.attachments ?? []), att] } : l,
         ),
       );
-      toast.success('تمت إضافة المستند للبند');
+      toast.success(t('productionFund.attachmentAdded'));
     };
-    reader.onerror = () => toast.error('تعذر قراءة الملف');
+    reader.onerror = () => toast.error(t('productionFund.fileReadFailed'));
     reader.readAsDataURL(file);
   };
 
@@ -9517,8 +9517,8 @@ const ProductionCustodyDashboard = () => {
     setExpenseSpendSaveBusy(true);
     try {
       const ok = await managerUpdateApprovedExpenseSpendLines(activeExpense.id, expenseSpendDraftLines);
-      if (ok) toast.success('تم حفظ بنود الصرف والمرفقات');
-      else toast.error('تعذر الحفظ — تحقق من المبلغ أو الصلاحية');
+      if (ok) toast.success(t('productionFund.expenseSpendSaved'));
+      else toast.error(t('productionFund.expenseSpendSaveFailed'));
     } finally {
       setExpenseSpendSaveBusy(false);
     }
@@ -9527,34 +9527,24 @@ const ProductionCustodyDashboard = () => {
   const saveLinesOnly = async () => {
     if (!activeFund) return;
     const ok = await managerUpdateCustodySpendLines(activeFund.id, draftLines);
-    if (ok) toast.success('تم حفظ بنود الصرف');
-    else toast.error('تعذر الحفظ — تحقق من حالة العهدة');
+    if (ok) toast.success(t('productionFund.custodyLinesSaved'));
+    else toast.error(t('productionFund.custodyLinesSaveFailed'));
   };
 
   const submitSettlement = async () => {
     if (!activeFund) return;
     const ok = await managerSubmitCustodySettlement(activeFund.id, draftLines);
-    if (ok) toast.success('تم إرسال التسوية للمحاسب لإقفال القيد');
-    else toast.error('تعذر الإرسال — مجموع البنود يتجاوز العهدة أو الحالة غير مناسبة');
+    if (ok) toast.success(t('productionFund.settlementSent'));
+    else toast.error(t('productionFund.settlementSendFailed'));
   };
 
-  const statusLabel: Record<string, string> = {
-    مسودة: 'مسودة',
-    طلب_بانتظار_المالك: 'طلب بانتظار المالك',
-    مرفوض_طلب: 'طلب مرفوض',
-    بانتظار_دفع_محاسب: 'بانتظار دفع المحاسب',
-    جاهزة_للاستلام: 'جاهزة للاستلام (بعد صرف المحاسب)',
-    نشطة: 'نشطة — تسجيل الصرف',
-    تسوية_بانتظار_محاسب: 'تسوية بانتظار المحاسب',
-    مرفوض_تسوية: 'مرفوض تسوية',
-    مقفلة: 'مقفلة',
-  };
+  const statusLabel = (status: string) => getCustodyStatusLabel(status, t);
 
   return (
     <div className="animate-in fade-in duration-500 space-y-6">
       <SectionTitle
-        title="لوحة الإنتاج"
-        subtitle="طلبات التسعير من فريق المبيعات، وعهود وتمويل الإنتاج"
+        title={t('productionFund.dashTitle')}
+        subtitle={t('productionFund.dashSubtitle')}
         icon={Briefcase}
       />
 
@@ -9564,13 +9554,13 @@ const ProductionCustodyDashboard = () => {
           onClick={() => setProdActiveTab('requests')}
           className={`px-5 py-2 rounded-xl text-sm font-black transition-all ${prodActiveTab === 'requests' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-white'}`}
         >
-          عهدة ومصروفات
+          {t('productionFund.tabRequests')}
         </button>
         <button
           onClick={() => setProdActiveTab('pricing')}
           className={`relative px-5 py-2 rounded-xl text-sm font-black transition-all ${prodActiveTab === 'pricing' ? 'bg-amber-500 text-black' : 'text-zinc-400 hover:text-white'}`}
         >
-          طلبات التسعير
+          {t('productionFund.tabPricing')}
           {myPricingQueue.length > 0 && (
             <span className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center">
               {myPricingQueue.length}
@@ -9581,7 +9571,7 @@ const ProductionCustodyDashboard = () => {
           onClick={() => setProdActiveTab('workorders')}
           className={`relative px-5 py-2 rounded-xl text-sm font-black transition-all ${prodActiveTab === 'workorders' ? 'bg-emerald-600 text-white' : 'text-zinc-400 hover:text-white'}`}
         >
-          أوامر شغل
+          {t('productionFund.tabWorkOrders')}
           {myWorkOrders.length > 0 && (
             <span className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center">
               {myWorkOrders.length}
@@ -9596,7 +9586,7 @@ const ProductionCustodyDashboard = () => {
           {myPricingQueue.length === 0 ? (
             <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-12 text-center text-zinc-500">
               <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
-              لا توجد طلبات تسعير معلقة
+              {t('productionFund.noPricingQueue')}
             </div>
           ) : (
             myPricingQueue.map((q: PriceQuote) => {
@@ -9614,26 +9604,25 @@ const ProductionCustodyDashboard = () => {
                       <p className="font-black text-white text-lg">{q.title}</p>
                       <p className="text-sm text-zinc-400 mt-0.5">{q.customerName}</p>
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-zinc-700/60 text-zinc-300">{q.costCenter || 'عام'}</span>
-                        <span className="text-[10px] text-zinc-500">أرسله: {q.createdByName}</span>
+                        <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-zinc-700/60 text-zinc-300">{q.costCenter || t('productionFund.generalCostCenter')}</span>
+                        <span className="text-[10px] text-zinc-500">{t('productionFund.sentBy')} {q.createdByName}</span>
                       </div>
                       {q.note && (
                         <p className="text-xs text-amber-300/80 mt-1.5 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-1.5">
-                          ملاحظات المندوب: {q.note}
+                          {t('productionFund.repNotePrefix')} {q.note}
                         </p>
                       )}
                     </div>
                     <span className="px-3 py-1 rounded-xl text-xs font-black bg-amber-500/20 text-amber-200 border border-amber-500/30 shrink-0">
-                      بانتظار التسعير
+                      {t('productionFund.awaitingPricingBadge')}
                     </span>
                   </div>
 
-                  {/* ===== تحويل للمدير آخر ===== */}
                   <div className="flex items-center gap-2 bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 flex-wrap">
                     <ArrowLeftRight className="w-4 h-4 text-zinc-400 shrink-0" />
-                    <span className="text-xs text-zinc-400 shrink-0">تحويل لمدير إنتاج آخر:</span>
+                    <span className="text-xs text-zinc-400 shrink-0">{t('productionFund.reassignToOther')}</span>
                     {otherProductionUsers.length === 0 ? (
-                      <span className="text-xs text-zinc-600 italic">لا يوجد مدير إنتاج آخر مسجل في النظام حالياً</span>
+                      <span className="text-xs text-zinc-600 italic">{t('productionFund.noOtherProdManager')}</span>
                     ) : (
                       <>
                         <select
@@ -9641,7 +9630,7 @@ const ProductionCustodyDashboard = () => {
                           onChange={(e) => setReassignTarget((prev) => ({ ...prev, [q.id]: e.target.value }))}
                           className="flex-1 min-w-[160px] bg-[#0B1020] border border-white/15 rounded-xl px-3 py-1.5 text-sm"
                         >
-                          <option value="">— اختر مدير إنتاج —</option>
+                          <option value="">{t('productionFund.selectProdManager')}</option>
                           {otherProductionUsers.map((u) => (
                             <option key={u.id} value={u.id}>{u.name}</option>
                           ))}
@@ -9654,15 +9643,15 @@ const ProductionCustodyDashboard = () => {
                             if (!targetUser) return;
                             const ok = await reassignPricingRequest(q.id, targetUser.id, targetUser.name);
                             if (ok) {
-                              toast.success(`تم تحويل الطلب إلى ${targetUser.name}`);
+                              toast.success(t('productionFund.reassignSuccess', { name: targetUser.name }));
                               setReassignTarget((prev) => { const n = { ...prev }; delete n[q.id]; return n; });
                             } else {
-                              toast.error('تعذر التحويل');
+                              toast.error(t('productionFund.reassignFailed'));
                             }
                           }}
                           className="px-4 py-1.5 rounded-xl text-xs font-black bg-indigo-500/20 border border-indigo-500/35 text-indigo-200 hover:bg-indigo-500/30 transition-colors disabled:opacity-40 disabled:pointer-events-none shrink-0"
                         >
-                          تحويل
+                          {t('productionFund.reassign')}
                         </button>
                       </>
                     )}
@@ -9670,17 +9659,17 @@ const ProductionCustodyDashboard = () => {
 
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-black text-zinc-200">بنود التسعير</p>
+                      <p className="text-sm font-black text-zinc-200">{t('productionFund.pricingLines')}</p>
                       <button
                         onClick={() => addPFLine(q.id)}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-amber-500/15 border border-amber-500/30 text-amber-200 hover:bg-amber-500/25 transition-colors"
                       >
-                        <Plus className="w-3.5 h-3.5" /> إضافة بند
+                        <Plus className="w-3.5 h-3.5" /> {t('productionFund.addPricingLine')}
                       </button>
                     </div>
                     <div className="grid grid-cols-[1fr_160px_36px] gap-2 px-3 py-1">
-                      <span className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">البند / الوصف</span>
-                      <span className="text-[10px] text-zinc-500 font-black uppercase tracking-widest text-center">السعر (ج.م)</span>
+                      <span className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">{t('productionFund.lineDescription')}</span>
+                      <span className="text-[10px] text-zinc-500 font-black uppercase tracking-widest text-center">{t('productionFund.linePrice', { currency: t('common.currency') })}</span>
                       <span />
                     </div>
                     {draft.lines.map((line, idx) => (
@@ -9688,7 +9677,7 @@ const ProductionCustodyDashboard = () => {
                         <input
                           value={line.desc}
                           onChange={(e) => setPFLine(q.id, line.id, { desc: e.target.value })}
-                          placeholder={`بند ${idx + 1} — مثال: تصوير فيديو إعلاني`}
+                          placeholder={t('productionFund.linePlaceholder', { n: idx + 1 })}
                           className="bg-transparent border-none outline-none text-sm text-white placeholder-zinc-600 w-full"
                         />
                         <input
@@ -9705,12 +9694,12 @@ const ProductionCustodyDashboard = () => {
                     ))}
                     <div className="bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 space-y-1.5 mt-1">
                       <div className="flex items-center justify-between text-sm text-zinc-400">
-                        <span>مجموع بنود التكلفة</span>
-                        <span className="font-black text-white">{costSubtotal.toLocaleString('ar-EG')} ج.م</span>
+                        <span>{t('productionFund.costLinesSubtotal')}</span>
+                        <span className="font-black text-white">{costSubtotal.toLocaleString(dateLocale)} {t('common.currency')}</span>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-zinc-400">
                         <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <span className="shrink-0">نسبة الشركة (هامش)</span>
+                          <span className="shrink-0">{t('productionFund.companyMarginLabel')}</span>
                           <div className="flex items-center gap-1">
                             <input
                               type="number"
@@ -9725,7 +9714,7 @@ const ProductionCustodyDashboard = () => {
                           </div>
                         </div>
                         <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <span className="shrink-0">ضريبة القيمة المضافة</span>
+                          <span className="shrink-0">{t('productionFund.vatLabel')}</span>
                           <div className="flex items-center gap-1">
                             <input type="number" min={0} max={100} value={draft.vatRate} onChange={(e) => setPF(q.id, { vatRate: e.target.value })} className="w-16 bg-[#0B1020] border border-white/15 rounded-lg px-2 py-0.5 text-xs text-center" />
                             <span>%</span>
@@ -9734,34 +9723,34 @@ const ProductionCustodyDashboard = () => {
                       </div>
                       {companyPct > 0 && (
                         <div className="flex items-center justify-between text-xs text-teal-300/90">
-                          <span>مبلغ هامش الشركة</span>
-                          <span className="font-bold">{companyMarginAmt.toLocaleString('ar-EG')} ج.م</span>
+                          <span>{t('productionFund.companyMarginAmount')}</span>
+                          <span className="font-bold">{companyMarginAmt.toLocaleString(dateLocale)} {t('common.currency')}</span>
                         </div>
                       )}
                       <div className="flex items-center justify-between text-sm text-zinc-400 border-t border-white/5 pt-1.5">
-                        <span>المبلغ قبل الضريبة (للعميل)</span>
-                        <span className="font-black text-white">{preVatAmount.toLocaleString('ar-EG')} ج.م</span>
+                        <span>{t('productionFund.preVatClient')}</span>
+                        <span className="font-black text-white">{preVatAmount.toLocaleString(dateLocale)} {t('common.currency')}</span>
                       </div>
                       <div className="flex items-center justify-between text-sm text-zinc-400">
-                        <span>قيمة الضريبة</span>
-                        <span className="font-black text-amber-300">{vatAmt.toLocaleString('ar-EG')} ج.م</span>
+                        <span>{t('productionFund.vatAmount')}</span>
+                        <span className="font-black text-amber-300">{vatAmt.toLocaleString(dateLocale)} {t('common.currency')}</span>
                       </div>
                       <div className="border-t border-white/10 pt-1.5 flex items-center justify-between">
-                        <span className="font-black text-white">الإجمالي الكلي</span>
-                        <span className="font-black text-emerald-300 text-lg">{total.toLocaleString('ar-EG')} ج.م</span>
+                        <span className="font-black text-white">{t('productionFund.grandTotal')}</span>
+                        <span className="font-black text-emerald-300 text-lg">{total.toLocaleString(dateLocale)} {t('common.currency')}</span>
                       </div>
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs text-zinc-400 mb-1">ملاحظة التسعير (اختياري)</label>
-                    <input value={draft.note} onChange={(e) => setPF(q.id, { note: e.target.value })} placeholder="شرح التسعير أو أي تفاصيل إضافية..." className="w-full bg-[#0B1020] border border-white/15 rounded-xl px-3 py-2 text-sm" />
+                    <label className="block text-xs text-zinc-400 mb-1">{t('productionFund.pricingNoteOptional')}</label>
+                    <input value={draft.note} onChange={(e) => setPF(q.id, { note: e.target.value })} placeholder={t('productionFund.pricingNotePh')} className="w-full bg-[#0B1020] border border-white/15 rounded-xl px-3 py-2 text-sm" />
                   </div>
 
                   <button
                     type="button"
                     onClick={async () => {
-                      if (costSubtotal <= 0) { toast.error('أضف بند واحد على الأقل بسعر'); return; }
+                      if (costSubtotal <= 0) { toast.error(t('productionFund.addLineWithPrice')); return; }
                       const ok = await productionPriceQuote(
                         q.id,
                         preVatAmount,
@@ -9770,12 +9759,12 @@ const ProductionCustodyDashboard = () => {
                         companyPct,
                         costSubtotal,
                       );
-                      if (ok) { toast.success('تم إرسال السعر للمالك للاعتماد'); setPricingForm((p) => { const n = { ...p }; delete n[q.id]; return n; }); }
-                      else toast.error('تعذر التسعير');
+                      if (ok) { toast.success(t('productionFund.sendPriceSuccess')); setPricingForm((p) => { const n = { ...p }; delete n[q.id]; return n; }); }
+                      else toast.error(t('productionFund.priceFailed'));
                     }}
                     className="w-full py-3 rounded-2xl bg-amber-500 text-black text-sm font-black hover:bg-amber-400 transition-colors"
                   >
-                    إرسال السعر للمالك للاعتماد
+                    {t('productionFund.sendPriceToOwner')}
                   </button>
                 </div>
               );
@@ -9786,11 +9775,11 @@ const ProductionCustodyDashboard = () => {
               <summary className="cursor-pointer list-none px-5 py-4 flex items-center justify-between gap-3 text-sm font-black text-zinc-200 hover:bg-white/[0.04] transition-colors [&::-webkit-details-marker]:hidden">
                 <span className="flex items-center gap-2">
                   <FileText className="w-4 h-4 text-zinc-500" />
-                  أرشيف طلبات التسعير (غير المعلقة)
+                  {t('productionFund.pricingArchiveTitle')}
                   <span className="text-[11px] font-black text-zinc-500 bg-white/5 border border-white/10 rounded-lg px-2 py-0.5">{myPricingArchive.length}</span>
                 </span>
                 <span className="text-[10px] text-zinc-500 font-normal max-w-[min(420px,55vw)] text-left">
-                  عروض مرّت بك أو سُعِّرت منك وتُرشَح هنا بعد إرسالها للمالك أو اعتمادها — لا تظهر في قائمة «بانتظار التسعير» النشطة.
+                  {t('productionFund.pricingArchiveHint')}
                 </span>
               </summary>
               <div className="border-t border-white/10 px-4 py-3 space-y-2 max-h-[min(420px,50vh)] overflow-y-auto custom-scrollbar">
@@ -9808,7 +9797,7 @@ const ProductionCustodyDashboard = () => {
                         {quoteStatusLabel[q.status] ?? q.status}
                       </span>
                       <p className="text-[10px] text-zinc-500">
-                        {typeof q.totalAmount === 'number' ? `${q.totalAmount.toLocaleString('ar-EG')} ج.م` : `${q.amount.toLocaleString('ar-EG')} ج.م قبل الضريبة`}
+                        {typeof q.totalAmount === 'number' ? `${q.totalAmount.toLocaleString(dateLocale)} ${t('common.currency')}` : t('productionFund.beforeVatAmount', { amount: q.amount.toLocaleString(dateLocale), currency: t('common.currency') })}
                       </p>
                     </div>
                   </div>
@@ -9823,17 +9812,17 @@ const ProductionCustodyDashboard = () => {
         <div className="space-y-4">
           {myWorkOrders.length === 0 ? (
             <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-12 text-center text-zinc-500">
-              لا توجد أوامر شغل نشطة — تظهر هنا بعد موافقة العميل على عرض سعر سعّرتَه.
+              {t('productionFund.noWorkOrders')}
             </div>
           ) : (
             myWorkOrders.map((b) => {
               const checklist = b.workOrderChecklist?.length
                 ? b.workOrderChecklist
                 : [
-                    { id: 'wo-prep', label: 'تأكيد الموعد والموقع مع العميل', done: false },
-                    { id: 'wo-team', label: 'تجهيز الفريق والمعدات', done: false },
-                    { id: 'wo-shoot', label: 'تنفيذ جلسة التصوير', done: false },
-                    { id: 'wo-deliver', label: 'تسليم المخرجات للعميل', done: false },
+                    { id: 'wo-prep', label: t('productionFund.woTaskPrep'), done: false },
+                    { id: 'wo-team', label: t('productionFund.woTaskTeam'), done: false },
+                    { id: 'wo-shoot', label: t('productionFund.woTaskShoot'), done: false },
+                    { id: 'wo-deliver', label: t('productionFund.woTaskDeliver'), done: false },
                   ];
               const allDone = checklist.every((t) => t.done);
               return (
@@ -9841,21 +9830,21 @@ const ProductionCustodyDashboard = () => {
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <p className="font-black text-white">{b.customerName}</p>
-                    <p className="text-xs text-zinc-400">من عرض سعر معتمد — المندوب: {b.repName}</p>
-                    {b.priceQuoteId && <p className="text-[10px] text-zinc-500">مرجع عرض: {b.priceQuoteId}</p>}
+                    <p className="text-xs text-zinc-400">{t('productionFund.fromApprovedQuote')} {b.repName}</p>
+                    {b.priceQuoteId && <p className="text-[10px] text-zinc-500">{t('productionFund.quoteRef')} {b.priceQuoteId}</p>}
                   </div>
                   <span className={`px-2 py-1 rounded-lg text-[10px] font-black border ${b.status === 'مكتمل' ? 'bg-zinc-700/50 text-zinc-300 border-white/10' : 'bg-emerald-500/20 text-emerald-200 border-emerald-500/30'}`}>
-                    {b.status === 'مكتمل' ? 'مكتمل' : 'أمر شغل نشط'}
+                    {b.status === 'مكتمل' ? t('productionFund.workOrderDone') : t('productionFund.workOrderActive')}
                   </span>
                 </div>
                 <p className="text-sm text-zinc-300">
                   {b.date} — {b.time} — {b.location}
                 </p>
                 {b.estimatedCost ? (
-                  <p className="text-xs text-amber-200">تكلفة تقديرية: {b.estimatedCost.toLocaleString('ar-EG')} ج.م</p>
+                  <p className="text-xs text-amber-200">{t('productionFund.estimatedCost', { amount: b.estimatedCost.toLocaleString(dateLocale), currency: t('common.currency') })}</p>
                 ) : null}
                 <div className="space-y-2">
-                  <p className="text-xs font-black text-zinc-300">مهام التنفيذ</p>
+                  <p className="text-xs font-black text-zinc-300">{t('productionFund.executionTasks')}</p>
                   {checklist.map((task) => (
                     <label key={task.id} className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
                       <input
@@ -9865,7 +9854,7 @@ const ProductionCustodyDashboard = () => {
                         onChange={async (e) => {
                           const next = checklist.map((t) => (t.id === task.id ? { ...t, done: e.target.checked } : t));
                           const ok = await productionUpdateWorkOrder(b.id, { workOrderChecklist: next });
-                          if (!ok) toast.error('تعذر حفظ المهمة');
+                          if (!ok) toast.error(t('productionFund.taskSaveFailed'));
                         }}
                         className="rounded border-white/20"
                       />
@@ -9882,12 +9871,12 @@ const ProductionCustodyDashboard = () => {
                     disabled={!allDone}
                     onClick={async () => {
                       const ok = await productionUpdateWorkOrder(b.id, { markComplete: true, workOrderChecklist: checklist });
-                      if (ok) toast.success('تم إغلاق أمر الشغل');
-                      else toast.error(allDone ? 'تعذر الإغلاق' : 'أكمل جميع المهام أولاً');
+                      if (ok) toast.success(t('productionFund.workOrderClosed'));
+                      else toast.error(allDone ? t('productionFund.closeWorkOrderFailed') : t('productionFund.completeTasksFirst'));
                     }}
                     className="w-full py-2.5 rounded-xl text-sm font-black bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-40 transition-colors"
                   >
-                    إغلاق أمر الشغل
+                    {t('productionFund.closeWorkOrder')}
                   </button>
                 )}
               </div>
@@ -9902,37 +9891,37 @@ const ProductionCustodyDashboard = () => {
       <div className="bg-white/[0.04] border border-white/10 rounded-3xl p-5 space-y-3">
 
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <h4 className="font-black">جدول طلباتك (عهدة + مصروف)</h4>
+          <h4 className="font-black">{t('productionFund.unifiedTableTitle')}</h4>
           {unifiedProductionRows.length > 0 && (
             <button
               type="button"
               onClick={async () => {
-                if (!window.confirm('هل أنت متأكد من حذف جميع الطلبات؟ لا يمكن التراجع.')) return;
+                if (!window.confirm(t('productionFund.deleteAllConfirm'))) return;
                 for (const row of unifiedProductionRows) {
                   if (row.kind === 'custody') await hardDeleteCustodyFund(row.fund.id);
                   else await hardDeleteExpense(row.expense.id);
                 }
-                toast.success('تم حذف جميع الطلبات');
+                toast.success(t('productionFund.deleteAllSuccess'));
               }}
               className="shrink-0 rounded-xl border border-rose-500/40 bg-rose-500/15 px-3 py-1 text-xs font-black text-rose-200 hover:bg-rose-500/25 transition-colors"
             >
-              حذف الكل
+              {t('productionFund.deleteAll')}
             </button>
           )}
         </div>
         <p className="text-[11px] text-zinc-500 leading-relaxed">
-          الصفوف من نوع <strong className="text-zinc-300">«أمانة عهدة»</strong> تمرّ بمسار العهدة (مالك → محاسب صرف → استلامك → بنود صرف وتسوية). الصفوف <strong className="text-zinc-300">«طلب مصروف»</strong> نفس تمويل الإنتاج لكن تُثبَّت في الدفاتر كمصروف بعد اعتماد المالك وتنفيذ المحاسب — انقر أي صف للتفاصيل.
+          {t('productionFund.unifiedTableHint')}
         </p>
         <div className="overflow-x-auto rounded-xl border border-white/10">
           <table className="w-full text-right text-xs min-w-[720px]">
             <thead>
               <tr className="border-b border-white/10 text-zinc-400">
-                <th className="p-2 font-black">النوع</th>
-                <th className="p-2 font-black">العنوان</th>
-                <th className="p-2 font-black">المبلغ</th>
-                <th className="p-2 font-black">الحالة</th>
-                <th className="p-2 font-black">قيد صرف / ملاحظة</th>
-                <th className="p-2 font-black">قيد إقفال</th>
+                <th className="p-2 font-black">{t('productionFund.colType')}</th>
+                <th className="p-2 font-black">{t('productionFund.colTitle')}</th>
+                <th className="p-2 font-black">{t('productionFund.colAmount')}</th>
+                <th className="p-2 font-black">{t('productionFund.colStatus')}</th>
+                <th className="p-2 font-black">{t('productionFund.colPaymentJournal')}</th>
+                <th className="p-2 font-black">{t('productionFund.colClosingJournal')}</th>
                 <th className="p-2 font-black"></th>
               </tr>
             </thead>
@@ -9963,15 +9952,15 @@ const ProductionCustodyDashboard = () => {
                           : 'border-sky-400/30 bg-sky-500/15 text-sky-200'
                       }`}
                     >
-                      {row.kind === 'custody' ? 'أمانة عهدة' : 'طلب مصروف'}
+                      {row.kind === 'custody' ? t('productionFund.custodyTrust') : t('productionFund.expenseRequest')}
                     </span>
                   </td>
                   <td className="p-2 font-bold text-white">{row.title}</td>
-                  <td className="p-2 text-emerald-300">{row.amount.toLocaleString()} ج.م</td>
+                  <td className="p-2 text-emerald-300">{row.amount.toLocaleString()} {t('common.currency')}</td>
                   <td className="p-2">
                     {row.kind === 'custody' ? (
-                      <span className={custodyStatusBadgeClass(row.fund.status)} title={statusLabel[row.fund.status] || row.fund.status}>
-                        {statusLabel[row.fund.status] || row.fund.status}
+                      <span className={custodyStatusBadgeClass(row.fund.status)} title={statusLabel(row.fund.status)}>
+                        {statusLabel(row.fund.status)}
                       </span>
                     ) : (
                       <div className="flex flex-col gap-0.5 items-end">
@@ -9984,9 +9973,9 @@ const ProductionCustodyDashboard = () => {
                                 : 'bg-amber-500/20 text-amber-200'
                           }`}
                         >
-                          اعتماد: {row.expense.approvalStatus}
+                          {t('productionFund.approvalLabel')} {getApprovalStatusLabel(row.expense.approvalStatus, t)}
                         </span>
-                        <span className="text-[10px] text-zinc-500">دفع: {row.expense.status}</span>
+                        <span className="text-[10px] text-zinc-500">{t('productionFund.paymentLabel')} {getExpenseStatusLabel(row.expense.status, t)}</span>
                       </div>
                     )}
                   </td>
@@ -10001,13 +9990,13 @@ const ProductionCustodyDashboard = () => {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (!window.confirm('حذف هذا الطلب نهائياً؟')) return;
-                        if (row.kind === 'custody') hardDeleteCustodyFund(row.fund.id).then((ok) => ok && toast.success('تم الحذف'));
-                        else hardDeleteExpense(row.expense.id).then((ok) => ok && toast.success('تم الحذف'));
+                        if (!window.confirm(t('productionFund.deleteConfirm'))) return;
+                        if (row.kind === 'custody') hardDeleteCustodyFund(row.fund.id).then((ok) => ok && toast.success(t('productionFund.deleted')));
+                        else hardDeleteExpense(row.expense.id).then((ok) => ok && toast.success(t('productionFund.deleted')));
                       }}
                       className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[10px] font-black text-rose-300 hover:bg-rose-500/20 transition-colors"
                     >
-                      حذف
+                      {t('productionFund.delete')}
                     </button>
                   </td>
                 </tr>
@@ -10017,33 +10006,33 @@ const ProductionCustodyDashboard = () => {
         </div>
         {myFunds.length === 0 && custodyFunds.length > 0 && (
           <p className="text-[11px] text-amber-300/90 pt-1">
-            يوجد عهد في النظام لكن لا يوجد ما يطابق ملفك كمدير إنتاج (تأكد أن المحاسب اختارك في العهدة، أو أن الطلب صادر من حسابك). إن استمرت المشكلة أعد تحميل الصفحة بعد تسجيل الدخول.
+            {t('productionFund.custodyMismatchHint')}
           </p>
         )}
         {unifiedProductionRows.length === 0 && custodyFunds.length === 0 && myProductionExpenseRows.length === 0 && (
-          <p className="text-sm text-zinc-500">لا توجد طلبات بعد — أرسل طلباً من النموذج أدناه.</p>
+          <p className="text-sm text-zinc-500">{t('productionFund.noRequestsYet')}</p>
         )}
         {unifiedProductionRows.length === 0 && (custodyFunds.length > 0 || myProductionExpenseRows.length > 0) && (
-          <p className="text-sm text-zinc-500">لا توجد صفوف تطابق ملفك في هذا الجدول الموحّد.</p>
+          <p className="text-sm text-zinc-500">{t('productionFund.noMatchingRows')}</p>
         )}
-        <p className="text-[11px] text-zinc-500 pt-1">حجوزات التصوير والمعدات والاجتماعات تُدار من تبويب «الحجوزات».</p>
+        <p className="text-[11px] text-zinc-500 pt-1">{t('productionFund.bookingsTabHint')}</p>
       </div>
 
       <div className="bg-white/[0.04] border border-white/10 rounded-3xl p-5 space-y-3">
-        <h4 className="font-black">طلب تمويل إنتاج (يُسجَّل كمصروف — يظهر في الجدول الموحّد)</h4>
+        <h4 className="font-black">{t('productionFund.expenseFundingTitle')}</h4>
         <p className="text-[11px] text-zinc-500">
-          نفس طلب التمويل الذي تعتبره «عهدة مصروف»: يمرّ على المالك ثم المحاسب، ويظهر في الجدول أعلاه ضمن «طلب مصروف».
+          {t('productionFund.expenseFundingHint')}
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          <input className="bg-[#0B1020] border border-white/10 rounded-xl px-3 py-2 text-sm" placeholder="بيان الطلب" value={expenseReqForm.title} onChange={(e) => setExpenseReqForm((p) => ({ ...p, title: e.target.value }))} />
-          <input type="number" min={0} className="bg-[#0B1020] border border-white/10 rounded-xl px-3 py-2 text-sm" placeholder="المبلغ" value={expenseReqForm.amount} onChange={(e) => setExpenseReqForm((p) => ({ ...p, amount: e.target.value }))} />
+          <input className="bg-[#0B1020] border border-white/10 rounded-xl px-3 py-2 text-sm" placeholder={t('productionFund.requestTitlePh')} value={expenseReqForm.title} onChange={(e) => setExpenseReqForm((p) => ({ ...p, title: e.target.value }))} />
+          <input type="number" min={0} className="bg-[#0B1020] border border-white/10 rounded-xl px-3 py-2 text-sm" placeholder={t('productionFund.amountPh')} value={expenseReqForm.amount} onChange={(e) => setExpenseReqForm((p) => ({ ...p, amount: e.target.value }))} />
           <select className="bg-[#0B1020] border border-white/10 rounded-xl px-3 py-2 text-sm" value={expenseReqForm.category} onChange={(e) => setExpenseReqForm((p) => ({ ...p, category: e.target.value as Expense['category'] }))}>
             {(['رواتب', 'إيجارات', 'معدات', 'تسويق', 'تشغيل', 'ضيافة', 'نثريات', 'أخرى'] as const).map((c) => (
-              <option key={c} value={c}>{c}</option>
+              <option key={c} value={c}>{getExpenseCategoryLabel(c, t)}</option>
             ))}
           </select>
-          <input className="bg-[#0B1020] border border-white/10 rounded-xl px-3 py-2 text-sm" placeholder="مركز تكلفة" value={expenseReqForm.costCenter} onChange={(e) => setExpenseReqForm((p) => ({ ...p, costCenter: e.target.value }))} />
-          <textarea className="md:col-span-2 bg-[#0B1020] border border-white/10 rounded-xl px-3 py-2 text-sm min-h-[72px]" placeholder="ملاحظة" value={expenseReqForm.note} onChange={(e) => setExpenseReqForm((p) => ({ ...p, note: e.target.value }))} />
+          <input className="bg-[#0B1020] border border-white/10 rounded-xl px-3 py-2 text-sm" placeholder={t('productionFund.costCenterPh')} value={expenseReqForm.costCenter} onChange={(e) => setExpenseReqForm((p) => ({ ...p, costCenter: e.target.value }))} />
+          <textarea className="md:col-span-2 bg-[#0B1020] border border-white/10 rounded-xl px-3 py-2 text-sm min-h-[72px]" placeholder={t('productionFund.notePh')} value={expenseReqForm.note} onChange={(e) => setExpenseReqForm((p) => ({ ...p, note: e.target.value }))} />
         </div>
         <button
           type="button"
@@ -10064,7 +10053,7 @@ const ProductionCustodyDashboard = () => {
               vatRate: 0,
             });
             if (ok) {
-              toast.success('تم إرسال الطلب — سيظهر في الجدول الموحّد ضمن «طلب مصروف»');
+              toast.success(t('productionFund.submitSuccess'));
               setExpenseReqForm({ title: '', category: 'تشغيل', amount: '', costCenter: 'تصوير', note: '' });
             }
             } finally {
@@ -10074,39 +10063,39 @@ const ProductionCustodyDashboard = () => {
           }}
           className="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 text-sm font-black disabled:opacity-50 disabled:pointer-events-none"
         >
-          {expenseSubmitBusy ? 'جاري الإرسال…' : 'إرسال الطلب'}
+          {expenseSubmitBusy ? t('productionFund.submitting') : t('productionFund.submitRequest')}
         </button>
       </div>
       <div className="space-y-4">
           {!activeRowKey && unifiedProductionRows.length > 0 && (
-            <p className="text-sm text-zinc-500">اختر صفاً في الجدول أعلاه لعرض التفاصيل؛ صفوف العهدة تفتح بنود الصرف والتصفية عند توفر الحالة.</p>
+            <p className="text-sm text-zinc-500">{t('productionFund.selectRowHint')}</p>
           )}
           {!activeRowKey && unifiedProductionRows.length === 0 && (
-            <p className="text-sm text-zinc-500">لا توجد طلبات بعد؛ أرسل من النموذج أعلاه أو انتظر أن يربطك المحاسب بعهدة أمانة.</p>
+            <p className="text-sm text-zinc-500">{t('productionFund.noRequestsEmptyHint')}</p>
           )}
           {activeExpense && (
             <div className="bg-white/[0.04] border border-white/10 rounded-3xl p-5 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h4 className="font-black">تفاصيل طلب المصروف</h4>
-                <span className="inline-flex rounded-lg px-2 py-0.5 text-[10px] font-black border border-sky-400/30 bg-sky-500/15 text-sky-200">طلب مصروف</span>
+                <h4 className="font-black">{t('productionFund.expenseDetailTitle')}</h4>
+                <span className="inline-flex rounded-lg px-2 py-0.5 text-[10px] font-black border border-sky-400/30 bg-sky-500/15 text-sky-200">{t('productionFund.expenseRequest')}</span>
               </div>
               <p className="text-sm text-zinc-300">{activeExpense.title}</p>
               <div className="flex flex-wrap gap-3 text-xs text-zinc-400">
-                <span>المبلغ: {(activeExpense.totalAmount ?? activeExpense.amount).toLocaleString()} ج.م</span>
-                <span>الفئة: {activeExpense.category}</span>
-                <span>مركز تكلفة: {activeExpense.costCenter || '—'}</span>
-                <span>اعتماد المالك: {activeExpense.approvalStatus}</span>
-                <span>حالة الدفع: {activeExpense.status}</span>
-                {activeExpense.vendor && <span>المورد: {activeExpense.vendor}</span>}
+                <span>{t('productionFund.labelAmount')} {(activeExpense.totalAmount ?? activeExpense.amount).toLocaleString(dateLocale)} {t('common.currency')}</span>
+                <span>{t('productionFund.labelCategory')} {getExpenseCategoryLabel(activeExpense.category, t)}</span>
+                <span>{t('productionFund.labelCostCenter')} {activeExpense.costCenter || '—'}</span>
+                <span>{t('productionFund.labelOwnerApproval')} {getApprovalStatusLabel(activeExpense.approvalStatus, t)}</span>
+                <span>{t('productionFund.labelPaymentStatus')} {getExpenseStatusLabel(activeExpense.status, t)}</span>
+                {activeExpense.vendor && <span>{t('productionFund.labelVendor')} {activeExpense.vendor}</span>}
               </div>
-              {activeExpense.note && <p className="text-xs text-zinc-500">ملاحظة: {activeExpense.note}</p>}
+              {activeExpense.note && <p className="text-xs text-zinc-500">{t('productionFund.labelNote')} {activeExpense.note}</p>}
               <p className="text-[11px] text-zinc-500 pt-1">
-                متابعة الاعتماد والدفع من تبويب المحاسب أو «مركز الاعتمادات» عند المالك. هذا السجل محاسبياً مصروفاً وليس مسار أمانة العهدة النقدية.
+                {t('productionFund.expenseTrackingHint')}
               </p>
               {activeExpense.approvalStatus === 'معتمد' && (
                 <div className="pt-4 mt-4 border-t border-white/10 space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h5 className="font-black text-sm text-white">بنود الصرف والمرفقات (بعد اعتماد المالك)</h5>
+                    <h5 className="font-black text-sm text-white">{t('productionFund.spendLinesTitle')}</h5>
                     <p
                       className={`text-sm font-bold ${
                         expenseSpendSum > (activeExpense.totalAmount ?? activeExpense.amount) + 0.01
@@ -10114,22 +10103,22 @@ const ProductionCustodyDashboard = () => {
                           : 'text-emerald-300'
                       }`}
                     >
-                      المجموع: {expenseSpendSum.toLocaleString()} / {(activeExpense.totalAmount ?? activeExpense.amount).toLocaleString()} ج.م
+                      {t('productionFund.spendTotal', { sum: expenseSpendSum.toLocaleString(dateLocale), max: (activeExpense.totalAmount ?? activeExpense.amount).toLocaleString(dateLocale), currency: t('common.currency') })}
                     </p>
                   </div>
                   <p className="text-[11px] text-zinc-500">
-                    سجّل ما تم صرفه فعلياً وأرفق الفواتير؛ يُحفظ مع الطلب ويظهر عند إعادة فتحه. لا يتجاوز مجموع البنود مبلغ الطلب المعتمد.
+                    {t('productionFund.expenseSpendHint')}
                   </p>
                   <div className="overflow-x-auto max-h-[420px] overflow-y-auto rounded-xl border border-white/10">
                     <table className="w-full text-right text-xs min-w-[720px]">
                       <thead className="sticky top-0 bg-[#0B1020] z-10">
                         <tr className="border-b border-white/10 text-zinc-400">
-                          <th className="p-2 font-black">البيان</th>
-                          <th className="p-2 font-black">المبلغ</th>
-                          <th className="p-2 font-black">الفئة</th>
-                          <th className="p-2 font-black">مركز التكلفة</th>
-                          <th className="p-2 font-black">ملاحظة</th>
-                          <th className="p-2 font-black">المستندات</th>
+                          <th className="p-2 font-black">{t('productionFund.colDescription')}</th>
+                          <th className="p-2 font-black">{t('productionFund.colAmount')}</th>
+                          <th className="p-2 font-black">{t('productionFund.colCategory')}</th>
+                          <th className="p-2 font-black">{t('productionFund.colCostCenter')}</th>
+                          <th className="p-2 font-black">{t('productionFund.colNote')}</th>
+                          <th className="p-2 font-black">{t('productionFund.colDocuments')}</th>
                           <th className="p-2 font-black" />
                         </tr>
                       </thead>
@@ -10139,7 +10128,7 @@ const ProductionCustodyDashboard = () => {
                             <td className="p-2">
                               <input
                                 className="w-full bg-[#0F1528] border border-white/10 rounded-lg px-2 py-1 text-xs"
-                                placeholder="البيان"
+                                placeholder={t('productionFund.colDescription')}
                                 value={line.title}
                                 onChange={(e) => updateExpenseSpendLine(line.id, { title: e.target.value })}
                               />
@@ -10178,7 +10167,7 @@ const ProductionCustodyDashboard = () => {
                                   ] as const
                                 ).map((c) => (
                                   <option key={c} value={c}>
-                                    {c}
+                                    {getExpenseCategoryLabel(c, t)}
                                   </option>
                                 ))}
                               </select>
@@ -10186,7 +10175,7 @@ const ProductionCustodyDashboard = () => {
                             <td className="p-2 w-28">
                               <input
                                 className="w-full bg-[#0F1528] border border-white/10 rounded-lg px-2 py-1 text-xs"
-                                placeholder="مركز تكلفة"
+                                placeholder={t('productionFund.costCenterPh')}
                                 value={line.costCenter}
                                 onChange={(e) => updateExpenseSpendLine(line.id, { costCenter: e.target.value })}
                               />
@@ -10194,14 +10183,14 @@ const ProductionCustodyDashboard = () => {
                             <td className="p-2 w-32">
                               <input
                                 className="w-full bg-[#0F1528] border border-white/10 rounded-lg px-2 py-1 text-xs"
-                                placeholder="ملاحظة"
+                                placeholder={t('productionFund.notePh')}
                                 value={line.note || ''}
                                 onChange={(e) => updateExpenseSpendLine(line.id, { note: e.target.value })}
                               />
                             </td>
                             <td className="p-2 min-w-[140px]">
                               <label className="block cursor-pointer text-[11px] text-[#A99FFF] font-black underline mb-1">
-                                إضافة ملف
+                                {t('productionFund.addFile')}
                                 <input
                                   type="file"
                                   className="sr-only"
@@ -10233,7 +10222,7 @@ const ProductionCustodyDashboard = () => {
                                         className="text-[10px] text-rose-400 font-black"
                                         onClick={() => removeExpenseSpendAttachment(line.id, att.id)}
                                       >
-                                        إزالة
+                                        {t('productionFund.removeAttachment')}
                                       </button>
                                     </div>
                                   );
@@ -10246,7 +10235,7 @@ const ProductionCustodyDashboard = () => {
                                 onClick={() => removeExpenseSpendLine(line.id)}
                                 className="text-rose-400 text-xs font-black"
                               >
-                                حذف
+                                {t('common.delete')}
                               </button>
                             </td>
                           </tr>
@@ -10260,7 +10249,7 @@ const ProductionCustodyDashboard = () => {
                       onClick={addExpenseSpendLine}
                       className="px-3 py-2 rounded-xl bg-white/10 text-sm font-black"
                     >
-                      + بند
+                      {t('productionFund.addLineBtn')}
                     </button>
                     <button
                       type="button"
@@ -10271,7 +10260,7 @@ const ProductionCustodyDashboard = () => {
                       onClick={() => void saveExpenseSpendLines()}
                       className="px-3 py-2 rounded-xl bg-emerald-500 text-slate-950 text-sm font-black disabled:opacity-45 disabled:cursor-not-allowed"
                     >
-                      {expenseSpendSaveBusy ? 'جاري الحفظ…' : 'حفظ البنود والمرفقات'}
+                      {expenseSpendSaveBusy ? t('settingsWork.saving') : t('productionFund.saveLinesAttachments')}
                     </button>
                   </div>
                 </div>
@@ -10282,49 +10271,49 @@ const ProductionCustodyDashboard = () => {
             <>
               <div className="bg-white/[0.04] border border-white/10 rounded-3xl p-5 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h4 className="font-black">تفاصيل</h4>
-                  <span className={custodyStatusBadgeClass(activeFund.status)}>{statusLabel[activeFund.status] || activeFund.status}</span>
+                  <h4 className="font-black">{t('productionFund.custodyDetailTitle')}</h4>
+                  <span className={custodyStatusBadgeClass(activeFund.status)}>{statusLabel(activeFund.status)}</span>
                 </div>
                 <p className="text-sm text-zinc-300">{activeFund.description || '—'}</p>
                 <div className="flex flex-wrap gap-3 text-xs text-zinc-400">
-                  <span>المبلغ: {activeFund.totalAmount.toLocaleString()} ج.م</span>
-                  {activeFund.paymentMethod && <span>طريقة دفع المحاسب: {activeFund.paymentMethod}</span>}
-                  {activeFund.receivedMethod && <span>طريقة الاستلام: {activeFund.receivedMethod}</span>}
-                  {activeFund.journalEntryPaymentId && <span className="text-teal-300">قيد صرف: {activeFund.journalEntryPaymentId}</span>}
+                  <span>{t('productionFund.labelAmount')} {activeFund.totalAmount.toLocaleString(dateLocale)} {t('common.currency')}</span>
+                  {activeFund.paymentMethod && <span>{t('productionFund.labelAccountantPayMethod')} {activeFund.paymentMethod}</span>}
+                  {activeFund.receivedMethod && <span>{t('productionFund.labelReceiveMethod')} {activeFund.receivedMethod}</span>}
+                  {activeFund.journalEntryPaymentId && <span className="text-teal-300">{t('productionFund.paymentJournal')} {activeFund.journalEntryPaymentId}</span>}
                   {(activeFund.journalEntrySettlementId || activeFund.journalEntryId) && (
-                    <span className="text-emerald-300">قيد إقفال: {activeFund.journalEntrySettlementId || activeFund.journalEntryId}</span>
+                    <span className="text-emerald-300">{t('productionFund.closingJournal')} {activeFund.journalEntrySettlementId || activeFund.journalEntryId}</span>
                   )}
                 </div>
                 {activeFund.status === 'طلب_بانتظار_المالك' && (
-                  <p className="text-xs text-amber-300/90 pt-2">الطلب عند المالك للاعتماد.</p>
+                  <p className="text-xs text-amber-300/90 pt-2">{t('productionFund.awaitingOwner')}</p>
                 )}
                 {activeFund.status === 'مرفوض_طلب' && activeFund.requestRejectReason && (
-                  <p className="text-xs text-rose-300/90 pt-2">سبب الرفض: {activeFund.requestRejectReason}</p>
+                  <p className="text-xs text-rose-300/90 pt-2">{t('productionFund.rejectReason')} {activeFund.requestRejectReason}</p>
                 )}
                 {activeFund.status === 'بانتظار_دفع_محاسب' && (
-                  <p className="text-xs text-indigo-300/90 pt-2">المالك اعتمد — بانتظار المحاسب لتسجيل الدفع وقيد الصرف.</p>
+                  <p className="text-xs text-indigo-300/90 pt-2">{t('productionFund.awaitingAccountantPay')}</p>
                 )}
                 {activeFund.status === 'نشطة' && activeFund.settlementRejectedReason && (
-                  <p className="text-xs text-rose-300/90 pt-2">آخر رفض للتسوية من المحاسب: {activeFund.settlementRejectedReason}</p>
+                  <p className="text-xs text-rose-300/90 pt-2">{t('productionFund.settlementRejected')} {activeFund.settlementRejectedReason}</p>
                 )}
                 {activeFund.status === 'جاهزة_للاستلام' && (
                   <div className="flex flex-wrap gap-2 items-end pt-2">
                     <input
                       value={recvNote}
                       onChange={(e) => setRecvNote(e.target.value)}
-                      placeholder="ملاحظة (اختياري)"
+                      placeholder={t('productionFund.notePh')}
                       className="flex-1 min-w-[160px] bg-[#0B1020] border border-white/10 rounded-xl px-3 py-2 text-sm"
                     />
                     <button
                       type="button"
                       onClick={async () => {
                         const ok = await managerReceiveCustody(activeFund.id, recvNote);
-                        if (ok) toast.success('تم تأكيد استلام العهدة');
-                        else toast.error('تعذر التسجيل');
+                        if (ok) toast.success(t('productionFund.receiveSuccess'));
+                        else toast.error(t('productionFund.receiveFailed'));
                       }}
                       className="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 text-sm font-black"
                     >
-                      تأكيد الاستلام
+                      {t('productionFund.confirmReceive')}
                     </button>
                   </div>
                 )}
@@ -10333,41 +10322,41 @@ const ProductionCustodyDashboard = () => {
               {(activeFund.status === 'نشطة' || activeFund.status === 'جاهزة_للاستلام') && (
                 <div className="bg-white/[0.04] border border-white/10 rounded-3xl p-5 space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h4 className="font-black">جدول بنود الصرف والتصفية</h4>
+                    <h4 className="font-black">{t('productionFund.spendSettlementTable')}</h4>
                     <div className="flex flex-col items-end gap-0.5">
                       <p className={`text-sm font-bold ${spendSum > activeFund.totalAmount + 0.01 ? 'text-amber-300' : 'text-emerald-300'}`}>
-                        المجموع: {spendSum.toLocaleString()} / {activeFund.totalAmount.toLocaleString()} ج.م
+                        {t('productionFund.spendTotal', { sum: spendSum.toLocaleString(dateLocale), max: activeFund.totalAmount.toLocaleString(dateLocale), currency: t('common.currency') })}
                       </p>
                       {spendSum > activeFund.totalAmount + 0.01 && (
                         <span className="text-[10px] font-black text-amber-300/90">
-                          زيادة {(spendSum - activeFund.totalAmount).toLocaleString()} ج.م ← دائن مستحقات موظف (2100)
+                          {t('productionFund.spendOverageLine', { amount: (spendSum - activeFund.totalAmount).toLocaleString(dateLocale), currency: t('common.currency') })}
                         </span>
                       )}
                       {activeFund.totalAmount > spendSum + 0.01 && (
                         <span className="text-[10px] font-black text-sky-300/90">
-                          متبقي {(activeFund.totalAmount - spendSum).toLocaleString()} ج.م ← مدين صندوق إرجاع (1010)
+                          {t('productionFund.spendRemainderLine', { amount: (activeFund.totalAmount - spendSum).toLocaleString(dateLocale), currency: t('common.currency') })}
                         </span>
                       )}
                     </div>
                   </div>
                   {activeFund.status === 'جاهزة_للاستلام' && (
                     <div className="rounded-xl border border-cyan-500/35 bg-cyan-500/[0.07] px-3 py-2 text-[11px] text-cyan-100/95 leading-relaxed">
-                      المحاسب سجّل الدفع — يمكنك الآن إدخال بيانات الصرف وإرفاق الفواتير ثم «حفظ البنود». زر «إرسال التسوية للمحاسب» يُفعّل بعد «تأكيد الاستلام» في الأعلى.
+                      {t('productionFund.readyPickupHint')}
                     </div>
                   )}
                   <p className="text-[11px] text-zinc-500">
-                    لو الصرف أكثر من العهدة يُسجّل الفرق دائناً (ح/ 2100 مستحقات للموظف)؛ لو أقل يُردّ الباقي مديناً للصندوق ح/ 1010 — كلاهما تلقائي عند اعتماد المحاسب.
+                    {t('productionFund.spendOverageHint')}
                   </p>
                   <div className="overflow-x-auto max-h-[420px] overflow-y-auto rounded-xl border border-white/10">
                     <table className="w-full text-right text-xs min-w-[720px]">
                       <thead className="sticky top-0 bg-[#0B1020] z-10">
                         <tr className="border-b border-white/10 text-zinc-400">
-                          <th className="p-2 font-black">البيان</th>
-                          <th className="p-2 font-black">المبلغ</th>
-                          <th className="p-2 font-black">الفئة</th>
-                          <th className="p-2 font-black">مركز التكلفة</th>
-                          <th className="p-2 font-black">ملاحظة</th>
-                          <th className="p-2 font-black">المستندات</th>
+                          <th className="p-2 font-black">{t('productionFund.colDescription')}</th>
+                          <th className="p-2 font-black">{t('productionFund.colAmount')}</th>
+                          <th className="p-2 font-black">{t('productionFund.colCategory')}</th>
+                          <th className="p-2 font-black">{t('productionFund.colCostCenter')}</th>
+                          <th className="p-2 font-black">{t('productionFund.colNote')}</th>
+                          <th className="p-2 font-black">{t('productionFund.colDocuments')}</th>
                           <th className="p-2 font-black" />
                         </tr>
                       </thead>
@@ -10377,7 +10366,7 @@ const ProductionCustodyDashboard = () => {
                             <td className="p-2">
                               <input
                                 className="w-full bg-[#0F1528] border border-white/10 rounded-lg px-2 py-1 text-xs"
-                                placeholder="البيان"
+                                placeholder={t('productionFund.colDescription')}
                                 value={line.title}
                                 onChange={(e) => updateLine(line.id, { title: e.target.value })}
                               />
@@ -10398,14 +10387,14 @@ const ProductionCustodyDashboard = () => {
                                 onChange={(e) => updateLine(line.id, { category: e.target.value as Expense['category'] })}
                               >
                                 {(['رواتب', 'إيجارات', 'معدات', 'تسويق', 'تشغيل', 'ضيافة', 'نثريات', 'أخرى'] as const).map((c) => (
-                                  <option key={c} value={c}>{c}</option>
+                                  <option key={c} value={c}>{getExpenseCategoryLabel(c, t)}</option>
                                 ))}
                               </select>
                             </td>
                             <td className="p-2 w-28">
                               <input
                                 className="w-full bg-[#0F1528] border border-white/10 rounded-lg px-2 py-1 text-xs"
-                                placeholder="مركز تكلفة"
+                                placeholder={t('productionFund.costCenterPh')}
                                 value={line.costCenter}
                                 onChange={(e) => updateLine(line.id, { costCenter: e.target.value })}
                               />
@@ -10413,14 +10402,14 @@ const ProductionCustodyDashboard = () => {
                             <td className="p-2 w-32">
                               <input
                                 className="w-full bg-[#0F1528] border border-white/10 rounded-lg px-2 py-1 text-xs"
-                                placeholder="ملاحظة"
+                                placeholder={t('productionFund.notePh')}
                                 value={line.note || ''}
                                 onChange={(e) => updateLine(line.id, { note: e.target.value })}
                               />
                             </td>
                             <td className="p-2 min-w-[140px]">
                               <label className="block cursor-pointer text-[11px] text-[#A99FFF] font-black underline mb-1">
-                                إضافة ملف
+                                {t('productionFund.addFile')}
                                 <input type="file" className="sr-only" accept="image/*,.pdf,.doc,.docx" onChange={(e) => attachToLine(line.id, e.target.files?.[0] ?? null)} />
                               </label>
                               <div className="space-y-1">
@@ -10435,14 +10424,14 @@ const ProductionCustodyDashboard = () => {
                                       ) : (
                                         <span className="text-[10px] text-zinc-500">{att.fileName}</span>
                                       )}
-                                      <button type="button" className="text-[10px] text-rose-400 font-black" onClick={() => removeAttachmentFromLine(line.id, att.id)}>إزالة</button>
+                                      <button type="button" className="text-[10px] text-rose-400 font-black" onClick={() => removeAttachmentFromLine(line.id, att.id)}>{t('productionFund.removeAttachment')}</button>
                                     </div>
                                   );
                                 })}
                               </div>
                             </td>
                             <td className="p-2 w-12">
-                              <button type="button" onClick={() => removeLine(line.id)} className="text-rose-400 text-xs font-black">حذف</button>
+                              <button type="button" onClick={() => removeLine(line.id)} className="text-rose-400 text-xs font-black">{t('productionFund.removeLine')}</button>
                             </td>
                           </tr>
                         ))}
@@ -10451,10 +10440,10 @@ const ProductionCustodyDashboard = () => {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <button type="button" onClick={addLine} className="px-3 py-2 rounded-xl bg-white/10 text-sm font-black">
-                      + بند
+                      {t('productionFund.addLineBtn')}
                     </button>
                     <button type="button" onClick={saveLinesOnly} className="px-3 py-2 rounded-xl bg-white/10 text-sm font-black">
-                      حفظ البنود
+                      {t('productionFund.saveLinesOnly')}
                     </button>
                     <button
                       type="button"
@@ -10462,20 +10451,29 @@ const ProductionCustodyDashboard = () => {
                       disabled={activeFund.status !== 'نشطة'}
                       className="px-3 py-2 rounded-xl bg-emerald-500 text-slate-950 text-sm font-black disabled:opacity-45 disabled:cursor-not-allowed"
                     >
-                      إرسال التسوية للمحاسب
+                      {t('productionFund.submitSettlementBtn')}
                     </button>
                   </div>
                   {activeFund.status === 'جاهزة_للاستلام' && (
-                    <p className="text-[11px] text-zinc-500">إرسال التسوية متاح بعد تأكيد استلام العهدة (الحالة تصبح «نشطة»).</p>
+                    <p className="text-[11px] text-zinc-500">{t('productionFund.settlementAfterReceive')}</p>
                   )}
                 </div>
               )}
 
               {activeFund.status === 'تسوية_بانتظار_محاسب' && (
-                <p className="text-sm text-amber-300/90">التسوية عند المحاسب لترحيل قيد الإقفال وإغلاق أمانة العهدة (1150).</p>
+                <p className="text-sm text-amber-300/90">{t('productionFund.settlementAtAccountant')}</p>
               )}
               {activeFund.status === 'مقفلة' && (
-                <p className="text-sm text-emerald-300/90">تم إقفال العهدة{activeFund.journalEntrySettlementId || activeFund.journalEntryId ? ` — قيد الإقفال ${activeFund.journalEntrySettlementId || activeFund.journalEntryId}` : ''}.</p>
+                <p className="text-sm text-emerald-300/90">
+                  {t('productionFund.custodyClosed', {
+                    journal:
+                      activeFund.journalEntrySettlementId || activeFund.journalEntryId
+                        ? t('productionFund.custodyClosedJournal', {
+                            id: activeFund.journalEntrySettlementId || activeFund.journalEntryId,
+                          })
+                        : '',
+                  })}
+                </p>
               )}
             </>
           )}
