@@ -3605,6 +3605,8 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
   const [isAddLeadOpen, setIsAddLeadOpen] = useState(false);
   const [quoteLead, setQuoteLead] = useState<Lead | null>(null);
   const [client360Lead, setClient360Lead] = useState<Lead | null>(null);
+  const [client360AnchorY, setClient360AnchorY] = useState<number | null>(null);
+  const mainScrollPreserveRef = useRef<number | null>(null);
   const [statementCustomer, setStatementCustomer] = useState<{ name: string; customerCode: string; sourceLabel?: string; sourceType: 'lead_auto' | 'manual' } | null>(null);
   const [entityMode, setEntityMode] = useState<'leads' | 'customers'>('leads');
   const [leadForm, setLeadForm] = useState({
@@ -3692,7 +3694,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
         setRepUserFilterId(intent.leadsRepUserId || '');
         if (intent.leadsClient360Id) {
           const target = leads.find((l) => l.id === intent.leadsClient360Id);
-          if (target) setClient360Lead(target);
+          if (target) openClient360(target);
         }
         localStorage.removeItem(NAV_INTENT_KEY);
       } catch {
@@ -3896,7 +3898,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
     try {
       const result = await deleteLeadsBulk(ids);
       if (client360Lead && ids.includes(client360Lead.id)) {
-        setClient360Lead(null);
+        closeClient360();
       }
       if (result.deleted === 0) {
         if (result.blocked > 0) {
@@ -4148,13 +4150,57 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
     };
   }, [client360Lead, invoices, expenses, meetingBookings, shootBookings, equipmentBookings]);
 
+  const openClient360 = (lead: Lead, event?: React.MouseEvent<HTMLElement>) => {
+    const main = document.querySelector('main.premium-main-layer') as HTMLElement | null;
+    mainScrollPreserveRef.current = main?.scrollTop ?? null;
+    if (event?.currentTarget) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      setClient360AnchorY(rect.top + rect.height / 2);
+    } else {
+      setClient360AnchorY(typeof window !== 'undefined' ? window.innerHeight / 2 : 400);
+    }
+    setClient360Lead(lead);
+  };
+
+  const closeClient360 = () => {
+    setClient360Lead(null);
+    setClient360AnchorY(null);
+  };
+
+  const client360PanelStyle = useMemo((): React.CSSProperties => {
+    if (typeof window === 'undefined') {
+      return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)', maxHeight: '90vh' };
+    }
+    const anchorY = client360AnchorY ?? window.innerHeight / 2;
+    const panelMaxH = Math.min(window.innerHeight * 0.9, 720);
+    const top = Math.min(Math.max(24, anchorY - 40), window.innerHeight - 24 - panelMaxH);
+    return {
+      top: `${top}px`,
+      left: '50%',
+      transform: 'translateX(-50%)',
+      maxHeight: `${panelMaxH}px`,
+    };
+  }, [client360AnchorY, client360Lead]);
+
   useEffect(() => {
     if (!client360Lead) return;
     const main = document.querySelector('main.premium-main-layer') as HTMLElement | null;
-    const prevOverflow = main?.style.overflow ?? '';
-    if (main) main.style.overflow = 'hidden';
+    if (!main) return;
+    const savedTop = mainScrollPreserveRef.current ?? main.scrollTop;
+    const preserve = () => {
+      main.scrollTop = savedTop;
+    };
+    preserve();
+    const raf = requestAnimationFrame(preserve);
+    const onScroll = () => {
+      preserve();
+    };
+    main.addEventListener('scroll', onScroll, { passive: true });
     return () => {
-      if (main) main.style.overflow = prevOverflow;
+      cancelAnimationFrame(raf);
+      main.removeEventListener('scroll', onScroll);
+      preserve();
+      mainScrollPreserveRef.current = null;
     };
   }, [client360Lead]);
 
@@ -4678,10 +4724,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                           )}
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              setClient360Lead(lead);
-                            }}
+                            onClick={(e) => openClient360(lead, e)}
                             className="px-2 py-1.5 rounded-lg text-[10px] font-black bg-cyan-500/20 text-cyan-200 border border-cyan-500/30"
                           >
                             {t('leads.client360')}
@@ -4986,14 +5029,15 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
       )}
       {client360Lead && client360Data && typeof document !== 'undefined' && createPortal(
         <div
-          className="fixed inset-0 bg-black/80 backdrop-blur-md z-[350] flex items-center justify-center p-6"
+          className="fixed inset-0 bg-black/80 backdrop-blur-md z-[350] p-6 pointer-events-auto"
           dir={dir}
           role="dialog"
           aria-modal="true"
-          onClick={() => setClient360Lead(null)}
+          onClick={closeClient360}
         >
           <div
-            className="bg-[#0E1426] border border-white/10 w-full max-w-6xl rounded-[2.5rem] p-6 max-h-[90vh] overflow-y-auto custom-scrollbar"
+            className="fixed bg-[#0E1426] border border-white/10 w-full max-w-6xl rounded-[2.5rem] p-6 overflow-y-auto custom-scrollbar shadow-2xl"
+            style={client360PanelStyle}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-5">
@@ -5011,7 +5055,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                     {t('client360.addUpdate')}
                   </button>
                 )}
-                <button type="button" onClick={() => setClient360Lead(null)} className="p-2 hover:bg-white/10 rounded-xl">
+                <button type="button" onClick={closeClient360} className="p-2 hover:bg-white/10 rounded-xl">
                   <X className="w-5 h-5" />
                 </button>
               </div>
