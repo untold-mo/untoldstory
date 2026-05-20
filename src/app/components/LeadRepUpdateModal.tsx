@@ -1,6 +1,5 @@
-import React, { useCallback, useState } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { motion } from 'motion/react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useData, type Lead } from '../context/DataContext';
@@ -34,10 +33,191 @@ const emptyModal = (): ModalState => ({
   toastType: 'success',
 });
 
-export function useLeadRepUpdate() {
-  const { logLeadInteraction, currentUser } = useData();
+type LeadRepUpdateContextValue = {
+  isOpen: boolean;
+  openInteraction: (lead: Lead, action: string, defaultNote?: string, toastType?: 'success' | 'info') => void;
+  openLeadUpdate: (lead: Lead) => void;
+  canUpdateLead: (lead: Lead) => boolean;
+};
+
+const LeadRepUpdateContext = createContext<LeadRepUpdateContextValue | null>(null);
+
+const LeadRepUpdateStateContext = createContext<{
+  modal: ModalState;
+  setModal: React.Dispatch<React.SetStateAction<ModalState>>;
+} | null>(null);
+
+function LeadRepUpdateModalPortal() {
+  const state = useContext(LeadRepUpdateStateContext);
+  const { logLeadInteraction } = useData();
   const { t } = useTranslation();
   const { dir } = useAppDirection();
+  if (!state) return null;
+  const { modal, setModal } = state;
+
+  const applyPlaybookTemplate = (templateId: string) => {
+    if (!templateId) return;
+    const templates = REP_INTERACTION_PLAYBOOKS[modal.channelType] || [];
+    const picked = templates.find((p) => p.id === templateId);
+    if (!picked) return;
+    setModal((prev) => ({ ...prev, note: picked.text }));
+  };
+
+  const submit = () => {
+    if (!modal.lead) return;
+    const note = modal.note.trim();
+    if (!note) {
+      toast.error(t('leadUpdate.noteRequired'));
+      return;
+    }
+    logLeadInteraction(modal.lead.id, modal.action, note, {
+      channelType: modal.channelType,
+      evidenceType: modal.evidenceType,
+      evidenceRef: modal.evidenceRef.trim() || undefined,
+      durationSeconds: modal.durationSeconds ? Number(modal.durationSeconds) || undefined : undefined,
+    });
+    const msg = t('leadUpdate.savedWithName', { name: modal.lead.name });
+    if (modal.toastType === 'info') {
+      toast.info(msg);
+    } else {
+      toast.success(msg);
+    }
+    setModal(emptyModal());
+  };
+
+  if (!modal.isOpen || !modal.lead) return null;
+
+  return createPortal(
+    <div
+      className="lead-rep-update-modal fixed inset-0 z-[400] bg-black/65 backdrop-blur-sm flex items-center justify-center p-4"
+      dir={dir}
+      role="dialog"
+      aria-modal="true"
+      onClick={() => setModal(emptyModal())}
+    >
+      <div
+        className="w-full max-w-2xl rounded-3xl border border-white/15 bg-[#0B1020] text-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-6 py-5 border-b border-white/10">
+          <p className="text-xs text-zinc-400">{t('leadUpdate.logTitle')}</p>
+          <h3 className="text-lg font-black text-white mt-1">
+            {modal.lead.name} — {modal.lead.company}
+          </h3>
+        </div>
+        <div className="p-6 space-y-3">
+          <label className="block text-sm font-bold text-zinc-200">{t('leadUpdate.actionType')}</label>
+          <select
+            value={modal.action}
+            onChange={(e) => {
+              const picked = REP_LEAD_UPDATE_ACTIONS.find((a) => a.value === e.target.value);
+              setModal((prev) => ({
+                ...prev,
+                action: e.target.value,
+                channelType: picked?.channel ?? prev.channelType,
+              }));
+            }}
+            className="w-full bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-sm text-zinc-100"
+          >
+            {REP_LEAD_UPDATE_ACTIONS.map((a) => (
+              <option key={a.value} value={a.value}>
+                {a.value}
+              </option>
+            ))}
+            {![...REP_LEAD_UPDATE_ACTIONS.map((a) => a.value)].includes(modal.action) && modal.action ? (
+              <option value={modal.action}>{modal.action}</option>
+            ) : null}
+          </select>
+
+          <label className="block text-sm font-bold text-zinc-200">{t('leadUpdate.summaryLabel')}</label>
+          <select
+            defaultValue=""
+            onChange={(e) => {
+              applyPlaybookTemplate(e.target.value);
+              e.currentTarget.value = '';
+            }}
+            className="w-full bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-xs text-zinc-200"
+          >
+            <option value="">{t('leadUpdate.templateOptional')}</option>
+            {(REP_INTERACTION_PLAYBOOKS[modal.channelType] || []).map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+          <textarea
+            value={modal.note}
+            onChange={(e) => setModal((prev) => ({ ...prev, note: e.target.value }))}
+            rows={5}
+            autoFocus
+            placeholder={t('leadUpdate.notePlaceholder')}
+            className="w-full bg-[#111A32] border border-white/15 rounded-2xl px-4 py-3 text-sm text-zinc-100 focus:outline-none focus:border-[#7C6BFF] resize-y"
+          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <select
+              value={modal.channelType}
+              onChange={(e) =>
+                setModal((prev) => ({ ...prev, channelType: e.target.value as ChannelType }))
+              }
+              className="bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-xs text-zinc-100"
+            >
+              <option value="call">{t('leadUpdate.channelCall')}</option>
+              <option value="chat">{t('leadUpdate.channelChat')}</option>
+              <option value="other">{t('leadUpdate.channelOther')}</option>
+            </select>
+            <select
+              value={modal.evidenceType}
+              onChange={(e) =>
+                setModal((prev) => ({ ...prev, evidenceType: e.target.value as EvidenceType }))
+              }
+              className="bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-xs text-zinc-100"
+            >
+              <option value="note_only">{t('leadUpdate.evidenceNoteOnly')}</option>
+              <option value="recording">{t('leadUpdate.evidenceRecording')}</option>
+              <option value="chat_export">{t('leadUpdate.evidenceChat')}</option>
+              <option value="link">{t('leadUpdate.evidenceLink')}</option>
+            </select>
+            <input
+              value={modal.evidenceRef}
+              onChange={(e) => setModal((prev) => ({ ...prev, evidenceRef: e.target.value }))}
+              placeholder={t('leadUpdate.evidenceUrlPlaceholder')}
+              className="bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-xs text-zinc-100 md:col-span-2"
+            />
+            <input
+              type="number"
+              min={0}
+              value={modal.durationSeconds}
+              onChange={(e) => setModal((prev) => ({ ...prev, durationSeconds: e.target.value }))}
+              placeholder={t('leadUpdate.durationPlaceholder')}
+              className="bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-xs text-zinc-100"
+            />
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-white/10 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setModal(emptyModal())}
+            className="px-4 py-2 rounded-xl text-sm font-bold bg-white/10 border border-white/15 text-zinc-200"
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            className="px-4 py-2 rounded-xl text-sm font-black bg-[#7C6BFF] text-white"
+          >
+            {t('leadUpdate.saveToTimeline')}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+export function LeadRepUpdateProvider({ children }: { children: React.ReactNode }) {
+  const { currentUser } = useData();
+  const { t } = useTranslation();
   const [modal, setModal] = useState<ModalState>(emptyModal);
 
   const canUpdateLead = useCallback(
@@ -82,165 +262,30 @@ export function useLeadRepUpdate() {
     [openInteraction, t],
   );
 
-  const applyPlaybookTemplate = (templateId: string) => {
-    if (!templateId) return;
-    const templates = REP_INTERACTION_PLAYBOOKS[modal.channelType] || [];
-    const picked = templates.find((p) => p.id === templateId);
-    if (!picked) return;
-    setModal((prev) => ({ ...prev, note: picked.text }));
-  };
+  const value = useMemo(
+    () => ({
+      isOpen: modal.isOpen,
+      openInteraction,
+      openLeadUpdate,
+      canUpdateLead,
+    }),
+    [modal.isOpen, openInteraction, openLeadUpdate, canUpdateLead],
+  );
 
-  const submit = () => {
-    if (!modal.lead) return;
-    const note = modal.note.trim();
-    if (!note) {
-      toast.error(t('leadUpdate.noteRequired'));
-      return;
-    }
-    logLeadInteraction(modal.lead.id, modal.action, note, {
-      channelType: modal.channelType,
-      evidenceType: modal.evidenceType,
-      evidenceRef: modal.evidenceRef.trim() || undefined,
-      durationSeconds: modal.durationSeconds ? Number(modal.durationSeconds) || undefined : undefined,
-    });
-    const msg = t('leadUpdate.savedWithName', { name: modal.lead.name });
-    if (modal.toastType === 'info') {
-      toast.info(msg);
-    } else {
-      toast.success(msg);
-    }
-    setModal(emptyModal());
-  };
+  return (
+    <LeadRepUpdateContext.Provider value={value}>
+      <LeadRepUpdateStateContext.Provider value={{ modal, setModal }}>
+        {children}
+        <LeadRepUpdateModalPortal />
+      </LeadRepUpdateStateContext.Provider>
+    </LeadRepUpdateContext.Provider>
+  );
+}
 
-  const LeadRepUpdateModal = () => {
-    if (!modal.isOpen || !modal.lead) return null;
-    return createPortal(
-      <div
-        className="fixed inset-0 z-[350] bg-black/65 backdrop-blur-sm flex items-center justify-center p-4"
-        dir={dir}
-        role="dialog"
-        aria-modal="true"
-      >
-        <div className="w-full max-w-2xl rounded-3xl border border-white/15 bg-[#0B1020] shadow-2xl">
-          <motion.div
-            className="px-6 py-5 border-b border-white/10"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <p className="text-xs text-zinc-400">{t('leadUpdate.logTitle')}</p>
-            <h3 className="text-lg font-black text-white mt-1">
-              {modal.lead.name} — {modal.lead.company}
-            </h3>
-          </motion.div>
-          <motion.div className="p-6 space-y-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <label className="block text-sm font-bold text-zinc-200">{t('leadUpdate.actionType')}</label>
-            <select
-              value={modal.action}
-              onChange={(e) => {
-                const picked = REP_LEAD_UPDATE_ACTIONS.find((a) => a.value === e.target.value);
-                setModal((prev) => ({
-                  ...prev,
-                  action: e.target.value,
-                  channelType: picked?.channel ?? prev.channelType,
-                }));
-              }}
-              className="w-full bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-sm text-zinc-100"
-            >
-              {REP_LEAD_UPDATE_ACTIONS.map((a) => (
-                <option key={a.value} value={a.value}>
-                  {a.value}
-                </option>
-              ))}
-              {![...REP_LEAD_UPDATE_ACTIONS.map((a) => a.value)].includes(modal.action) && modal.action ? (
-                <option value={modal.action}>{modal.action}</option>
-              ) : null}
-            </select>
-
-            <label className="block text-sm font-bold text-zinc-200">{t('leadUpdate.summaryLabel')}</label>
-            <select
-              defaultValue=""
-              onChange={(e) => {
-                applyPlaybookTemplate(e.target.value);
-                e.currentTarget.value = '';
-              }}
-              className="w-full bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-xs text-zinc-200"
-            >
-              <option value="">{t('leadUpdate.templateOptional')}</option>
-              {(REP_INTERACTION_PLAYBOOKS[modal.channelType] || []).map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-            <textarea
-              value={modal.note}
-              onChange={(e) => setModal((prev) => ({ ...prev, note: e.target.value }))}
-              rows={5}
-              autoFocus
-              placeholder={t('leadUpdate.notePlaceholder')}
-              className="w-full bg-[#111A32] border border-white/15 rounded-2xl px-4 py-3 text-sm text-zinc-100 focus:outline-none focus:border-[#7C6BFF] resize-y"
-            />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <select
-                value={modal.channelType}
-                onChange={(e) =>
-                  setModal((prev) => ({ ...prev, channelType: e.target.value as ChannelType }))
-                }
-                className="bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-xs"
-              >
-                <option value="call">{t('leadUpdate.channelCall')}</option>
-                <option value="chat">{t('leadUpdate.channelChat')}</option>
-                <option value="other">{t('leadUpdate.channelOther')}</option>
-              </select>
-              <select
-                value={modal.evidenceType}
-                onChange={(e) =>
-                  setModal((prev) => ({ ...prev, evidenceType: e.target.value as EvidenceType }))
-                }
-                className="bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-xs"
-              >
-                <option value="note_only">{t('leadUpdate.evidenceNoteOnly')}</option>
-                <option value="recording">{t('leadUpdate.evidenceRecording')}</option>
-                <option value="chat_export">{t('leadUpdate.evidenceChat')}</option>
-                <option value="link">{t('leadUpdate.evidenceLink')}</option>
-              </select>
-              <input
-                value={modal.evidenceRef}
-                onChange={(e) => setModal((prev) => ({ ...prev, evidenceRef: e.target.value }))}
-                placeholder={t('leadUpdate.evidenceUrlPlaceholder')}
-                className="bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-xs md:col-span-2"
-              />
-              <input
-                type="number"
-                min={0}
-                value={modal.durationSeconds}
-                onChange={(e) => setModal((prev) => ({ ...prev, durationSeconds: e.target.value }))}
-                placeholder={t('leadUpdate.durationPlaceholder')}
-                className="bg-[#111A32] border border-white/15 rounded-xl px-3 py-2 text-xs"
-              />
-            </div>
-          </motion.div>
-          <motion.div className="px-6 py-4 border-t border-white/10 flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setModal(emptyModal())}
-              className="px-4 py-2 rounded-xl text-sm font-bold bg-white/10 border border-white/15 text-zinc-200"
-            >
-              {t('common.cancel')}
-            </button>
-            <button
-              type="button"
-              onClick={submit}
-              className="px-4 py-2 rounded-xl text-sm font-black bg-[#7C6BFF] text-white"
-            >
-              {t('leadUpdate.saveToTimeline')}
-            </button>
-          </motion.div>
-        </div>
-      </div>,
-      document.body,
-    );
-  };
-
-  return { openInteraction, openLeadUpdate, canUpdateLead, LeadRepUpdateModal };
+export function useLeadRepUpdate() {
+  const ctx = useContext(LeadRepUpdateContext);
+  if (!ctx) {
+    throw new Error('useLeadRepUpdate must be used within LeadRepUpdateProvider');
+  }
+  return ctx;
 }

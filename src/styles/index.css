@@ -36,3 +36,22 @@
   transform: translateX(50%) translateY(0);
 }
 
+/* Portal modals render outside .system-theme — keep Client 360 readable */
+.client360-modal-panel {
+  color: #f8fafc !important;
+}
+
+.client360-modal-panel h3,
+.client360-modal-panel h4,
+.client360-modal-panel h5 {
+  color: #ffffff !important;
+}
+
+.lead-rep-update-modal {
+  color: #f8fafc !important;
+}
+
+.lead-rep-update-modal h3 {
+  color: #ffffff !important;
+}
+

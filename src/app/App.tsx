@@ -78,7 +78,7 @@ import {
   type RepQuotePipelineStepState,
 } from '@/lib/repQuotePipeline';
 import PageViewsHub from './components/PageViewsHub';
-import { useLeadRepUpdate } from './components/LeadRepUpdateModal';
+import { LeadRepUpdateProvider, useLeadRepUpdate } from './components/LeadRepUpdateModal';
 import { BulkLeadsUploadModal } from './components/BulkLeadsUploadModal';
 import { RepSkillsEditor } from './components/RepSkillsEditor';
 import { REP_SKILL_PRESETS } from '@/lib/repSkills';
@@ -3587,7 +3587,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
   const { leads, users, invoices, expenses, priceQuotes, shootBookings, equipmentBookings, meetingBookings, manualCustomers, currentUser, addLead, addManualCustomer, assignLead, assignLeadsBulk, updateLeadStatus, deleteLead, deleteLeadsBulk } = useData();
   const { t } = useTranslation();
   const { dir, dateLocale } = useAppDirection();
-  const { openLeadUpdate, canUpdateLead, LeadRepUpdateModal } = useLeadRepUpdate();
+  const { openLeadUpdate, canUpdateLead, isOpen: leadUpdateModalOpen } = useLeadRepUpdate();
   const [search, setSearch] = useState('');
   const [leadsPage, setLeadsPage] = useState(1);
   const [leadsPageSize, setLeadsPageSize] = useState(readLeadsPageSize);
@@ -4112,28 +4112,34 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
     if (!statementCustomer) return 'CUS-0000';
     return statementCustomer.customerCode;
   }, [statementCustomer]);
-  const client360Data = useMemo(() => {
+
+  const activeClient360Lead = useMemo(() => {
     if (!client360Lead) return null;
+    return leads.find((l) => l.id === client360Lead.id) ?? client360Lead;
+  }, [client360Lead, leads]);
+
+  const client360Data = useMemo(() => {
+    if (!activeClient360Lead) return null;
     const leadInvoices = invoices
-      .filter((inv) => inv.leadId === client360Lead.id)
+      .filter((inv) => inv.leadId === activeClient360Lead.id)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     const leadExpenses = expenses
-      .filter((exp) => (exp.note || '').includes(client360Lead.name) || (exp.costCenter || '') === (client360Lead.category || ''))
+      .filter((exp) => (exp.note || '').includes(activeClient360Lead.name) || (exp.costCenter || '') === (activeClient360Lead.category || ''))
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 8);
     const leadMeetings = meetingBookings
-      .filter((m) => m.leadId === client360Lead.id)
+      .filter((m) => m.leadId === activeClient360Lead.id)
       .sort((a, b) => new Date(`${b.date}T${b.startTime}:00`).getTime() - new Date(`${a.date}T${a.startTime}:00`).getTime())
       .slice(0, 8);
     const leadShoots = shootBookings
-      .filter((s) => s.leadId === client360Lead.id)
+      .filter((s) => s.leadId === activeClient360Lead.id)
       .sort((a, b) => new Date(`${b.date}T${b.time}:00`).getTime() - new Date(`${a.date}T${a.time}:00`).getTime())
       .slice(0, 8);
     const leadEquipment = equipmentBookings
-      .filter((e) => e.leadId === client360Lead.id)
+      .filter((e) => e.leadId === activeClient360Lead.id)
       .sort((a, b) => new Date(b.fromDate).getTime() - new Date(a.fromDate).getTime())
       .slice(0, 8);
-    const evidenceItems = client360Lead.timeline.filter((a) => Boolean(a.evidenceRef?.trim())).slice(0, 12);
+    const evidenceItems = activeClient360Lead.timeline.filter((a) => Boolean(a.evidenceRef?.trim())).slice(0, 12);
     const totalRevenue = leadInvoices.reduce((sum, inv) => sum + Number(inv.totalAmount ?? inv.amount ?? 0), 0);
     const totalCollected = leadInvoices.reduce((sum, inv) => sum + Number(inv.paidAmount ?? (inv.status === 'مدفوع' ? (inv.totalAmount ?? inv.amount ?? 0) : 0)), 0);
     const totalRemaining = Math.max(0, totalRevenue - totalCollected);
@@ -4148,7 +4154,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
       totalCollected,
       totalRemaining,
     };
-  }, [client360Lead, invoices, expenses, meetingBookings, shootBookings, equipmentBookings]);
+  }, [activeClient360Lead, invoices, expenses, meetingBookings, shootBookings, equipmentBookings]);
 
   const openClient360 = (lead: Lead, event?: React.MouseEvent<HTMLElement>) => {
     const main = document.querySelector('main.premium-main-layer') as HTMLElement | null;
@@ -4180,29 +4186,20 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
       transform: 'translateX(-50%)',
       maxHeight: `${panelMaxH}px`,
     };
-  }, [client360AnchorY, client360Lead]);
+  }, [client360AnchorY, client360Lead?.id]);
 
   useEffect(() => {
-    if (!client360Lead) return;
+    if (!client360Lead || leadUpdateModalOpen) return;
     const main = document.querySelector('main.premium-main-layer') as HTMLElement | null;
     if (!main) return;
     const savedTop = mainScrollPreserveRef.current ?? main.scrollTop;
-    const preserve = () => {
+    requestAnimationFrame(() => {
       main.scrollTop = savedTop;
-    };
-    preserve();
-    const raf = requestAnimationFrame(preserve);
-    const onScroll = () => {
-      preserve();
-    };
-    main.addEventListener('scroll', onScroll, { passive: true });
+    });
     return () => {
-      cancelAnimationFrame(raf);
-      main.removeEventListener('scroll', onScroll);
-      preserve();
       mainScrollPreserveRef.current = null;
     };
-  }, [client360Lead]);
+  }, [client360Lead?.id, leadUpdateModalOpen]);
 
   const exportCustomerStatementCsv = () => {
     if (!statementCustomer) return;
@@ -4725,7 +4722,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                           <button
                             type="button"
                             onClick={(e) => openClient360(lead, e)}
-                            className="px-2 py-1.5 rounded-lg text-[10px] font-black bg-cyan-500/20 text-cyan-200 border border-cyan-500/30"
+                            className="px-2 py-1.5 rounded-lg text-[10px] font-black bg-cyan-600/40 text-white border border-cyan-400/50 hover:bg-cyan-500/50"
                           >
                             {t('leads.client360')}
                           </button>
@@ -5027,7 +5024,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
           </div>
         </div>
       )}
-      {client360Lead && client360Data && typeof document !== 'undefined' && createPortal(
+      {activeClient360Lead && client360Data && !leadUpdateModalOpen && typeof document !== 'undefined' && createPortal(
         <div
           className="fixed inset-0 bg-black/80 backdrop-blur-md z-[350] p-6 pointer-events-auto"
           dir={dir}
@@ -5036,53 +5033,53 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
           onClick={closeClient360}
         >
           <div
-            className="fixed bg-[#0E1426] border border-white/10 w-full max-w-6xl rounded-[2.5rem] p-6 overflow-y-auto custom-scrollbar shadow-2xl"
+            className="client360-modal-panel fixed bg-[#0E1426] text-white border border-white/10 w-full max-w-6xl rounded-[2.5rem] p-6 overflow-y-auto custom-scrollbar shadow-2xl [&_h3]:text-white [&_h4]:text-white [&_h5]:text-white"
             style={client360PanelStyle}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h3 className="text-xl font-black">{t('client360.title', { name: client360Lead.name })}</h3>
-                <p className="text-xs text-zinc-500 mt-1">{t('client360.subtitle', { company: client360Lead.company, phone: client360Lead.phone, statusLabel: t('leads.colStatus'), status: getLeadStatusLabel(client360Lead.status, t) })}</p>
+                <h3 className="text-xl font-black text-white">{t('client360.title', { name: activeClient360Lead.name })}</h3>
+                <p className="text-xs text-zinc-300 mt-1">{t('client360.subtitle', { company: activeClient360Lead.company, phone: activeClient360Lead.phone, statusLabel: t('leads.colStatus'), status: getLeadStatusLabel(activeClient360Lead.status, t) })}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                {canUpdateLead(client360Lead) && (
+                {canUpdateLead(activeClient360Lead) && (
                   <button
                     type="button"
-                    onClick={() => openLeadUpdate(client360Lead)}
+                    onClick={() => openLeadUpdate(activeClient360Lead)}
                     className="px-4 py-2 rounded-xl text-xs font-black bg-[#7C6BFF] text-white"
                   >
                     {t('client360.addUpdate')}
                   </button>
                 )}
-                <button type="button" onClick={closeClient360} className="p-2 hover:bg-white/10 rounded-xl">
-                  <X className="w-5 h-5" />
+                <button type="button" onClick={closeClient360} className="p-2 hover:bg-white/10 rounded-xl text-white">
+                  <X className="w-5 h-5 text-white" />
                 </button>
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-5">
-              <div className="bg-[#0F1528] border border-white/10 rounded-xl p-3"><p className="text-[11px] text-zinc-400">{t('client360.totalInvoices')}</p><p className="text-lg font-black text-white">{client360Data.totalRevenue.toLocaleString(dateLocale)} {t('common.currency')}</p></div>
-              <div className="bg-[#0F1528] border border-white/10 rounded-xl p-3"><p className="text-[11px] text-zinc-400">{t('client360.collected')}</p><p className="text-lg font-black text-emerald-300">{client360Data.totalCollected.toLocaleString(dateLocale)} {t('common.currency')}</p></div>
-              <div className="bg-[#0F1528] border border-white/10 rounded-xl p-3"><p className="text-[11px] text-zinc-400">{t('client360.remaining')}</p><p className="text-lg font-black text-amber-300">{client360Data.totalRemaining.toLocaleString(dateLocale)} {t('common.currency')}</p></div>
-              <div className="bg-[#0F1528] border border-white/10 rounded-xl p-3"><p className="text-[11px] text-zinc-400">{t('client360.evidenceCount')}</p><p className="text-lg font-black text-cyan-300">{client360Data.evidenceItems.length}</p></div>
+              <div className="bg-[#0F1528] border border-white/10 rounded-xl p-3 text-white"><p className="text-[11px] text-zinc-300">{t('client360.totalInvoices')}</p><p className="text-lg font-black text-white">{client360Data.totalRevenue.toLocaleString(dateLocale)} {t('common.currency')}</p></div>
+              <div className="bg-[#0F1528] border border-white/10 rounded-xl p-3 text-white"><p className="text-[11px] text-zinc-300">{t('client360.collected')}</p><p className="text-lg font-black text-emerald-300">{client360Data.totalCollected.toLocaleString(dateLocale)} {t('common.currency')}</p></div>
+              <div className="bg-[#0F1528] border border-white/10 rounded-xl p-3 text-white"><p className="text-[11px] text-zinc-300">{t('client360.remaining')}</p><p className="text-lg font-black text-amber-300">{client360Data.totalRemaining.toLocaleString(dateLocale)} {t('common.currency')}</p></div>
+              <div className="bg-[#0F1528] border border-white/10 rounded-xl p-3 text-white"><p className="text-[11px] text-zinc-300">{t('client360.evidenceCount')}</p><p className="text-lg font-black text-cyan-300">{client360Data.evidenceItems.length}</p></div>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {currentUser?.role !== 'محاسب' && (
-              <div className="bg-[#0F1528]/70 border border-white/10 rounded-xl p-4">
-                <h4 className="font-black mb-3">{t('client360.recentComms')}</h4>
+              <div className="bg-[#0F1528]/70 border border-white/10 rounded-xl p-4 text-white">
+                <h4 className="font-black mb-3 text-white">{t('client360.recentComms')}</h4>
                 <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar pr-1">
-                  {client360Lead.timeline.slice(0, 10).map((a) => (
+                  {activeClient360Lead.timeline.slice(0, 10).map((a) => (
                     <div key={a.id} className="border border-white/10 rounded-lg p-2">
-                      <p className="text-sm font-bold text-zinc-200">{a.action}</p>
-                      <p className="text-[11px] text-zinc-400 mt-1">{a.note || t('client360.noNote')}</p>
+                      <p className="text-sm font-bold text-white">{a.action}</p>
+                      <p className="text-[11px] text-zinc-300 mt-1">{a.note || t('client360.noNote')}</p>
                     </div>
                   ))}
                 </div>
               </div>
               )}
               {currentUser?.role !== 'محاسب' && (
-              <div className="bg-[#0F1528]/70 border border-white/10 rounded-xl p-4">
-                <h4 className="font-black mb-3">{t('client360.evidenceArchive')}</h4>
+              <div className="bg-[#0F1528]/70 border border-white/10 rounded-xl p-4 text-white">
+                <h4 className="font-black mb-3 text-white">{t('client360.evidenceArchive')}</h4>
                 <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar pr-1">
                   {client360Data.evidenceItems.map((a) => (
                     <a key={a.id} href={a.evidenceRef} target="_blank" rel="noreferrer" className="block border border-cyan-500/25 rounded-lg p-2 hover:bg-cyan-500/10">
@@ -5090,26 +5087,26 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                       <p className="text-[11px] text-zinc-400 mt-1">{new Date(a.createdAt).toLocaleString(dateLocale)}</p>
                     </a>
                   ))}
-                  {client360Data.evidenceItems.length === 0 && <p className="text-sm text-zinc-500">{t('client360.noEvidence')}</p>}
+                  {client360Data.evidenceItems.length === 0 && <p className="text-sm text-zinc-300">{t('client360.noEvidence')}</p>}
                 </div>
               </div>
               )}
-              <div className="bg-[#0F1528]/70 border border-white/10 rounded-xl p-4">
-                <h4 className="font-black mb-3">{t('client360.invoiceSummary')}</h4>
+              <div className="bg-[#0F1528]/70 border border-white/10 rounded-xl p-4 text-white">
+                <h4 className="font-black mb-3 text-white">{t('client360.invoiceSummary')}</h4>
                 <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar pr-1">
                   {client360Data.leadInvoices.map((inv) => (
                     <div key={inv.id} className="border border-white/10 rounded-lg p-2 flex items-center justify-between text-sm">
-                      <span className="text-zinc-200 font-bold">{inv.id}</span>
+                      <span className="text-white font-bold">{inv.id}</span>
                       <span className="text-emerald-300">{Number(inv.totalAmount ?? inv.amount).toLocaleString(dateLocale)} {t('common.currency')}</span>
-                      <span className="text-zinc-400">{inv.status}</span>
+                      <span className="text-zinc-200">{getInvoiceStatusLabel(inv.status, t)}</span>
                     </div>
                   ))}
-                  {client360Data.leadInvoices.length === 0 && <p className="text-sm text-zinc-500">{t('client360.noInvoices')}</p>}
+                  {client360Data.leadInvoices.length === 0 && <p className="text-sm text-zinc-300">{t('client360.noInvoices')}</p>}
                 </div>
               </div>
-              <div className="bg-[#0F1528]/70 border border-white/10 rounded-xl p-4">
-                <h4 className="font-black mb-3">{t('client360.opsStatus')}</h4>
-                <div className="text-xs text-zinc-300 space-y-2">
+              <div className="bg-[#0F1528]/70 border border-white/10 rounded-xl p-4 text-white">
+                <h4 className="font-black mb-3 text-white">{t('client360.opsStatus')}</h4>
+                <div className="text-xs text-zinc-200 space-y-2">
                   <p>{t('client360.meetings')}: <span className="font-black text-indigo-300">{client360Data.leadMeetings.length}</span></p>
                   <p>{t('client360.shoots')}: <span className="font-black text-amber-300">{client360Data.leadShoots.length}</span></p>
                   <p>{t('client360.equipment')}: <span className="font-black text-cyan-300">{client360Data.leadEquipment.length}</span></p>
@@ -5121,7 +5118,6 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
         </div>,
         document.body,
       )}
-      <LeadRepUpdateModal />
     </div>
   );
 };
@@ -6327,7 +6323,7 @@ const RepProfessionalDashboard = ({ currentUser, onGoToTab }: { currentUser: Use
   const { dateLocale, dir } = useAppDirection();
   const currency = t('common.currency');
   const { leads, logLeadInteraction, updateLeadStatus, setLeadFollowUp, printBrandingSettings, priceQuotes, repRecordClientAcceptance, repRecordClientRejection } = useData();
-  const { openInteraction, openLeadUpdate, LeadRepUpdateModal } = useLeadRepUpdate();
+  const { openInteraction, openLeadUpdate } = useLeadRepUpdate();
   const [quoteLead, setQuoteLead] = useState<Lead | null>(null);
 
   // ---- State for client-response modal ----
@@ -7105,7 +7101,6 @@ const RepProfessionalDashboard = ({ currentUser, onGoToTab }: { currentUser: Use
       </div>
       <PriceQuoteSubmitModal lead={quoteLead} open={!!quoteLead} onClose={() => setQuoteLead(null)} />
 
-      <LeadRepUpdateModal />
     </div>
   );
 };
@@ -12419,8 +12414,10 @@ function App() {
   return (
     <AppErrorBoundary>
       <DataProvider>
-        <Toaster position="top-center" richColors theme="dark" />
-        <AppContent />
+        <LeadRepUpdateProvider>
+          <Toaster position="top-center" richColors theme="dark" />
+          <AppContent />
+        </LeadRepUpdateProvider>
       </DataProvider>
     </AppErrorBoundary>
   );
