@@ -11659,7 +11659,40 @@ const Root = () => {
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const parallaxFrameRef = useRef<number | null>(null);
   const notificationsAnchorRef = useRef<HTMLButtonElement | null>(null);
+  const notificationsPanelRef = useRef<HTMLDivElement | null>(null);
+  const notificationsWrapRef = useRef<HTMLDivElement | null>(null);
+  const notificationsCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [notificationsPanelPos, setNotificationsPanelPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+
+  const cancelNotificationsClose = () => {
+    if (notificationsCloseTimerRef.current) {
+      clearTimeout(notificationsCloseTimerRef.current);
+      notificationsCloseTimerRef.current = null;
+    }
+  };
+
+  const scheduleNotificationsClose = () => {
+    cancelNotificationsClose();
+    notificationsCloseTimerRef.current = setTimeout(() => {
+      setIsNotificationsOpen(false);
+      notificationsCloseTimerRef.current = null;
+    }, 180);
+  };
+
+  const handleNotificationsPointerLeave = (e: React.MouseEvent) => {
+    const related = e.relatedTarget as Node | null;
+    if (!related) {
+      scheduleNotificationsClose();
+      return;
+    }
+    if (
+      notificationsPanelRef.current?.contains(related) ||
+      notificationsWrapRef.current?.contains(related)
+    ) {
+      return;
+    }
+    scheduleNotificationsClose();
+  };
   /** بدون تخزين افتراضي: F5 يعيد شاشة الترحيب. بعد خروج صريح نضع وسماً للمرور مباشرة لشاشة الدخول. */
   const [welcomeUnlocked, setWelcomeUnlocked] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -12314,6 +12347,14 @@ const Root = () => {
   }, [isNotificationsOpen]);
 
   useEffect(() => {
+    return () => cancelNotificationsClose();
+  }, []);
+
+  useEffect(() => {
+    if (!isNotificationsOpen) cancelNotificationsClose();
+  }, [isNotificationsOpen]);
+
+  useEffect(() => {
     if (!isSidebarOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setIsSidebarOpen(false);
@@ -12576,7 +12617,12 @@ const Root = () => {
                 </span>
               </button>
             )}
-            <div className="relative shrink-0">
+            <div
+              ref={notificationsWrapRef}
+              className="relative shrink-0"
+              onMouseEnter={cancelNotificationsClose}
+              onMouseLeave={handleNotificationsPointerLeave}
+            >
               {notifications.length > 0 && (
                 <div className="absolute -top-1 -left-1 z-20 min-w-5 h-5 px-1 bg-rose-500 border-2 border-[#080B13] rounded-full flex items-center justify-center text-[10px] font-black shadow-lg shadow-rose-500/40">
                   {Math.min(9, notifications.length)}
@@ -12610,8 +12656,11 @@ const Root = () => {
               </button>
               {isNotificationsOpen && createPortal(
                 <div
+                  ref={notificationsPanelRef}
                   className="premium-notifications-panel fixed w-[360px] max-w-[90vw] bg-[#E8EAED] border border-zinc-300/80 rounded-2xl shadow-2xl z-[9999] p-3 text-zinc-900"
                   style={{ top: notificationsPanelPos.top, left: notificationsPanelPos.left }}
+                  onMouseEnter={cancelNotificationsClose}
+                  onMouseLeave={handleNotificationsPointerLeave}
                 >
                   <div className="flex items-center justify-between mb-2 gap-2">
                     <p className="text-sm font-black text-zinc-900">{t('notifications.hub')}</p>
