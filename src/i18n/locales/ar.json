@@ -145,7 +145,8 @@
     "repTodayBookings": "حجوزاتي اليوم",
     "opsOverdueFollowups": "المتابعات المتأخرة",
     "opsPendingApprovals": "طلبات اعتماد",
-    "opsTodayMeetings": "اجتماعات اليوم"
+    "opsTodayMeetings": "اجتماعات اليوم",
+    "ownerCustodyPending": "عهد بانتظار اعتمادك"
   },
   "errors": {
     "noFinancePage": "لا توجد صفحة الإدارة المالية في صلاحياتك الحالية",
@@ -1757,6 +1758,7 @@
     "quotesAccountingNote": "لا تُسجَّل عند المحاسب كفاتورة إلا بعد اعتمادك أنت كمالك.",
     "sectionMeetings": "طلبات اجتماعات/أماكن",
     "sectionCustody": "طلبات عهد إنتاج",
+    "noCustodyPending": "لا توجد عهد بانتظار اعتمادك حالياً.",
     "estimatedCost": "تكلفة تقديرية: {{amount}} {{currency}}",
     "noPendingQuotes": "لا توجد عروض معلقة.",
     "paymentTermsTitle": "شروط الدفع عند الاعتماد",

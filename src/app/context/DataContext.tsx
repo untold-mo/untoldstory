@@ -3617,6 +3617,33 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [currentUser?.id, currentUser?.role]);
 
+  /** استطلاع عهد الإنتاج — المالك/المحاسب/مدير الإنتاج (تنبيهات + اعتمادات بدون إعادة تحميل الصفحة) */
+  useEffect(() => {
+    if (!isServerDataMode()) return;
+    if (!hasServerAuthToken()) return;
+    if (!currentUser?.id) return;
+    if (!['مالك', 'محاسب', 'مدير إنتاج'].includes(currentUser.role)) return;
+
+    let cancelled = false;
+    const pollCustody = async () => {
+      if (cancelled || typeof document === 'undefined') return;
+      if (document.visibilityState === 'hidden') return;
+      try {
+        const fresh = await fetchCustodyFundsApi();
+        if (!cancelled) setCustodyFunds(fresh.map(migrateCustodyFund));
+      } catch {
+        /* ignore */
+      }
+    };
+
+    void pollCustody();
+    const id = window.setInterval(pollCustody, 45_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [currentUser?.id, currentUser?.role]);
+
   // Save to localStorage
   useEffect(() => {
     if (!isServerDataMode() && leads.length > 0) {
@@ -9275,6 +9302,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     if (ok) {
       addAuditEvent({ action: 'إرسال مسودة عهدة للمالك', entityType: 'system', entityId: id, details: '' });
+      if (isServerDataMode()) {
+        try {
+          const fresh = await fetchCustodyFundsApi();
+          setCustodyFunds(fresh.map(migrateCustodyFund));
+        } catch {
+          /* ignore */
+        }
+      }
     }
     return ok;
   };

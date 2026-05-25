@@ -274,7 +274,7 @@ const SectionTitle = ({ title, subtitle, icon: Icon }: any) => (
 // --- Owner Dashboard ---
 
 const OwnerDashboard = ({ onGoToTab, openAccountantSubTab, openBookingsWithIntent }: any) => {
-  const { leads, invoices, expenses, shootBookings, equipmentBookings, meetingBookings, getRepSnapshots, printBrandingSettings } = useData();
+  const { leads, invoices, expenses, shootBookings, equipmentBookings, meetingBookings, custodyFunds, getRepSnapshots, printBrandingSettings } = useData();
   const { t } = useTranslation();
   const { dateLocale } = useAppDirection();
   const [conversionMode, setConversionMode] = useState<'all' | 'closed'>('all');
@@ -363,7 +363,8 @@ const OwnerDashboard = ({ onGoToTab, openAccountantSubTab, openBookingsWithInten
     const pendingApprovals = expenses.filter((e) => e.approvalStatus === 'قيد الاعتماد').length
       + shootBookings.filter((b) => b.status === 'قيد المراجعة').length
       + equipmentBookings.filter((b) => b.status === 'قيد المراجعة').length
-      + meetingBookings.filter((b) => b.status === 'قيد المراجعة').length;
+      + meetingBookings.filter((b) => b.status === 'قيد المراجعة').length
+      + custodyFunds.filter((c) => c.status === 'طلب_بانتظار_المالك').length;
     const pipelineAmount = leads
       .filter((l) => l.status !== 'مغلق - فوز' && l.status !== 'مغلق - خسارة')
       .reduce((sum, l) => sum + Number(l.budget || 0), 0);
@@ -373,7 +374,7 @@ const OwnerDashboard = ({ onGoToTab, openAccountantSubTab, openBookingsWithInten
       return (Date.now() - new Date(latestAt).getTime()) >= (1000 * 60 * 60 * 24 * 2);
     }).length;
     return { todayRevenue, pendingApprovals, pipelineAmount, staleOpenLeads };
-  }, [invoices, expenses, shootBookings, equipmentBookings, meetingBookings, leads]);
+  }, [invoices, expenses, shootBookings, equipmentBookings, meetingBookings, leads, custodyFunds]);
 
   const printOwnerPdf = () => {
     const company = escapeHtml(printBrandingSettings.companyName || t('ownerDash.defaultCompany'));
@@ -9416,6 +9417,7 @@ const ApprovalCenter = ({
               )}
             </div>
           ))}
+          {pendingCustodyRequest.length === 0 && <p className="text-xs text-zinc-500">{t('approvals.noCustodyPending')}</p>}
         </div>
       </div>
     </div>
@@ -11715,10 +11717,11 @@ const Root = () => {
     const pendingApprovals = safeExpenses.filter(e => e.approvalStatus === 'قيد الاعتماد').length
       + safeShootBookings.filter(b => b.status === 'قيد المراجعة').length
       + safeEquipmentBookings.filter(b => b.status === 'قيد المراجعة').length
-      + safeMeetingBookings.filter(b => b.status === 'قيد المراجعة').length;
+      + safeMeetingBookings.filter(b => b.status === 'قيد المراجعة').length
+      + custodyFunds.filter((f) => f.status === 'طلب_بانتظار_المالك').length;
     const invoicesNoCostCenter = safeInvoices.filter(i => !i.costCenter || !i.costCenter.trim()).length;
     return { leadsNoAssignee, pendingApprovals, invoicesNoCostCenter };
-  }, [safeLeads, safeExpenses, safeShootBookings, safeEquipmentBookings, safeMeetingBookings, safeInvoices]);
+  }, [safeLeads, safeExpenses, safeShootBookings, safeEquipmentBookings, safeMeetingBookings, safeInvoices, custodyFunds]);
   const showSalesOpsHomeStrip = currentRole !== 'مدير إنتاج';
   const productionCustodyHome = useMemo(() => {
     if (!currentUserId) {
@@ -11779,6 +11782,24 @@ const Root = () => {
         { id: 'prod-custody-settlement', label: t('homeFocus.prodCustodySettlement'), value: h.settlement, onClick: goProd },
         { id: 'prod-today-meetings', label: t('homeFocus.prodTodayMeetings'), value: myTodayMeetings, onClick: () => openBookingsWithIntent('today', errMeetings) },
       ];
+    }
+    if (currentRole === 'مالك') {
+      const custodyPendingOwner = custodyFunds.filter((f) => f.status === 'طلب_بانتظار_المالك').length;
+      const errApprovals = t('errors.noFinancePage');
+      const items = [
+        { id: 'ops-overdue-followups', label: t('homeFocus.opsOverdueFollowups'), value: overdueFollowupsCount, onClick: () => handleTodayFocusClick('overdue-followups') },
+        { id: 'ops-pending-approvals', label: t('homeFocus.opsPendingApprovals'), value: dataHealth.pendingApprovals, onClick: () => handleTodayFocusClick('pending-approvals') },
+        { id: 'ops-today-meetings', label: t('homeFocus.opsTodayMeetings'), value: todayMeetingsCount, onClick: () => handleTodayFocusClick('today-meetings') },
+      ];
+      if (custodyPendingOwner > 0) {
+        items.unshift({
+          id: 'owner-custody-pending',
+          label: t('homeFocus.ownerCustodyPending'),
+          value: custodyPendingOwner,
+          onClick: () => openFirstAllowedTab(['approvals'], errApprovals),
+        });
+      }
+      return items;
     }
     if (currentRole === 'مندوب') {
       const myOverdue = safeLeads.filter(

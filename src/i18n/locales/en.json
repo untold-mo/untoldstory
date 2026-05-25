@@ -145,7 +145,8 @@
     "repTodayBookings": "My bookings today",
     "opsOverdueFollowups": "Overdue follow-ups",
     "opsPendingApprovals": "Pending approvals",
-    "opsTodayMeetings": "Today's meetings"
+    "opsTodayMeetings": "Today's meetings",
+    "ownerCustodyPending": "Custody awaiting your approval"
   },
   "errors": {
     "noFinancePage": "Finance page is not available with your current permissions",
@@ -1757,6 +1758,7 @@
     "quotesAccountingNote": "Not recorded as an invoice until you approve as owner.",
     "sectionMeetings": "Meeting / venue requests",
     "sectionCustody": "Production custody requests",
+    "noCustodyPending": "No custody requests awaiting your approval.",
     "estimatedCost": "Estimated cost: {{amount}} {{currency}}",
     "noPendingQuotes": "No pending quotes.",
     "paymentTermsTitle": "Payment terms on approval",
