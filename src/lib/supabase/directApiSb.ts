@@ -1180,22 +1180,56 @@ export async function deleteCustodyFundSb(id: string): Promise<void> {
   if (error) throw new Error(error.message || 'فشل حذف العهدة');
 }
 
+function custodyDocJsonForStorage(doc: unknown): Record<string, unknown> {
+  const raw = doc && typeof doc === 'object' ? (doc as Record<string, unknown>) : {};
+  return JSON.parse(JSON.stringify({ ...raw, id: String(raw.id || '').trim() })) as Record<string, unknown>;
+}
+
 export async function putCustodyFundSb(id: string, doc: unknown): Promise<unknown> {
   const actor = await getSupabaseActor();
   if (!['محاسب', 'مالك', 'مدير إنتاج'].includes(actor.role)) throw new Error('غير مصرح');
-  const raw = doc && typeof doc === 'object' ? (doc as Record<string, unknown>) : {};
-  const merged: Record<string, unknown> = { ...raw, id: String(id).trim() };
+  const merged = custodyDocJsonForStorage({ ...(doc as object), id: String(id).trim() });
   if (actor.role === 'مدير إنتاج' && !custodyDocForProductionManager(merged, actor)) throw new Error('غير مصرح');
   const sb = getSupabase();
   const { data: ex } = await sb.from('custody_funds').select('id').eq('id', id).maybeSingle();
   if (!ex) {
-    const { data, error } = await sb.from('custody_funds').insert({ id, doc_json: merged }).select('doc_json').single();
-    if (error || !data) throw new Error(error?.message || 'فشل الحفظ');
-    return (data as { doc_json: unknown }).doc_json;
+    const { error } = await sb.from('custody_funds').insert({ id, doc_json: merged });
+    if (error) throw new Error(error?.message || 'فشل الحفظ');
+  } else {
+    const { error } = await sb.from('custody_funds').update({ doc_json: merged }).eq('id', id);
+    if (error) throw new Error(error?.message || 'فشل الحفظ');
   }
-  const { data, error } = await sb.from('custody_funds').update({ doc_json: merged }).eq('id', id).select('doc_json').single();
-  if (error || !data) throw new Error(error?.message || 'فشل الحفظ');
-  return (data as { doc_json: unknown }).doc_json;
+  const { data: row, error: readErr } = await sb.from('custody_funds').select('doc_json').eq('id', id).maybeSingle();
+  if (readErr || !row) throw new Error(readErr?.message || 'فشل قراءة العهدة بعد الحفظ');
+  return (row as { doc_json: unknown }).doc_json;
+}
+
+/** ترقية كل المسودات (ومرفوض الطلب) إلى بانتظار اعتماد المالك — طلب واحد من الواجهة */
+export async function promoteCustodyDraftsToOwnerSb(): Promise<number> {
+  const actor = await getSupabaseActor();
+  if (actor.role !== 'مالك' && actor.role !== 'محاسب') throw new Error('غير مصرح');
+  const sb = getSupabase();
+  const { data, error } = await sb.from('custody_funds').select('id,doc_json');
+  if (error) throw new Error(error.message);
+  if (!Array.isArray(data)) return 0;
+  let promoted = 0;
+  for (const row of data) {
+    const raw = (row as { doc_json?: unknown }).doc_json;
+    if (!raw || typeof raw !== 'object') continue;
+    const st = String((raw as Record<string, unknown>).status || '');
+    if (st !== 'مسودة' && st !== 'مرفوض_طلب') continue;
+    const merged = custodyDocJsonForStorage({
+      ...(raw as Record<string, unknown>),
+      status: 'طلب_بانتظار_المالك',
+      requestRejectReason: undefined,
+      request_reject_reason: undefined,
+    });
+    const id = String((row as { id?: string }).id || merged.id || '').trim();
+    if (!id) continue;
+    const { error: upErr } = await sb.from('custody_funds').update({ doc_json: merged }).eq('id', id);
+    if (!upErr) promoted += 1;
+  }
+  return promoted;
 }
 
 /* ---------- bookings doc tables ---------- */

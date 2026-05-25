@@ -1,6 +1,12 @@
 import { getApiBaseUrl } from '@/config/api';
 import { isSupabaseDirectMode } from '@/config/supabaseMode';
-import { fetchCustodyFundsSb, createCustodyFundSb, putCustodyFundSb, deleteCustodyFundSb } from '@/lib/supabase/directApiSb';
+import {
+  fetchCustodyFundsSb,
+  createCustodyFundSb,
+  putCustodyFundSb,
+  deleteCustodyFundSb,
+  promoteCustodyDraftsToOwnerSb,
+} from '@/lib/supabase/directApiSb';
 
 function authHeaders(): HeadersInit {
   const token = localStorage.getItem('prod_system_jwt');
@@ -52,4 +58,15 @@ export async function putCustodyFundApi(
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(typeof data.error === 'string' ? data.error : 'put custody fund');
   return data.fund as import('@/app/context/DataContext').CustodyFund;
+}
+
+export async function promoteCustodyDraftsToOwnerApi(): Promise<number> {
+  if (isSupabaseDirectMode()) return promoteCustodyDraftsToOwnerSb();
+  const r = await fetch(`${getApiBaseUrl()}/api/custody-funds/actions/promote-drafts-to-owner`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(typeof data.error === 'string' ? data.error : 'promote custody drafts');
+  return Number(data.promoted) || 0;
 }

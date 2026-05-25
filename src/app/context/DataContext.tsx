@@ -41,7 +41,13 @@ import { fetchClosedMonthsApi, postCloseMonthApi, postReopenMonthApi } from '@/l
 import { fetchMonthlyTargetsApi, patchMonthlyTargetApi } from '@/lib/api/monthlyTargetsApi';
 import { fetchCustodySettingsApi, patchCustodySettingsApi } from '@/lib/api/custodySettingsApi';
 import { fetchAuditEventsApi, postAuditEventApi } from '@/lib/api/auditEventsApi';
-import { fetchCustodyFundsApi, createCustodyFundApi, putCustodyFundApi, deleteCustodyFundApi } from '@/lib/api/custodyFundsApi';
+import {
+  fetchCustodyFundsApi,
+  createCustodyFundApi,
+  putCustodyFundApi,
+  deleteCustodyFundApi,
+  promoteCustodyDraftsToOwnerApi,
+} from '@/lib/api/custodyFundsApi';
 import {
   fetchShootBookingsApi,
   createShootBookingApi,
@@ -1383,6 +1389,8 @@ interface DataContextType {
     >
   ) => Promise<boolean>;
   submitCustodyDraftToOwner: (id: string) => Promise<boolean>;
+  /** إرسال كل مسودات العهدة للمالك دفعة واحدة */
+  submitAllCustodyDraftsToOwner: () => Promise<number>;
   ownerApproveCustodyRequest: (id: string) => Promise<boolean>;
   ownerRejectCustodyRequest: (id: string, reason?: string) => Promise<boolean>;
   /** بعد اعتماد المالك: المحاسب يسجل الدفع ويُنشأ قيد الصرف */
@@ -9471,6 +9479,33 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return ok;
   };
 
+  const submitAllCustodyDraftsToOwner = async (): Promise<number> => {
+    if (currentUser?.role !== 'مالك' && currentUser?.role !== 'محاسب') return 0;
+    if (!isServerDataMode()) {
+      const drafts = custodyFunds.filter((f) => f.status === 'مسودة' || f.status === 'مرفوض_طلب');
+      let n = 0;
+      for (const f of drafts) {
+        if (await submitCustodyDraftToOwner(f.id)) n += 1;
+      }
+      return n;
+    }
+    try {
+      const promoted = await promoteCustodyDraftsToOwnerApi();
+      const fresh = await fetchCustodyFundsApi();
+      setCustodyFunds(fresh.map(migrateCustodyFund));
+      if (promoted > 0) {
+        addAuditEvent({
+          action: 'إرسال مسودات عهدة للمالك (دفعة)',
+          entityType: 'system',
+          details: String(promoted),
+        });
+      }
+      return promoted;
+    } catch {
+      return 0;
+    }
+  };
+
   const ownerApproveCustodyRequest = async (id: string): Promise<boolean> => {
     if (currentUser?.role !== 'مالك') return false;
     const beforeFund = custodyFunds.find((f) => f.id === id);
@@ -9952,7 +9987,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       integrations, startIntegrationConnect, completeIntegrationConnect, markIntegrationError, disconnectIntegration,
       syncExternalLeads,
       custodyFunds, custodyAccountByCategory, updateCustodyAccountByCategory,
-      createCustodyRequest, createCustodyFund, updateCustodyDraft, submitCustodyDraftToOwner,
+      createCustodyRequest, createCustodyFund, updateCustodyDraft, submitCustodyDraftToOwner, submitAllCustodyDraftsToOwner,
       ownerApproveCustodyRequest, ownerRejectCustodyRequest,
       accountantRecordCustodyPayment,
       managerReceiveCustody, managerUpdateCustodySpendLines, managerUpdateApprovedExpenseSpendLines, managerSubmitCustodySettlement,

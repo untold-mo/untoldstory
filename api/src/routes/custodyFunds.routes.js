@@ -47,6 +47,38 @@ router.get('/', requireAuth(), async (req, res) => {
   }
 });
 
+router.post('/actions/promote-drafts-to-owner', requireAuth(), async (req, res) => {
+  try {
+    const actor = req.authUser;
+    if (actor.role !== 'مالك' && actor.role !== 'محاسب') {
+      return res.status(403).json({ error: 'غير مصرح' });
+    }
+    const rows = await prisma.custodyFundDoc.findMany();
+    let promoted = 0;
+    for (const row of rows) {
+      const doc = row.docJson;
+      if (!doc || typeof doc !== 'object') continue;
+      const st = String(doc.status || '');
+      if (st !== 'مسودة' && st !== 'مرفوض_طلب') continue;
+      await prisma.custodyFundDoc.update({
+        where: { id: row.id },
+        data: {
+          docJson: {
+            ...doc,
+            status: 'طلب_بانتظار_المالك',
+            requestRejectReason: undefined,
+          },
+        },
+      });
+      promoted += 1;
+    }
+    return res.json({ promoted });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
 router.post('/', requireAuth(), async (req, res) => {
   try {
     const actor = req.authUser;

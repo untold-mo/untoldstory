@@ -601,7 +601,7 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
   const { t } = useTranslation();
   const { dateLocale, dir } = useAppDirection();
   const currency = t('common.currency');
-  const { currentUser, invoices, expenses, leads, users, addInvoice, updateInvoiceStatus, recordInvoiceCollection, addExpense, updateExpenseStatus, approveExpense, rejectExpense, closedMonths, closeMonth, reopenMonth, isMonthClosed, chartOfAccounts, addChartAccount, removeChartAccount, manualJournalEntries, addManualJournalEntry, removeManualJournalEntry, journalCodingRules, setJournalCodingRules, expenseCodingRules, setExpenseCodingRules, customerCodePrefix, setCustomerCodePrefix, expenseSavedViews, setExpenseSavedViews, payrollAutoSendDay, setPayrollAutoSendDay, closedFiscalYears, closeFiscalYear, reopenFiscalYear, getOpeningBalances, getRepSnapshots, attendanceRecords, logAttendance, payrollApprovals, payrollApprovalRequests, getPayrollSalesDiscountTotal, financialReopenRequests, approvePayroll, reopenPayroll, isPayrollApproved, requestPayrollApproval, ownerApprovePayrollRequest, ownerRejectPayrollRequest, requestMonthReopen, ownerApproveMonthReopenRequest, ownerRejectMonthReopenRequest, printBrandingSettings, addEmployee, updateEmployeeSalary, accountingPolicy, updateAccountingPolicy, priceQuotes, custodyFunds, custodyAccountByCategory, updateCustodyAccountByCategory, createCustodyFund, updateCustodyDraft, submitCustodyDraftToOwner, ownerApproveCustodyRequest, ownerRejectCustodyRequest, accountantRecordCustodyPayment, accountantApproveCustodySettlement, accountantRejectCustodySettlement } = useData();
+  const { currentUser, invoices, expenses, leads, users, addInvoice, updateInvoiceStatus, recordInvoiceCollection, addExpense, updateExpenseStatus, approveExpense, rejectExpense, closedMonths, closeMonth, reopenMonth, isMonthClosed, chartOfAccounts, addChartAccount, removeChartAccount, manualJournalEntries, addManualJournalEntry, removeManualJournalEntry, journalCodingRules, setJournalCodingRules, expenseCodingRules, setExpenseCodingRules, customerCodePrefix, setCustomerCodePrefix, expenseSavedViews, setExpenseSavedViews, payrollAutoSendDay, setPayrollAutoSendDay, closedFiscalYears, closeFiscalYear, reopenFiscalYear, getOpeningBalances, getRepSnapshots, attendanceRecords, logAttendance, payrollApprovals, payrollApprovalRequests, getPayrollSalesDiscountTotal, financialReopenRequests, approvePayroll, reopenPayroll, isPayrollApproved, requestPayrollApproval, ownerApprovePayrollRequest, ownerRejectPayrollRequest, requestMonthReopen, ownerApproveMonthReopenRequest, ownerRejectMonthReopenRequest, printBrandingSettings, addEmployee, updateEmployeeSalary, accountingPolicy, updateAccountingPolicy, priceQuotes, custodyFunds, custodyAccountByCategory, updateCustodyAccountByCategory, createCustodyFund, updateCustodyDraft, submitCustodyDraftToOwner, submitAllCustodyDraftsToOwner, ownerApproveCustodyRequest, ownerRejectCustodyRequest, accountantRecordCustodyPayment, accountantApproveCustodySettlement, accountantRejectCustodySettlement } = useData();
   const [activeFinanceTab, setActiveFinanceTab] = useState<'invoices' | 'expenses' | 'ledger' | 'reports' | 'coa' | 'journals' | 'reps' | 'codebook' | 'custody'>('invoices');
   const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
   const [isCreateExpenseOpen, setIsCreateExpenseOpen] = useState(false);
@@ -1689,13 +1689,7 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
               type="button"
               onClick={() => {
                 void (async () => {
-                  const drafts = custodyFunds.filter(
-                    (f) => f.status === 'مسودة' || f.status === 'مرفوض_طلب',
-                  );
-                  let n = 0;
-                  for (const f of drafts) {
-                    if (await submitCustodyDraftToOwner(f.id)) n += 1;
-                  }
+                  const n = await submitAllCustodyDraftsToOwner();
                   if (n > 0) toast.success(t('approvals.toastCustodyPulled', { count: n }));
                   else toast.error(t('approvals.toastCustodyPullFailed'));
                 })();
@@ -3305,13 +3299,7 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
                         type="button"
                         onClick={() => {
                           void (async () => {
-                            const drafts = custodyFunds.filter(
-                              (f) => f.status === 'مسودة' || f.status === 'مرفوض_طلب',
-                            );
-                            let n = 0;
-                            for (const f of drafts) {
-                              if (await submitCustodyDraftToOwner(f.id)) n += 1;
-                            }
+                            const n = await submitAllCustodyDraftsToOwner();
                             if (n > 0) toast.success(t('finance.toastCustodyBatchSent', { count: n }));
                             else toast.error(t('finance.toastCustodySubmitFailed'));
                           })();
@@ -9161,6 +9149,7 @@ const ApprovalCenter = ({
   onApproveCustodyRequest,
   onRejectCustodyRequest,
   onSubmitCustodyDraftToOwner,
+  onSubmitAllCustodyDraftsToOwner,
   onRefreshWorkspace,
   onGoToTab,
   entityComments,
@@ -9618,15 +9607,16 @@ const ApprovalCenter = ({
                   <li className="text-zinc-500">{t('approvals.custodyDraftsMore', { count: custodyDraftsNotSent.length - 8 })}</li>
                 )}
               </ul>
-              {onSubmitCustodyDraftToOwner && (
+              {(onSubmitAllCustodyDraftsToOwner || onSubmitCustodyDraftToOwner) && (
                 <button
                   type="button"
                   onClick={() => {
                     void (async () => {
-                      let n = 0;
-                      for (const c of custodyDraftsNotSent) {
-                        if (await onSubmitCustodyDraftToOwner(c.id)) n += 1;
-                      }
+                      const n = onSubmitAllCustodyDraftsToOwner
+                        ? await onSubmitAllCustodyDraftsToOwner()
+                        : (await Promise.all(
+                            custodyDraftsNotSent.map((c: { id: string }) => onSubmitCustodyDraftToOwner(c.id)),
+                          )).filter(Boolean).length;
                       if (n > 0) toast.success(t('approvals.toastCustodyPulled', { count: n }));
                       else toast.error(t('approvals.toastCustodyPullFailed'));
                     })();
@@ -11611,6 +11601,7 @@ const Root = () => {
     ownerApproveCustodyRequest,
     ownerRejectCustodyRequest,
     submitCustodyDraftToOwner,
+    submitAllCustodyDraftsToOwner,
     slaEscalationSettings,
     leadIngestionSettings,
     entityComments,
@@ -11907,16 +11898,13 @@ const Root = () => {
     if (!drafts.length) return;
     legacyCustodyReconcileDoneRef.current = true;
     void (async () => {
-      let n = 0;
-      for (const f of drafts) {
-        if (await submitCustodyDraftToOwner(f.id)) n += 1;
-      }
+      const n = await submitAllCustodyDraftsToOwner();
       if (n > 0) {
         toast.success(t('approvals.toastLegacyCustodyPulled', { count: n }));
         await refreshServerWorkspace();
       }
     })();
-  }, [activeTab, currentUser?.role, custodyFunds, submitCustodyDraftToOwner, refreshServerWorkspace, t]);
+  }, [activeTab, currentUser?.role, custodyFunds, submitAllCustodyDraftsToOwner, refreshServerWorkspace, t]);
 
   useEffect(() => {
     const onNavIntent = () => {
@@ -12953,6 +12941,7 @@ const Root = () => {
                 })();
               }}
               onSubmitCustodyDraftToOwner={submitCustodyDraftToOwner}
+              onSubmitAllCustodyDraftsToOwner={submitAllCustodyDraftsToOwner}
               onRefreshWorkspace={refreshServerWorkspace}
               onGoToTab={handleTabChange}
               entityComments={entityComments}
