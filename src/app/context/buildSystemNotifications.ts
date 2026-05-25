@@ -103,6 +103,7 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       return ts < now.getTime() && l.status !== 'مغلق - فوز' && l.status !== 'مغلق - خسارة';
     });
     if (overdueFollowUps.length > 0) {
+      const overdueFollowUpIds = overdueFollowUps.map((l) => l.id).filter(Boolean);
       out.push({
         id: `n-overdue-followups-${overdueFollowUps.length}`,
         level: 'high',
@@ -113,6 +114,7 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
         entityType: 'lead',
         queue: 'ops',
         navigateTab: 'leads',
+        leadIds: overdueFollowUpIds,
       });
       const overdueByRep = users
         .filter((u) => u.role === 'مندوب')
@@ -122,6 +124,10 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
         }))
         .filter((row) => row.count > 0);
       overdueByRep.forEach(({ rep, count }) => {
+        const repLeadIds = overdueFollowUps
+          .filter((lead) => lead.assignedTo === rep.id)
+          .map((l) => l.id)
+          .filter(Boolean);
         out.push({
           id: `n-overdue-followups-rep-${rep.id}-${count}`,
           level: 'high',
@@ -133,6 +139,7 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
           entityType: 'lead',
           queue: 'ops',
           navigateTab: 'leads',
+          leadIds: repLeadIds,
         });
       });
       users
@@ -150,6 +157,7 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
             targetUserId: mgr.id,
             entityType: 'lead',
             navigateTab: 'leads',
+            leadIds: overdueFollowUpIds,
           });
         });
     }
@@ -172,6 +180,7 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
         targetRoles: ['مالك', 'مدير مبيعات'],
         entityType: 'lead',
         navigateTab: 'leads',
+        leadIds: staleLeads.map((l) => l.id).filter(Boolean),
       });
     }
     const autoReassignCandidates = leads.filter((l) => {
@@ -191,6 +200,7 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
         targetRoles: ['مالك', 'مدير مبيعات'],
         entityType: 'lead',
         navigateTab: 'leads',
+        leadIds: autoReassignCandidates.map((l) => l.id).filter(Boolean),
       });
     }
 
@@ -265,6 +275,7 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
         targetUserId: assigneeId,
         entityType: 'lead',
         navigateTab: 'leads',
+        leadIds: list.map((l) => l.id).filter(Boolean),
       });
     });
 

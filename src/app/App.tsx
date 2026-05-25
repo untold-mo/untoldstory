@@ -93,6 +93,7 @@ import { useAppDirection } from './hooks/useAppDirection';
 import { getNavLabel } from '@/lib/navLabels';
 import { getLeadStatusLabel, getInvoiceStatusLabel, getExpenseStatusLabel, getApprovalStatusLabel, getSlaStatusLabel, getBookingStatusLabel, getExpenseCategoryLabel, getPaymentMethodLabel, getRoleLabel, getCoaAccountTypeLabel, getBookingFinancialStatusLabel, getCustodyStatusLabel } from '@/lib/i18nLabels';
 import { useTranslation } from 'react-i18next';
+import { buildLeadsNavIntent, getSlaAtRiskLeads } from '@/lib/notificationLeadNav';
 
 // --- Shared Components ---
 const SYSTEM_NAME = 'The Untold Story System';
@@ -4031,6 +4032,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
   const [sourceFilter, setSourceFilter] = useState<LeadSourceFilter>('all');
   const [assignedFilter, setAssignedFilter] = useState<'all' | 'mine' | 'unassigned'>('all');
   const [overdueOnly, setOverdueOnly] = useState(false);
+  const [focusLeadIds, setFocusLeadIds] = useState<string[]>([]);
   const [repUserFilterId, setRepUserFilterId] = useState('');
   const [isAddLeadOpen, setIsAddLeadOpen] = useState(false);
   const [quoteLead, setQuoteLead] = useState<Lead | null>(null);
@@ -4115,6 +4117,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
           leadsOverdueOnly?: boolean;
           leadsRepUserId?: string;
           leadsClient360Id?: string;
+          leadsFocusIds?: string[];
         };
         if (intent.tab !== 'leads') return;
         if (intent.leadsAssignedFilter) setAssignedFilter(intent.leadsAssignedFilter);
@@ -4122,8 +4125,13 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
         if (intent.leadsSourceFilter) setSourceFilter(intent.leadsSourceFilter);
         setOverdueOnly(Boolean(intent.leadsOverdueOnly));
         setRepUserFilterId(intent.leadsRepUserId || '');
-        if (intent.leadsClient360Id) {
-          const target = leads.find((l) => l.id === intent.leadsClient360Id);
+        const focusIds = Array.isArray(intent.leadsFocusIds)
+          ? intent.leadsFocusIds.map((id) => String(id).trim()).filter(Boolean)
+          : [];
+        setFocusLeadIds(focusIds);
+        const openId = intent.leadsClient360Id || (focusIds.length === 1 ? focusIds[0] : '');
+        if (openId) {
+          const target = leads.find((l) => l.id === openId);
           if (target) openClient360(target);
         }
         localStorage.removeItem(NAV_INTENT_KEY);
@@ -4190,7 +4198,10 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
       result = result.filter((l) => l.assignedTo === repUserFilterId);
     }
 
-    if (overdueOnly) {
+    if (focusLeadIds.length > 0) {
+      const focusSet = new Set(focusLeadIds);
+      result = result.filter((l) => focusSet.has(l.id));
+    } else if (overdueOnly) {
       result = result.filter((l) =>
         l.slaStatus !== 'مستقر' &&
         l.status !== 'مغلق - فوز' &&
@@ -4213,7 +4224,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
     }
 
     return result;
-  }, [leads, invoices, priceQuotes, currentUser, assignedFilter, statusFilter, sourceFilter, overdueOnly, repUserFilterId, search]);
+  }, [leads, invoices, priceQuotes, currentUser, assignedFilter, statusFilter, sourceFilter, overdueOnly, focusLeadIds, repUserFilterId, search]);
 
   const leadsPageCount = Math.max(1, Math.ceil(visibleLeads.length / leadsPageSize));
   const paginatedLeads = useMemo(() => {
@@ -4368,7 +4379,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
   useEffect(() => {
     setLeadsPage(1);
     setSelectedLeadIds(new Set());
-  }, [search, statusFilter, sourceFilter, assignedFilter, overdueOnly, repUserFilterId, entityMode, currentUser?.id, leadsPageSize]);
+  }, [search, statusFilter, sourceFilter, assignedFilter, overdueOnly, focusLeadIds, repUserFilterId, entityMode, currentUser?.id, leadsPageSize]);
 
   useEffect(() => {
     if (leadsPage > leadsPageCount) setLeadsPage(leadsPageCount);
@@ -4899,10 +4910,35 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
           </select>)}
         </div>
 
-        {entityMode === 'leads' && overdueOnly && (
+        {entityMode === 'leads' && focusLeadIds.length > 0 && (
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-violet-400/30 bg-violet-500/10 px-4 py-2">
+            <span className="text-xs text-violet-100 font-bold">
+              {t('leads.notificationFocusActive', { count: visibleLeads.length })}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setFocusLeadIds([]);
+                setOverdueOnly(false);
+                setRepUserFilterId('');
+              }}
+              className="px-3 py-1.5 rounded-lg text-xs font-black bg-violet-500 text-white"
+            >
+              {t('common.showAll')}
+            </button>
+          </div>
+        )}
+        {entityMode === 'leads' && overdueOnly && focusLeadIds.length === 0 && (
           <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-2">
             <span className="text-xs text-rose-200 font-bold">{t('leads.overdueFilterActive')}</span>
-            <button onClick={() => { setOverdueOnly(false); setRepUserFilterId(''); }} className="px-3 py-1.5 rounded-lg text-xs font-black bg-rose-500 text-white">
+            <button
+              type="button"
+              onClick={() => {
+                setOverdueOnly(false);
+                setRepUserFilterId('');
+              }}
+              className="px-3 py-1.5 rounded-lg text-xs font-black bg-rose-500 text-white"
+            >
               {t('common.showAll')}
             </button>
           </div>
@@ -11575,6 +11611,7 @@ const Root = () => {
     ownerApproveCustodyRequest,
     ownerRejectCustodyRequest,
     submitCustodyDraftToOwner,
+    slaEscalationSettings,
     leadIngestionSettings,
     entityComments,
     setEntityComments,
@@ -11709,11 +11746,15 @@ const Root = () => {
   };
   const handleTodayFocusClick = (key: 'overdue-followups' | 'pending-approvals' | 'today-meetings') => {
     if (key === 'overdue-followups') {
-      const intent: { tab: 'leads'; leadsAssignedFilter?: 'all' | 'mine' | 'unassigned'; leadsStatusFilter?: 'الكل' | LeadStatus; leadsOverdueOnly?: boolean; leadsRepUserId?: string; leadsClient360Id?: string } = {
-        tab: 'leads',
+      const atRisk = getSlaAtRiskLeads(safeLeads);
+      const intent = {
+        tab: 'leads' as const,
         leadsOverdueOnly: true,
+        leadsFocusIds: atRisk.map((l) => l.id).filter(Boolean),
+        ...(atRisk.length === 1 ? { leadsClient360Id: atRisk[0].id } : {}),
       };
       localStorage.setItem(NAV_INTENT_KEY, JSON.stringify(intent));
+      window.dispatchEvent(new Event('prod-system-nav-intent'));
       openFirstAllowedTab(['leads'], 'لا توجد صفحة متاحة لعرض المتابعات المتأخرة في صلاحياتك الحالية');
       return;
     }
@@ -11876,36 +11917,24 @@ const Root = () => {
     if (n.entityType === 'invoice' || /فاتور|قسط|أقساط|تحصيل|ذمم/i.test(text)) return 'invoices' as const;
     return 'invoices' as const;
   };
-  const handleNotificationClick = (n: Pick<SystemNotification, 'navigateTab' | 'entityType' | 'title' | 'message'>) => {
+  const handleNotificationClick = (
+    n: Pick<
+      SystemNotification,
+      'navigateTab' | 'entityType' | 'title' | 'message' | 'entityId' | 'leadIds' | 'targetUserId'
+    >,
+  ) => {
     const tab = resolveNotificationTab(n);
     if (!tab) {
       toast.info('لا يوجد تبويب متاح لهذا التنبيه ضمن صلاحياتك');
       return;
     }
     if (tab === 'leads') {
-      const text = `${n.title || ''} ${n.message || ''}`;
-      const intent: {
-        tab: 'leads';
-        leadsAssignedFilter?: 'all' | 'mine' | 'unassigned';
-        leadsStatusFilter?: 'الكل' | LeadStatus;
-        leadsSourceFilter?: LeadSourceFilter;
-        leadsOverdueOnly?: boolean;
-        leadsRepUserId?: string;
-        leadsClient360Id?: string;
-      } = { tab: 'leads' };
-      if (/غير\s*مسند|غير\s*موزع|تنتظر\s*توزيع|بدون\s*تعيين|القنوات\s*المربوطة|وارد/i.test(text)) {
-        intent.leadsAssignedFilter = 'unassigned';
-        intent.leadsStatusFilter = 'جديد';
-      }
-      if (/facebook|فيسبوك/i.test(text)) intent.leadsSourceFilter = 'facebook';
-      else if (/instagram|إنستجرام|انستجرام/i.test(text)) intent.leadsSourceFilter = 'instagram';
-      else if (/linkedin|لينكد/i.test(text)) intent.leadsSourceFilter = 'linkedin';
-      else if (/gmail|email|بريد|إيميل/i.test(text)) intent.leadsSourceFilter = 'email';
-      else if (/google|جوجل|sheet/i.test(text)) intent.leadsSourceFilter = 'google';
-      if (/متأخر|متأخرة|تصعيد|بدون\s*متابعة|overdue/i.test(text)) {
-        intent.leadsOverdueOnly = true;
+      const intent = buildLeadsNavIntent(n, safeLeads, slaEscalationSettings);
+      if (currentRole === 'مندوب') {
+        intent.leadsAssignedFilter = 'mine';
       }
       localStorage.setItem(NAV_INTENT_KEY, JSON.stringify(intent));
+      window.dispatchEvent(new Event('prod-system-nav-intent'));
     }
     if (tab === 'accountant') {
       const financeTab = resolveFinanceSubTab(n);

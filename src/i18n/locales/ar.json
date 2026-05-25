@@ -311,6 +311,7 @@
     "filterMine": "الخاص بي",
     "filterUnassigned": "غير موزع",
     "overdueFilterActive": "فلتر المتأخر مفعل الآن",
+    "notificationFocusActive": "عرض {{count}} ليدز من التنبيه — اضغط على صف لفتح التفاصيل",
     "repFilterActive": "فلتر المندوب مفعل: {{name}}",
     "clearRepFilter": "إلغاء فلتر المندوب",
     "uploadExcelCsv": "رفع Excel / CSV",

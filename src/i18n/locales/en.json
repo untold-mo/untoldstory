@@ -311,6 +311,7 @@
     "filterMine": "Mine",
     "filterUnassigned": "Unassigned",
     "overdueFilterActive": "Overdue filter is active",
+    "notificationFocusActive": "Showing {{count}} lead(s) from this alert — click a row for details",
     "repFilterActive": "Rep filter active: {{name}}",
     "clearRepFilter": "Clear rep filter",
     "uploadExcelCsv": "Upload Excel / CSV",
