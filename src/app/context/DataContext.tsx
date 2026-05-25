@@ -4952,7 +4952,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const bulkAddLeads = async (
-    leadsData: Omit<Lead, 'id' | 'createdAt' | 'updatedAt' | 'score' | 'slaStatus' | 'timeline'>[]
+    leadsData: (Omit<Lead, 'id' | 'createdAt' | 'updatedAt' | 'score' | 'slaStatus' | 'timeline'> & {
+      createdAt?: string;
+    })[]
   ): Promise<{ created: number; failed: number }> => {
     if (!(currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات')) {
       return { created: 0, failed: leadsData.length };
@@ -5023,12 +5025,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     const newLeads = acceptedInput.map(ld => {
       const id = Math.random().toString(36).substr(2, 9);
+      const when = ld.createdAt || new Date().toISOString();
       const lead: Lead = {
         ...ld,
         id,
         customerCode: ld.customerCode || buildCustomerCodeFromSeed(id),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: when,
+        updatedAt: when,
         score: getLeadScore(ld),
         slaStatus: 'مستقر',
         timeline: [{
@@ -5037,7 +5040,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           action: 'رفع ملف ليدز (Bulk)',
           userId: currentUser?.id || 'sys',
           userName: currentUser?.name || 'النظام',
-          createdAt: new Date().toISOString()
+          createdAt: when,
         }]
       };
       

@@ -265,6 +265,8 @@ export type ImportCsvLeadInput = {
   category?: string;
   score?: number;
   linkedinRowIndex?: number;
+  /** تاريخ الإضافة من عمود Date في Excel (ISO) */
+  leadDate?: string;
 };
 
 /** استيراد دفعة ليدز من CSV إلى Supabase/الخادم مع تجنب التكرار (بريد/جوال). */

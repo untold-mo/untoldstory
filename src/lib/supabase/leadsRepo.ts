@@ -204,6 +204,7 @@ export async function supabaseImportLeadsCsv(payload: {
     category?: string;
     score?: number;
     linkedinRowIndex?: number;
+    leadDate?: string;
   }>;
   routeToManagerId?: string | null;
 }): Promise<{
@@ -247,7 +248,11 @@ export async function supabaseImportLeadsCsv(payload: {
     }
 
     const id = `lead_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-    const now = new Date().toISOString();
+    const leadDateRaw = row.leadDate ? new Date(String(row.leadDate)) : null;
+    const now =
+      leadDateRaw && !Number.isNaN(leadDateRaw.getTime())
+        ? leadDateRaw.toISOString()
+        : new Date().toISOString();
     const timeline = [
       {
         id: `ev-csv-${id}`,

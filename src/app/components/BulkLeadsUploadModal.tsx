@@ -151,7 +151,14 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
       if (parsed.rows.length === 0) {
         toast.error(parsed.errors[0] || t('bulkUpload.noValidRows'));
       } else {
-        toast.success(t('bulkUpload.readOk', { count: parsed.rows.length }));
+        toast.success(
+          parsed.sheetsParsed && parsed.sheetsParsed > 1
+            ? t('bulkUpload.readOkSheets', {
+                count: parsed.rows.length,
+                sheets: parsed.sheetsParsed,
+              })
+            : t('bulkUpload.readOk', { count: parsed.rows.length }),
+        );
       }
     } catch {
       toast.error(t('bulkUpload.readFail'));
@@ -211,6 +218,7 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
             companySize: r.companySize,
             category: r.category,
             linkedinRowIndex: r.fileRowIndex,
+            ...(r.leadDate ? { leadDate: r.leadDate } : {}),
           }));
           const res = await importLeadsCsvApi({ source: 'excel', leads: chunk });
           totalCreated += res.created;

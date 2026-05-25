@@ -15,6 +15,8 @@ export type SpreadsheetLeadsParseResult = {
   rows: SpreadsheetLeadRow[];
   skipped: number;
   errors: string[];
+  /** عدد الشيتات التي وُجد فيها بيانات */
+  sheetsParsed?: number;
 };
 
 const LEAD_CATEGORIES: LeadCategory[] = [
@@ -25,12 +27,13 @@ const LEAD_CATEGORIES: LeadCategory[] = [
   'سوشيال ميديا',
 ];
 
-/** أعمدة تُستورد فقط — باقي أعمدة الشيت (مصدر، تاريخ، Lead From…) تُتجاهل */
+/** أعمدة تُستورد — باقي الأعمدة (Channel، Lead Status…) تُتجاهل */
 const IMPORT_COLUMN_KEYS = new Set([
   'name',
   'phone',
   'email',
   'company',
+  'date',
   'interest',
   'budget',
   'category',
@@ -39,6 +42,8 @@ const IMPORT_COLUMN_KEYS = new Set([
   'last_name',
   'job_title',
 ]);
+
+const EXCEL_EPOCH_MS = Date.UTC(1899, 11, 30);
 
 function normalizeAsciiHeader(h: string): string {
   return String(h || '')
@@ -73,6 +78,9 @@ export function mapSpreadsheetHeaderKey(raw: string): string {
   }
   if (/^(البريد|الإيميل|ايميل|إيميل|بريد)$/.test(t) || /^(email|email_address|work_email|business_email|emailaddress)$/.test(ascii)) {
     return 'email';
+  }
+  if (/^(التاريخ|تاريخ|تاريخ الإضافة)$/.test(t) || /^(date|lead_date|created_date|created_at)$/.test(ascii)) {
+    return 'date';
   }
   if (/^(الميزانية|ميزانية|المبلغ|مبلغ)$/.test(t) || /^(budget|amount|deal_value|value)$/.test(ascii)) {
     return 'budget';
@@ -113,6 +121,54 @@ export function mapSpreadsheetHeaderKey(raw: string): string {
   return '_skip';
 }
 
+/** يحوّل تاريخ Excel أو نص (2026/03/30) إلى ISO — أو null */
+export function parseSpreadsheetDate(raw: string | number): string | null {
+  if (raw == null || raw === '') return null;
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    if (raw > 30000 && raw < 80000) {
+      const d = new Date(EXCEL_EPOCH_MS + raw * 86400000);
+      if (!Number.isNaN(d.getTime())) return d.toISOString();
+    }
+    return null;
+  }
+  const s = String(raw).trim();
+  if (!s) return null;
+  const slash = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (slash) {
+    const d = new Date(
+      Date.UTC(Number(slash[1]), Number(slash[2]) - 1, Number(slash[3]), 12, 0, 0),
+    );
+    if (!Number.isNaN(d.getTime())) return d.toISOString();
+  }
+  const dmy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (dmy) {
+    const d = new Date(
+      Date.UTC(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]), 12, 0, 0),
+    );
+    if (!Number.isNaN(d.getTime())) return d.toISOString();
+  }
+  const parsed = Date.parse(s);
+  if (!Number.isNaN(parsed)) return new Date(parsed).toISOString();
+  return null;
+}
+
+function isLikelyPhoneNumber(n: number): boolean {
+  return (n >= 1e8 && n < 1e12) || (n >= 1e9 && n < 2e11);
+}
+
+function formatPhoneFromNumber(n: number): string {
+  const rounded = Math.round(n);
+  return normalizeSpreadsheetPhone(rounded);
+}
+
+function excelSerialToYmd(serial: number): string {
+  const d = new Date(EXCEL_EPOCH_MS + serial * 86400000);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}/${m}/${day}`;
+}
+
 /** يحافظ على صفر بداية أرقام الجوال بعد قراءة Excel كرقم */
 export function normalizeSpreadsheetPhone(raw: string | number): string {
   let s = String(raw ?? '')
@@ -151,6 +207,9 @@ function looksLikeHeaderRow(row: string[]): boolean {
     'رقم',
     'الاهتمام',
     'الموديل',
+    'date',
+    'التاريخ',
+    'تاريخ',
   ];
   let hits = 0;
   for (const c of cells) {
@@ -276,28 +335,56 @@ function parseCompanySize(raw: string): 'صغير' | 'متوسط' | 'كبير' {
   return 'متوسط';
 }
 
-function matrixFromWorkbook(buffer: ArrayBuffer): string[][] {
-  const wb = XLSX.read(buffer, { type: 'array', cellDates: false });
-  const sheetName = wb.SheetNames[0];
-  if (!sheetName) return [];
-  const sheet = wb.Sheets[sheetName];
-  const raw = XLSX.utils.sheet_to_json<(string | number | boolean | null)[]>(sheet, {
-    header: 1,
-    defval: '',
-    raw: false,
-  });
-  return raw.map((row) =>
-    (Array.isArray(row) ? row : []).map((cell) => formatWorkbookCell(cell)),
-  );
+function sheetToMatrix(sheet: XLSX.WorkSheet): string[][] {
+  const ref = sheet['!ref'];
+  if (!ref) return [];
+  const range = XLSX.utils.decode_range(ref);
+  const matrix: string[][] = [];
+  for (let R = range.s.r; R <= range.e.r; R++) {
+    const row: string[] = [];
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const addr = XLSX.utils.encode_cell({ r: R, c: C });
+      row.push(formatSheetCell(sheet[addr]));
+    }
+    matrix.push(row);
+  }
+  return matrix;
+}
+
+function formatSheetCell(cell: XLSX.CellObject | undefined): string {
+  if (!cell) return '';
+  const v = cell.v;
+  if (v != null && typeof v === 'number') {
+    if (isLikelyPhoneNumber(v)) return formatPhoneFromNumber(v);
+    if (v > 30000 && v < 80000 && cell.t !== 's') return excelSerialToYmd(v);
+  }
+  if (cell.w != null && String(cell.w).trim()) {
+    const w = String(cell.w).trim();
+    if (/^\d+\.?\d*E\+\d+$/i.test(w)) {
+      const n = Number(w);
+      if (Number.isFinite(n) && isLikelyPhoneNumber(n)) return formatPhoneFromNumber(n);
+    }
+    return w;
+  }
+  return formatWorkbookCell(v);
 }
 
 function formatWorkbookCell(cell: unknown): string {
   if (cell == null || cell === '') return '';
   if (typeof cell === 'number') {
-    if (cell >= 1e8 && cell < 2e11) return normalizeSpreadsheetPhone(cell);
+    if (isLikelyPhoneNumber(cell)) return formatPhoneFromNumber(cell);
+    if (cell > 30000 && cell < 80000) return excelSerialToYmd(cell);
     return String(cell).trim();
   }
   return String(cell).trim();
+}
+
+function workbookToMatrices(buffer: ArrayBuffer): { sheetName: string; matrix: string[][] }[] {
+  const wb = XLSX.read(buffer, { type: 'array', cellDates: false });
+  return wb.SheetNames.map((sheetName) => ({
+    sheetName,
+    matrix: sheetToMatrix(wb.Sheets[sheetName]),
+  })).filter((s) => s.matrix.length > 0);
 }
 
 export function parseSpreadsheetObjects(objects: Record<string, string>[]): SpreadsheetLeadsParseResult {
@@ -340,6 +427,8 @@ export function parseSpreadsheetObjects(objects: Record<string, string>[]): Spre
       email = `excel-row-${rowNum}@lead.local`;
     }
 
+    const leadDate = parseSpreadsheetDate(pick(raw, ['date'])) ?? undefined;
+
     rows.push({
       name: name.slice(0, 200),
       company: company.slice(0, 200),
@@ -351,6 +440,7 @@ export function parseSpreadsheetObjects(objects: Record<string, string>[]): Spre
       companySize: parseCompanySize(pick(raw, ['company_size'])),
       category,
       fileRowIndex: rowNum,
+      ...(leadDate ? { leadDate } : {}),
     });
   });
 
@@ -372,8 +462,17 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetLeads
 
   if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
     const buffer = await file.arrayBuffer();
-    const matrix = matrixFromWorkbook(buffer);
-    return parseSpreadsheetObjects(matrixToRowObjects(matrix));
+    const sheets = workbookToMatrices(buffer);
+    const allObjects: Record<string, string>[] = [];
+    for (const { sheetName, matrix } of sheets) {
+      const objs = matrixToRowObjects(matrix);
+      for (const o of objs) {
+        const rowLabel = o._fileRow ? `${sheetName} — صف ${o._fileRow}` : sheetName;
+        allObjects.push({ ...o, _fileRow: rowLabel });
+      }
+    }
+    const result = parseSpreadsheetObjects(allObjects);
+    return { ...result, sheetsParsed: sheets.length };
   }
 
   return {
@@ -399,5 +498,6 @@ export function spreadsheetRowsToBulkLeads(
     companySize: r.companySize,
     source: 'رفع ملف',
     category: r.category,
+    ...(r.leadDate ? { createdAt: r.leadDate } : {}),
   }));
 }

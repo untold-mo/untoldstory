@@ -8,6 +8,13 @@ function normEmail(e) {
   return String(e || '').trim().toLowerCase();
 }
 
+function parseLeadDateIso(raw) {
+  if (!raw) return null;
+  const d = new Date(String(raw));
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
 /**
  * @param {object} opts
  * @param {import('@prisma/client').PrismaClient} opts.prisma
@@ -59,7 +66,8 @@ export async function importLeadsCsvBatch(opts) {
       continue;
     }
 
-    const nowIso = new Date().toISOString();
+    const leadDateIso = parseLeadDateIso(row.leadDate);
+    const nowIso = leadDateIso || new Date().toISOString();
     const timeline = [];
 
     if (routeToManagerId) {
@@ -100,6 +108,7 @@ export async function importLeadsCsvBatch(opts) {
           slaStatus: 'مستقر',
           assignedToId: routeToManagerId || null,
           timelineJson: [],
+          ...(leadDateIso ? { createdAt: new Date(leadDateIso), updatedAt: new Date(leadDateIso) } : {}),
         },
       });
 
