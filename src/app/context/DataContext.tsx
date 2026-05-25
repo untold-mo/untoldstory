@@ -771,6 +771,13 @@ function migrateCustodyFund(raw: any): CustodyFund {
     'مرسلة_للمالك_تسليم': 'طلب_بانتظار_المالك',
     'مرفوض_تسليم': 'مرفوض_طلب',
     'مرسلة_للمالك_تسوية': 'تسوية_بانتظار_محاسب',
+    draft: 'مسودة',
+    pending_owner: 'طلب_بانتظار_المالك',
+    pending_owner_approval: 'طلب_بانتظار_المالك',
+    rejected_request: 'مرفوض_طلب',
+    pending_payment: 'بانتظار_دفع_محاسب',
+    active: 'نشطة',
+    closed: 'مقفلة',
   };
   const st = r.status;
   let status = (statusMap[String(st || '')] || st || 'مسودة') as CustodyFundStatus;
@@ -9281,7 +9288,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     exchangeRate?: number;
     sendToOwner?: boolean;
   }): Promise<boolean> => {
-    if (currentUser?.role !== 'محاسب') return false;
+    if (currentUser?.role !== 'محاسب' && currentUser?.role !== 'مالك') return false;
     const pm = users.find(u => u.id === data.productionManagerId);
     if (!pm || pm.role !== 'مدير إنتاج') return false;
     const amt = Math.max(0, Number(data.totalAmount) || 0);
@@ -9292,7 +9299,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const exchangeRate =
       currency === 'USD' ? Math.max(0, Number(data.exchangeRate) || 0) : undefined;
     if (currency === 'USD' && (!exchangeRate || exchangeRate <= 0)) return false;
-    const sendToOwner = data.sendToOwner !== false;
+    const sendToOwner = currentUser.role === 'مالك' ? true : data.sendToOwner !== false;
     const row: CustodyFund = {
       id: `CF-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
       title,
@@ -9414,7 +9421,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const submitCustodyDraftToOwner = async (id: string): Promise<boolean> => {
-    if (currentUser?.role !== 'محاسب') return false;
+    if (currentUser?.role !== 'محاسب' && currentUser?.role !== 'مالك') return false;
     const beforeFund = custodyFunds.find((f) => f.id === id);
     let ok = false;
     let synced: CustodyFund | undefined;

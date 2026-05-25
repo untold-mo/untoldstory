@@ -1165,6 +1165,8 @@ export async function createCustodyFundSb(doc: unknown): Promise<unknown> {
     if (String(merged.createdById) !== actor.id) throw new Error('غير مصرح');
   } else if (actor.role === 'محاسب') {
     /* مسودة محاسب */
+  } else if (actor.role === 'مالك') {
+    merged.status = 'طلب_بانتظار_المالك';
   } else throw new Error('غير مصرح');
   const sb = getSupabase();
   const { data, error } = await sb.from('custody_funds').insert({ id, doc_json: merged }).select('doc_json').single();

@@ -60,6 +60,8 @@ router.post('/', requireAuth(), async (req, res) => {
       }
     } else if (actor.role === 'محاسب') {
       /* مسودة محاسب */
+    } else if (actor.role === 'مالك') {
+      doc.status = 'طلب_بانتظار_المالك';
     } else {
       return res.status(403).json({ error: 'غير مصرح' });
     }

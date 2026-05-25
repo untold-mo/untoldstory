@@ -1681,9 +1681,28 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
       <div className="animate-in fade-in duration-500 space-y-6">
         <SectionTitle title={t('screens.ownerApprovals.title')} subtitle={t('screens.ownerApprovals.subtitle')} icon={ShieldCheck} />
         {custodyDraftsNotSentToOwner > 0 && (
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-sm text-amber-100">
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-sm text-amber-100 space-y-2">
             <p className="font-black">{t('ownerApprovalsPanel.custodyDraftsHint', { count: custodyDraftsNotSentToOwner })}</p>
-            <p className="text-xs text-amber-200/80 mt-2">{t('ownerApprovalsPanel.custodyDraftsExplain')}</p>
+            <p className="text-xs text-amber-200/80">{t('ownerApprovalsPanel.custodyDraftsExplain')}</p>
+            <button
+              type="button"
+              onClick={() => {
+                void (async () => {
+                  const drafts = custodyFunds.filter(
+                    (f) => f.status === 'مسودة' || f.status === 'مرفوض_طلب',
+                  );
+                  let n = 0;
+                  for (const f of drafts) {
+                    if (await submitCustodyDraftToOwner(f.id)) n += 1;
+                  }
+                  if (n > 0) toast.success(t('approvals.toastCustodyPulled', { count: n }));
+                  else toast.error(t('approvals.toastCustodyPullFailed'));
+                })();
+              }}
+              className="px-3 py-1.5 rounded-lg text-xs font-black bg-amber-500 text-slate-950"
+            >
+              {t('approvals.custodyOwnerPullDrafts', { count: custodyDraftsNotSentToOwner })}
+            </button>
           </div>
         )}
         {pendingCustodyForOwner.length > 0 && (
@@ -9105,6 +9124,8 @@ const ApprovalCenter = ({
   onReturnPriceQuoteToProduction,
   onApproveCustodyRequest,
   onRejectCustodyRequest,
+  onSubmitCustodyDraftToOwner,
+  onRefreshWorkspace,
   onGoToTab,
   entityComments,
   setEntityComments,
@@ -9132,10 +9153,29 @@ const ApprovalCenter = ({
   const pendingMeetings = meetingBookings.filter((b: any) => b.status === 'قيد المراجعة');
   const pendingQuotes = (priceQuotes as PriceQuote[]).filter((q) => q.status === 'قيد اعتماد المالك');
   const pendingCustodyRequest = (custodyFunds as CustodyFund[]).filter((c) => c.status === 'طلب_بانتظار_المالك');
+  const custodyDraftsNotSent = (custodyFunds as CustodyFund[]).filter(
+    (c) => c.status === 'مسودة' || c.status === 'مرفوض_طلب',
+  );
   const ownerOnly = currentUserRole === 'مالك';
   return (
     <div className="animate-in fade-in duration-500 space-y-6">
       <SectionTitle title={t('screens.approvalsHub.title')} subtitle={t('screens.approvalsHub.subtitle')} icon={ShieldCheck} />
+      {ownerOnly && onRefreshWorkspace && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void onRefreshWorkspace()}
+            className="px-3 py-1.5 rounded-xl text-xs font-black bg-white/10 border border-white/10 hover:border-[#7C6BFF]/40"
+          >
+            {t('approvals.custodyRefresh')}
+          </button>
+          {custodyFunds.length > 0 && (
+            <span className="text-xs text-zinc-500">
+              {t('approvals.custodyTotalInSystem', { count: custodyFunds.length })}
+            </span>
+          )}
+        </div>
+      )}
       <p className="text-sm text-zinc-300 bg-white/[0.04] border border-white/10 rounded-2xl px-4 py-3 flex flex-wrap gap-x-4 gap-y-1">
         <span>{t('approvals.summaryExpenses')}: <b className="text-amber-300">{pendingExpenses.length}</b></span>
         <span className="text-zinc-600 hidden sm:inline">|</span>
@@ -9525,6 +9565,48 @@ const ApprovalCenter = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div className="bg-white/[0.04] border border-white/10 rounded-3xl p-5 space-y-2 md:col-span-2">
           <h4 className="font-black">{t('approvals.sectionCustody')}</h4>
+          {ownerOnly && custodyDraftsNotSent.length > 0 && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 space-y-2">
+              <p className="text-xs text-amber-100 font-bold">
+                {t('approvals.custodyDraftsNotSent', { count: custodyDraftsNotSent.length })}
+              </p>
+              <p className="text-[11px] text-amber-200/80">{t('approvals.custodyDraftsExplain')}</p>
+              <ul className="text-[11px] text-zinc-400 space-y-1 max-h-28 overflow-y-auto custom-scrollbar">
+                {custodyDraftsNotSent.slice(0, 8).map((c) => (
+                  <li key={c.id}>
+                    • {c.title} — {c.totalAmount.toLocaleString(dateLocale)}{' '}
+                    {c.currency === 'USD' ? 'USD' : currency}
+                  </li>
+                ))}
+                {custodyDraftsNotSent.length > 8 && (
+                  <li className="text-zinc-500">{t('approvals.custodyDraftsMore', { count: custodyDraftsNotSent.length - 8 })}</li>
+                )}
+              </ul>
+              {onSubmitCustodyDraftToOwner && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void (async () => {
+                      let n = 0;
+                      for (const c of custodyDraftsNotSent) {
+                        if (await onSubmitCustodyDraftToOwner(c.id)) n += 1;
+                      }
+                      if (n > 0) toast.success(t('approvals.toastCustodyPulled', { count: n }));
+                      else toast.error(t('approvals.toastCustodyPullFailed'));
+                    })();
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-black bg-amber-500 text-slate-950"
+                >
+                  {t('approvals.custodyOwnerPullDrafts', { count: custodyDraftsNotSent.length })}
+                </button>
+              )}
+            </div>
+          )}
+          {ownerOnly && custodyFunds.length === 0 && (
+            <p className="text-xs text-zinc-500 bg-[#0F1528]/50 border border-white/5 rounded-xl p-3">
+              {t('approvals.custodyNoneInDatabase')}
+            </p>
+          )}
           {pendingCustodyRequest.map((c: CustodyFund) => (
             <div key={c.id} className="bg-[#0F1528]/70 border border-white/10 rounded-xl p-3">
               <p className="font-bold">{c.title}</p>
@@ -11492,6 +11574,7 @@ const Root = () => {
     custodyFunds,
     ownerApproveCustodyRequest,
     ownerRejectCustodyRequest,
+    submitCustodyDraftToOwner,
     leadIngestionSettings,
     entityComments,
     setEntityComments,
@@ -11512,6 +11595,8 @@ const Root = () => {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notificationsPanelSyncing, setNotificationsPanelSyncing] = useState(false);
   const notificationsBackgroundSyncAt = useRef(0);
+  /** مرة واحدة لكل جلسة: إظهار عهود قديمة كانت محفوظة كمسودة */
+  const legacyCustodyReconcileDoneRef = useRef(false);
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState('');
   const restoreInputRef = useRef<HTMLInputElement | null>(null);
@@ -11559,6 +11644,7 @@ const Root = () => {
   useEffect(() => {
     setActiveTab('home');
     setTabHistory([]);
+    legacyCustodyReconcileDoneRef.current = false;
   }, [currentUser?.id]);
 
   useEffect(() => {
@@ -11729,6 +11815,34 @@ const Root = () => {
       window.removeEventListener('focus', sync);
     };
   }, [currentUser?.id, currentUser?.authSource, refreshServerWorkspace]);
+
+  useEffect(() => {
+    if (activeTab !== 'approvals') return;
+    if (currentUser?.role !== 'مالك') return;
+    if (!isServerDataMode()) return;
+    void refreshServerWorkspace();
+  }, [activeTab, currentUser?.role, refreshServerWorkspace]);
+
+  /** عهود قديمة: كانت تُحفظ «مسودة» ولا تظهر في مركز الاعتمادات — نقلها تلقائياً لقائمة الاعتماد */
+  useEffect(() => {
+    if (activeTab !== 'approvals') return;
+    if (currentUser?.role !== 'مالك') return;
+    if (!isServerDataMode()) return;
+    if (legacyCustodyReconcileDoneRef.current) return;
+    const drafts = custodyFunds.filter((f) => f.status === 'مسودة');
+    if (!drafts.length) return;
+    legacyCustodyReconcileDoneRef.current = true;
+    void (async () => {
+      let n = 0;
+      for (const f of drafts) {
+        if (await submitCustodyDraftToOwner(f.id)) n += 1;
+      }
+      if (n > 0) {
+        toast.success(t('approvals.toastLegacyCustodyPulled', { count: n }));
+        await refreshServerWorkspace();
+      }
+    })();
+  }, [activeTab, currentUser?.role, custodyFunds, submitCustodyDraftToOwner, refreshServerWorkspace, t]);
 
   useEffect(() => {
     const onNavIntent = () => {
@@ -12760,6 +12874,8 @@ const Root = () => {
                 else toast.info('تم رفض طلب العهدة');
                 })();
               }}
+              onSubmitCustodyDraftToOwner={submitCustodyDraftToOwner}
+              onRefreshWorkspace={refreshServerWorkspace}
               onGoToTab={handleTabChange}
               entityComments={entityComments}
               setEntityComments={setEntityComments}
