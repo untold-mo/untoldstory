@@ -5,6 +5,7 @@ build/
 .DS_Store
 .env
 .env.local
+.env.deploy
 .env.*.local
 !.env*.example
 backend/.integration-tokens.json

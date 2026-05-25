@@ -101,3 +101,27 @@ jobs:
           ftp.quit()
           print("Done!")
           PYEOF
+
+      - name: Verify live site bundle (optional)
+        env:
+          VITE_PUBLIC_APP_URL: ${{ secrets.VITE_PUBLIC_APP_URL }}
+        run: |
+          set -e
+          BUNDLE=$(grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' dist/index.html | head -1 || true)
+          echo "Built bundle: ${BUNDLE:-unknown}"
+          if [ -z "$VITE_PUBLIC_APP_URL" ]; then
+            echo "Skip live check: VITE_PUBLIC_APP_URL secret not set."
+            exit 0
+          fi
+          ORIGIN="${VITE_PUBLIC_APP_URL%/}"
+          HTML=$(curl -fsSL --max-time 45 "$ORIGIN/" || curl -fsSL --max-time 45 "$ORIGIN/index.html" || true)
+          if [ -z "$HTML" ]; then
+            echo "::warning::Could not fetch $ORIGIN — check DNS/SSL or set VITE_PUBLIC_APP_URL."
+            exit 0
+          fi
+          if [ -n "$BUNDLE" ] && echo "$HTML" | grep -q "$BUNDLE"; then
+            echo "Live site serves the new bundle ($BUNDLE)."
+          else
+            LIVE=$(echo "$HTML" | grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' | head -1 || true)
+            echo "::warning::Live bundle (${LIVE:-none}) does not match build ($BUNDLE). Clear CDN/cache or retry deploy."
+          fi

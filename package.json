@@ -7,6 +7,7 @@
     "typecheck": "tsc --noEmit",
     "build": "vite build",
     "pack:hostinger": "node scripts/pack-hostinger.mjs",
+    "deploy:hostinger": "node scripts/deploy-hostinger-ftp.mjs",
     "dev": "vite",
     "dev:auto": "concurrently -k -n ui,api -c cyan,magenta \"npm run dev\" \"npm run api:dev\"",
     "mirror:landing": "node scripts/mirror-site.mjs",
