@@ -657,6 +657,8 @@ export type CustodyFundStatus =
   | 'مرفوض_تسوية'
   | 'مقفلة';
 
+export type CustodyCurrency = 'EGP' | 'USD';
+
 /** مرفقات بند العهدة (تُحفظ في التخزين المحلي؛ حافظ على ملفات صغيرة لتجاوز حد المتصفّح). */
 export interface CustodySpendAttachment {
   id: string;
@@ -681,6 +683,10 @@ export interface CustodyFund {
   title: string;
   description: string;
   totalAmount: number;
+  /** عملة العهدة — القيود المحاسبية تُسجَّل بالجنيه المصري */
+  currency?: CustodyCurrency;
+  /** سعر صرف USD→EGP عند currency=USD (يحدده المحاسب قبل الصرف) */
+  exchangeRate?: number;
   status: CustodyFundStatus;
   createdAt: string;
   createdById: string;
@@ -704,6 +710,39 @@ export interface CustodyFund {
   /** @deprecated استخدم journalEntrySettlementId */
   journalEntryId?: string;
   requestRejectReason?: string;
+}
+
+export function custodyFundAmountInEgp(
+  fund: Pick<CustodyFund, 'totalAmount' | 'currency' | 'exchangeRate'>,
+): number {
+  const amt = Math.max(0, Number(fund.totalAmount) || 0);
+  if (fund.currency === 'USD') {
+    const rate = Math.max(0, Number(fund.exchangeRate) || 0);
+    if (rate <= 0) return 0;
+    return Math.round(amt * rate * 100) / 100;
+  }
+  return amt;
+}
+
+export function custodyLineAmountInEgp(
+  amount: number,
+  fund: Pick<CustodyFund, 'currency' | 'exchangeRate'>,
+): number {
+  const a = Math.max(0, Number(amount) || 0);
+  if (fund.currency === 'USD') {
+    const rate = Math.max(0, Number(fund.exchangeRate) || 0);
+    if (rate <= 0) return 0;
+    return Math.round(a * rate * 100) / 100;
+  }
+  return a;
+}
+
+export function accountantCanEditCustodyFundFull(fund: CustodyFund): boolean {
+  return ['مسودة', 'مرفوض_طلب', 'طلب_بانتظار_المالك', 'بانتظار_دفع_محاسب'].includes(fund.status);
+}
+
+export function accountantCanEditCustodyFundLimited(fund: CustodyFund): boolean {
+  return ['جاهزة_للاستلام', 'نشطة', 'تسوية_بانتظار_محاسب'].includes(fund.status);
 }
 
 function migrateCustodySpendLine(raw: any): CustodySpendLine {
@@ -750,11 +789,20 @@ function migrateCustodyFund(raw: any): CustodyFund {
     productionManagerId = createdById;
   }
   const spendRaw = r.spendLines ?? r.spend_lines;
+  const rawCurrency = String(r.currency ?? r.currency_code ?? 'EGP').trim().toUpperCase();
+  const currency: CustodyCurrency = rawCurrency === 'USD' ? 'USD' : 'EGP';
+  const exchangeRateRaw = r.exchangeRate ?? r.exchange_rate;
+  const exchangeRate =
+    exchangeRateRaw != null && String(exchangeRateRaw).trim() !== ''
+      ? Math.max(0, Number(exchangeRateRaw) || 0)
+      : undefined;
   return {
     id: String(r.id || `CF-${Math.random().toString(36).slice(2, 10)}`),
     title: String(r.title || ''),
     description: String(r.description || ''),
     totalAmount: Math.max(0, Number(r.totalAmount ?? r.total_amount) || 0),
+    currency,
+    exchangeRate: currency === 'USD' && exchangeRate && exchangeRate > 0 ? exchangeRate : undefined,
     status,
     createdAt: String((r.createdAt ?? r.created_at) || new Date().toISOString()),
     createdById,
@@ -769,6 +817,7 @@ function migrateCustodyFund(raw: any): CustodyFund {
     paymentAt: (r.paymentAt ?? r.payment_at) as string | undefined,
     receivedMethod: (r.receivedMethod ?? r.received_method) as CustodyFund['receivedMethod'],
     receivedAt: (r.receivedAt ?? r.received_at) as string | undefined,
+    approvedAt: (r.approvedAt ?? r.approved_at) as string | undefined,
     receivedNote: (r.receivedNote ?? r.received_note) as string | undefined,
     spendLines: Array.isArray(spendRaw) ? spendRaw.map(migrateCustodySpendLine) : [],
     settlementSubmittedAt: (r.settlementSubmittedAt ?? r.settlement_submitted_at) as string | undefined,
@@ -1288,10 +1337,17 @@ interface DataContextType {
     description: string;
     totalAmount: number;
     productionManagerId: string;
+    currency?: CustodyCurrency;
+    exchangeRate?: number;
   }) => Promise<boolean>;
   updateCustodyDraft: (
     id: string,
-    patch: Partial<Pick<CustodyFund, 'title' | 'description' | 'totalAmount' | 'productionManagerId' | 'productionManagerName'>>
+    patch: Partial<
+      Pick<
+        CustodyFund,
+        'title' | 'description' | 'totalAmount' | 'productionManagerId' | 'productionManagerName' | 'currency' | 'exchangeRate'
+      >
+    >
   ) => Promise<boolean>;
   submitCustodyDraftToOwner: (id: string) => Promise<boolean>;
   ownerApproveCustodyRequest: (id: string) => Promise<boolean>;
@@ -9069,6 +9125,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     description: string;
     totalAmount: number;
     productionManagerId: string;
+    currency?: CustodyCurrency;
+    exchangeRate?: number;
   }): Promise<boolean> => {
     if (currentUser?.role !== 'محاسب') return false;
     const pm = users.find(u => u.id === data.productionManagerId);
@@ -9077,11 +9135,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (amt <= 0) return false;
     const title = data.title.trim();
     if (!title) return false;
+    const currency: CustodyCurrency = data.currency === 'USD' ? 'USD' : 'EGP';
+    const exchangeRate =
+      currency === 'USD' ? Math.max(0, Number(data.exchangeRate) || 0) : undefined;
+    if (currency === 'USD' && (!exchangeRate || exchangeRate <= 0)) return false;
     const row: CustodyFund = {
       id: `CF-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
       title,
       description: (data.description || '').trim(),
       totalAmount: amt,
+      currency,
+      exchangeRate: currency === 'USD' ? exchangeRate : undefined,
       status: 'مسودة',
       createdAt: new Date().toISOString(),
       createdById: currentUser.id,
@@ -9111,30 +9175,59 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateCustodyDraft = async (
     id: string,
-    patch: Partial<Pick<CustodyFund, 'title' | 'description' | 'totalAmount' | 'productionManagerId' | 'productionManagerName'>>
+    patch: Partial<
+      Pick<
+        CustodyFund,
+        'title' | 'description' | 'totalAmount' | 'productionManagerId' | 'productionManagerName' | 'currency' | 'exchangeRate'
+      >
+    >
   ): Promise<boolean> => {
     if (currentUser?.role !== 'محاسب') return false;
     const beforeFund = custodyFunds.find((f) => f.id === id);
+    if (!beforeFund) return false;
+    const fullEdit = accountantCanEditCustodyFundFull(beforeFund);
+    const limitedEdit = accountantCanEditCustodyFundLimited(beforeFund);
+    if (!fullEdit && !limitedEdit) return false;
     let ok = false;
     let synced: CustodyFund | undefined;
     setCustodyFunds((prev) =>
       prev.map((f) => {
         if (f.id !== id) return f;
-        if (f.status !== 'مسودة' && f.status !== 'مرفوض_طلب') return f;
-        const nextPmId = patch.productionManagerId ?? f.productionManagerId;
-        const pm = users.find((u) => u.id === nextPmId);
-        if (!pm || pm.role !== 'مدير إنتاج') return f;
+        if (!accountantCanEditCustodyFundFull(f) && !accountantCanEditCustodyFundLimited(f)) return f;
+        const isFull = accountantCanEditCustodyFundFull(f);
+        const nextCurrency: CustodyCurrency =
+          isFull && patch.currency != null ? (patch.currency === 'USD' ? 'USD' : 'EGP') : f.currency || 'EGP';
+        const nextExchangeRate =
+          nextCurrency === 'USD'
+            ? Math.max(
+                0,
+                Number(
+                  isFull && patch.exchangeRate != null ? patch.exchangeRate : patch.exchangeRate ?? f.exchangeRate,
+                ) || 0,
+              )
+            : undefined;
+        if (nextCurrency === 'USD' && (!nextExchangeRate || nextExchangeRate <= 0)) return f;
+        let nextPmId = f.productionManagerId;
+        let nextPmName = f.productionManagerName;
+        if (isFull && patch.productionManagerId != null) {
+          const pm = users.find((u) => u.id === patch.productionManagerId);
+          if (!pm || pm.role !== 'مدير إنتاج') return f;
+          nextPmId = pm.id;
+          nextPmName = pm.name;
+        }
+        const totalAmount =
+          isFull && patch.totalAmount != null ? Math.max(0, Number(patch.totalAmount) || 0) : f.totalAmount;
+        if (isFull && patch.totalAmount != null && totalAmount <= 0) return f;
         ok = true;
-        const totalAmount = patch.totalAmount != null ? Math.max(0, Number(patch.totalAmount) || 0) : f.totalAmount;
-        if (patch.totalAmount != null && totalAmount <= 0) return f;
         synced = {
           ...f,
-          ...patch,
-          title: patch.title != null ? patch.title.trim() || f.title : f.title,
+          title: isFull && patch.title != null ? patch.title.trim() || f.title : f.title,
           description: patch.description != null ? patch.description.trim() : f.description,
-          totalAmount: patch.totalAmount != null ? totalAmount : f.totalAmount,
-          productionManagerId: pm.id,
-          productionManagerName: pm.name,
+          totalAmount: isFull && patch.totalAmount != null ? totalAmount : f.totalAmount,
+          productionManagerId: isFull && patch.productionManagerId != null ? nextPmId : f.productionManagerId,
+          productionManagerName: isFull && patch.productionManagerId != null ? nextPmName : f.productionManagerName,
+          currency: isFull && patch.currency != null ? nextCurrency : f.currency || 'EGP',
+          exchangeRate: nextCurrency === 'USD' ? nextExchangeRate : undefined,
         };
         return synced;
       })
@@ -9196,7 +9289,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (f.id !== id) return f;
         if (f.status !== 'طلب_بانتظار_المالك') return f;
         ok = true;
-        synced = { ...f, status: 'بانتظار_دفع_محاسب' as CustodyFundStatus };
+        synced = { ...f, status: 'بانتظار_دفع_محاسب' as CustodyFundStatus, approvedAt: new Date().toISOString() };
         return synced;
       })
     );
@@ -9244,12 +9337,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!asset) return false;
     const fund = custodyFunds.find((f) => f.id === id);
     if (!fund || fund.status !== 'بانتظار_دفع_محاسب') return false;
-    const T = fund.totalAmount;
+    if (fund.currency === 'USD' && (!fund.exchangeRate || fund.exchangeRate <= 0)) return false;
+    const T = custodyFundAmountInEgp(fund);
     if (T <= 0) return false;
     const dateStr = new Date().toISOString().slice(0, 10);
+    const currencyNote =
+      fund.currency === 'USD'
+        ? ` (${fund.totalAmount} USD × ${fund.exchangeRate} = ${T} EGP)`
+        : '';
     const j = await applySystemJournalEntry({
       date: dateStr,
-      description: `صرف عهدة إنتاج — ${fund.title}`,
+      description: `صرف عهدة إنتاج — ${fund.title}${currencyNote}`,
       lines: [
         { accountCode: asset, debit: T, credit: 0, costCenter: 'عام', note: 'أمانة عهدة لمدير الإنتاج' },
         { accountCode: method === 'تحويل' ? '1020' : '1010', debit: 0, credit: T, costCenter: 'عام', note: method === 'تحويل' ? 'صرف عبر بنك' : 'صرف نقدي من الصندوق' },
@@ -9431,8 +9529,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const fund = custodyFunds.find(f => f.id === id);
     if (!fund || fund.status !== 'تسوية_بانتظار_محاسب') return false;
     if (!fund.journalEntryPaymentId) return false;
-    const T = fund.totalAmount;
-    const S = fund.spendLines.reduce((s, l) => s + (Number(l.amount) || 0), 0);
+    if (fund.currency === 'USD' && (!fund.exchangeRate || fund.exchangeRate <= 0)) return false;
+    const T = custodyFundAmountInEgp(fund);
+    const S = fund.spendLines.reduce((s, l) => s + custodyLineAmountInEgp(Number(l.amount) || 0, fund), 0);
     const diff = Math.round(Math.abs(S - T) * 100) / 100;
     const overspent = S > T + 0.001;   // أنفق أكثر من العهدة
     const underspent = T > S + 0.001;  // أنفق أقل من العهدة
@@ -9441,7 +9540,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // بنود الصرف الفعلية — مدين مصروفات
     fund.spendLines.forEach((line) => {
-      const a = Math.max(0, Number(line.amount) || 0);
+      const a = custodyLineAmountInEgp(Number(line.amount) || 0, fund);
       if (a <= 0.001) return;
       lines.push({
         accountCode: resolveCustodyAccountCode(line.category),

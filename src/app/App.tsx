@@ -31,12 +31,17 @@ import {
   CustodyFund,
   CustodySpendLine,
   CustodySpendAttachment,
+  CustodyCurrency,
   SystemNotification,
   DeleteLeadResult,
   canonicalTodoUserId,
   PersonalTodo,
   BookingSpendLine,
   custodyFundBelongsToProductionManager,
+  custodyFundAmountInEgp,
+  custodyLineAmountInEgp,
+  accountantCanEditCustodyFundFull,
+  accountantCanEditCustodyFundLimited,
 } from './context/DataContext';
 import {
   ROLE_TAB_ACCESS,
@@ -593,7 +598,7 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
   const { t } = useTranslation();
   const { dateLocale, dir } = useAppDirection();
   const currency = t('common.currency');
-  const { currentUser, invoices, expenses, leads, users, addInvoice, updateInvoiceStatus, recordInvoiceCollection, addExpense, updateExpenseStatus, approveExpense, rejectExpense, closedMonths, closeMonth, reopenMonth, isMonthClosed, chartOfAccounts, addChartAccount, removeChartAccount, manualJournalEntries, addManualJournalEntry, removeManualJournalEntry, journalCodingRules, setJournalCodingRules, expenseCodingRules, setExpenseCodingRules, customerCodePrefix, setCustomerCodePrefix, expenseSavedViews, setExpenseSavedViews, payrollAutoSendDay, setPayrollAutoSendDay, closedFiscalYears, closeFiscalYear, reopenFiscalYear, getOpeningBalances, getRepSnapshots, attendanceRecords, logAttendance, payrollApprovals, payrollApprovalRequests, financialReopenRequests, approvePayroll, reopenPayroll, isPayrollApproved, requestPayrollApproval, ownerApprovePayrollRequest, ownerRejectPayrollRequest, requestMonthReopen, ownerApproveMonthReopenRequest, ownerRejectMonthReopenRequest, printBrandingSettings, addEmployee, updateEmployeeSalary, accountingPolicy, updateAccountingPolicy, priceQuotes, custodyFunds, custodyAccountByCategory, updateCustodyAccountByCategory, createCustodyFund, submitCustodyDraftToOwner, ownerApproveCustodyRequest, ownerRejectCustodyRequest, accountantRecordCustodyPayment, accountantApproveCustodySettlement, accountantRejectCustodySettlement } = useData();
+  const { currentUser, invoices, expenses, leads, users, addInvoice, updateInvoiceStatus, recordInvoiceCollection, addExpense, updateExpenseStatus, approveExpense, rejectExpense, closedMonths, closeMonth, reopenMonth, isMonthClosed, chartOfAccounts, addChartAccount, removeChartAccount, manualJournalEntries, addManualJournalEntry, removeManualJournalEntry, journalCodingRules, setJournalCodingRules, expenseCodingRules, setExpenseCodingRules, customerCodePrefix, setCustomerCodePrefix, expenseSavedViews, setExpenseSavedViews, payrollAutoSendDay, setPayrollAutoSendDay, closedFiscalYears, closeFiscalYear, reopenFiscalYear, getOpeningBalances, getRepSnapshots, attendanceRecords, logAttendance, payrollApprovals, payrollApprovalRequests, financialReopenRequests, approvePayroll, reopenPayroll, isPayrollApproved, requestPayrollApproval, ownerApprovePayrollRequest, ownerRejectPayrollRequest, requestMonthReopen, ownerApproveMonthReopenRequest, ownerRejectMonthReopenRequest, printBrandingSettings, addEmployee, updateEmployeeSalary, accountingPolicy, updateAccountingPolicy, priceQuotes, custodyFunds, custodyAccountByCategory, updateCustodyAccountByCategory, createCustodyFund, updateCustodyDraft, submitCustodyDraftToOwner, ownerApproveCustodyRequest, ownerRejectCustodyRequest, accountantRecordCustodyPayment, accountantApproveCustodySettlement, accountantRejectCustodySettlement } = useData();
   const [activeFinanceTab, setActiveFinanceTab] = useState<'invoices' | 'expenses' | 'ledger' | 'reports' | 'coa' | 'journals' | 'reps' | 'codebook' | 'custody'>('invoices');
   const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
   const [isCreateExpenseOpen, setIsCreateExpenseOpen] = useState(false);
@@ -645,7 +650,25 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
   const [expensePaymentPickId, setExpensePaymentPickId] = useState<string | null>(null);
   const [newExpenseViewName, setNewExpenseViewName] = useState('');
   const [newJournalCoding, setNewJournalCoding] = useState({ title: '', accountCode: '', costCenter: 'عام' });
-  const [custodyForm, setCustodyForm] = useState({ title: '', description: '', totalAmount: '', productionManagerId: '' });
+  const [custodyForm, setCustodyForm] = useState({
+    title: '',
+    description: '',
+    totalAmount: '',
+    productionManagerId: '',
+    currency: 'EGP' as CustodyCurrency,
+    exchangeRate: '',
+  });
+  type CustodyStageFilter = 'all' | 'draft' | 'owner' | 'pay' | 'active' | 'settlement' | 'closed';
+  const [custodyStageFilter, setCustodyStageFilter] = useState<CustodyStageFilter>('all');
+  const [custodyEditId, setCustodyEditId] = useState<string | null>(null);
+  const [custodyEditForm, setCustodyEditForm] = useState({
+    title: '',
+    description: '',
+    totalAmount: '',
+    productionManagerId: '',
+    currency: 'EGP' as CustodyCurrency,
+    exchangeRate: '',
+  });
   const [reopenMonthReason, setReopenMonthReason] = useState('');
   const canApproveExpenses = currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات';
   const canCloseMonths = currentUser?.role === 'مالك';
@@ -672,11 +695,18 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
       try {
         const raw = localStorage.getItem(FINANCE_INTENT_KEY);
         if (!raw) return;
-        const intent = JSON.parse(raw) as { tab?: string; financeTab?: typeof activeFinanceTab; invoiceQuickFilter?: InvoiceQuickFilter; expenseQuickFilter?: ExpenseQuickFilter };
+        const intent = JSON.parse(raw) as {
+          tab?: string;
+          financeTab?: typeof activeFinanceTab;
+          invoiceQuickFilter?: InvoiceQuickFilter;
+          expenseQuickFilter?: ExpenseQuickFilter;
+          custodyStageFilter?: CustodyStageFilter;
+        };
         if (intent.tab !== 'accountant') return;
         if (intent.financeTab) setActiveFinanceTab(intent.financeTab);
         if (intent.invoiceQuickFilter) setInvoiceQuickFilter(intent.invoiceQuickFilter);
         if (intent.expenseQuickFilter) setExpenseQuickFilter(intent.expenseQuickFilter);
+        if (intent.custodyStageFilter) setCustodyStageFilter(intent.custodyStageFilter);
         localStorage.removeItem(FINANCE_INTENT_KEY);
         if (intent.financeTab === 'reps') {
           setTimeout(() => repsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
@@ -810,6 +840,46 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
     () => pendingCustodyForOwner.filter((c) => users.find((u) => u.id === c.createdById)?.role === 'مدير إنتاج'),
     [pendingCustodyForOwner, users]
   );
+  const accCustodyStats = useMemo(() => ({
+    draft: custodyFunds.filter((f) => f.status === 'مسودة' || f.status === 'مرفوض_طلب').length,
+    owner: custodyFunds.filter((f) => f.status === 'طلب_بانتظار_المالك').length,
+    pay: custodyFunds.filter((f) => f.status === 'بانتظار_دفع_محاسب').length,
+    active: custodyFunds.filter((f) => f.status === 'جاهزة_للاستلام' || f.status === 'نشطة').length,
+    settlement: custodyFunds.filter((f) => f.status === 'تسوية_بانتظار_محاسب').length,
+    closed: custodyFunds.filter((f) => f.status === 'مقفلة').length,
+  }), [custodyFunds]);
+  const filteredAccountantCustodyFunds = useMemo(() => {
+    const list = [...custodyFunds].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+    if (custodyStageFilter === 'all') return list;
+    if (custodyStageFilter === 'draft') return list.filter((f) => f.status === 'مسودة' || f.status === 'مرفوض_طلب');
+    if (custodyStageFilter === 'owner') return list.filter((f) => f.status === 'طلب_بانتظار_المالك');
+    if (custodyStageFilter === 'pay') return list.filter((f) => f.status === 'بانتظار_دفع_محاسب');
+    if (custodyStageFilter === 'active') return list.filter((f) => f.status === 'جاهزة_للاستلام' || f.status === 'نشطة');
+    if (custodyStageFilter === 'settlement') return list.filter((f) => f.status === 'تسوية_بانتظار_محاسب');
+    return list.filter((f) => f.status === 'مقفلة');
+  }, [custodyFunds, custodyStageFilter]);
+  const formatCustodyAmountLabel = (cf: CustodyFund) => {
+    const cur = cf.currency === 'USD' ? 'USD' : currency;
+    const main = `${cf.totalAmount.toLocaleString(dateLocale)} ${cur}`;
+    if (cf.currency === 'USD' && cf.exchangeRate) {
+      const egp = custodyFundAmountInEgp(cf);
+      return `${main} (${t('finance.custodyEgpEquivalent', { amount: egp.toLocaleString(dateLocale), currency, rate: cf.exchangeRate })})`;
+    }
+    return main;
+  };
+  const openCustodyEdit = (cf: CustodyFund) => {
+    setCustodyEditId(cf.id);
+    setCustodyEditForm({
+      title: cf.title,
+      description: cf.description || '',
+      totalAmount: String(cf.totalAmount),
+      productionManagerId: cf.productionManagerId,
+      currency: cf.currency === 'USD' ? 'USD' : 'EGP',
+      exchangeRate: cf.exchangeRate != null ? String(cf.exchangeRate) : '',
+    });
+  };
   const pendingExpensesForOwner = useMemo(
     () => expenses.filter((e) => e.approvalStatus === 'قيد الاعتماد'),
     [expenses]
@@ -2974,14 +3044,41 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
                       value={custodyForm.title}
                       onChange={(e) => setCustodyForm((p) => ({ ...p, title: e.target.value }))}
                     />
-                    <input
-                      type="number"
-                      min={0}
-                      className="bg-[#0B1020] border border-white/10 rounded-xl px-3 py-2 text-sm"
-                      placeholder={t('finance.custodyAmountPh')}
-                      value={custodyForm.totalAmount}
-                      onChange={(e) => setCustodyForm((p) => ({ ...p, totalAmount: e.target.value }))}
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        className="flex-1 bg-[#0B1020] border border-white/10 rounded-xl px-3 py-2 text-sm"
+                        placeholder={t('finance.custodyAmountPh')}
+                        value={custodyForm.totalAmount}
+                        onChange={(e) => setCustodyForm((p) => ({ ...p, totalAmount: e.target.value }))}
+                      />
+                      <select
+                        className="bg-[#0B1020] border border-white/10 rounded-xl px-2 py-2 text-sm min-w-[88px]"
+                        value={custodyForm.currency}
+                        onChange={(e) =>
+                          setCustodyForm((p) => ({
+                            ...p,
+                            currency: e.target.value === 'USD' ? 'USD' : 'EGP',
+                            exchangeRate: e.target.value === 'USD' ? p.exchangeRate : '',
+                          }))
+                        }
+                      >
+                        <option value="EGP">{t('finance.custodyCurrencyEgp')}</option>
+                        <option value="USD">{t('finance.custodyCurrencyUsd')}</option>
+                      </select>
+                    </div>
+                    {custodyForm.currency === 'USD' && (
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        className="bg-[#0B1020] border border-white/10 rounded-xl px-3 py-2 text-sm md:col-span-2"
+                        placeholder={t('finance.custodyExchangeRatePh')}
+                        value={custodyForm.exchangeRate}
+                        onChange={(e) => setCustodyForm((p) => ({ ...p, exchangeRate: e.target.value }))}
+                      />
+                    )}
                     <select
                       className="bg-[#0B1020] border border-white/10 rounded-xl px-3 py-2 text-sm md:col-span-2"
                       value={custodyForm.productionManagerId}
@@ -3003,16 +3100,26 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
                     type="button"
                     onClick={() => {
                       void (async () => {
-                      const ok = await createCustodyFund({
-                        title: custodyForm.title,
-                        description: custodyForm.description,
-                        totalAmount: Number(custodyForm.totalAmount) || 0,
-                        productionManagerId: custodyForm.productionManagerId,
-                      });
-                      if (ok) {
-                        toast.success(t('finance.toastCustodyDraftCreated'));
-                        setCustodyForm({ title: '', description: '', totalAmount: '', productionManagerId: '' });
-                      } else toast.error(t('finance.toastCustodyDraftFailed'));
+                        const ok = await createCustodyFund({
+                          title: custodyForm.title,
+                          description: custodyForm.description,
+                          totalAmount: Number(custodyForm.totalAmount) || 0,
+                          productionManagerId: custodyForm.productionManagerId,
+                          currency: custodyForm.currency,
+                          exchangeRate:
+                            custodyForm.currency === 'USD' ? Number(custodyForm.exchangeRate) || 0 : undefined,
+                        });
+                        if (ok) {
+                          toast.success(t('finance.toastCustodyDraftCreated'));
+                          setCustodyForm({
+                            title: '',
+                            description: '',
+                            totalAmount: '',
+                            productionManagerId: '',
+                            currency: 'EGP',
+                            exchangeRate: '',
+                          });
+                        } else toast.error(t('finance.toastCustodyDraftFailed'));
                       })();
                     }}
                     className="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 text-sm font-black"
@@ -3021,91 +3128,251 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
                   </button>
                 </div>
                 <div className="space-y-3">
-                  <h5 className="font-black text-lg">{t('finance.custodyLogTitle')}</h5>
-                  {custodyFunds.length === 0 && <p className="text-sm text-zinc-500">{t('finance.noCustodyYet')}</p>}
-                  {custodyFunds.map((cf) => (
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h5 className="font-black text-lg">{t('finance.custodyLogTitle')}</h5>
+                    <p className="text-xs text-zinc-500">{t('finance.custodyLogHint')}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(
+                      [
+                        ['all', t('finance.custodyFilterAll'), custodyFunds.length],
+                        ['draft', t('finance.custodyFilterDraft'), accCustodyStats.draft],
+                        ['owner', t('finance.custodyFilterOwner'), accCustodyStats.owner],
+                        ['pay', t('finance.custodyFilterPay'), accCustodyStats.pay],
+                        ['active', t('finance.custodyFilterActive'), accCustodyStats.active],
+                        ['settlement', t('finance.custodyFilterSettlement'), accCustodyStats.settlement],
+                        ['closed', t('finance.custodyFilterClosed'), accCustodyStats.closed],
+                      ] as const
+                    ).map(([key, label, count]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setCustodyStageFilter(key)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-black border transition-all ${
+                          custodyStageFilter === key
+                            ? 'bg-[#7C6BFF] text-white border-[#7C6BFF]/40'
+                            : 'bg-[#0F1528] text-zinc-300 border-white/10 hover:border-[#7C6BFF]/30'
+                        }`}
+                      >
+                        {label} ({count})
+                      </button>
+                    ))}
+                  </div>
+                  {filteredAccountantCustodyFunds.length === 0 && (
+                    <p className="text-sm text-zinc-500">
+                      {custodyFunds.length === 0 ? t('finance.noCustodyYet') : t('finance.noCustodyInFilter')}
+                    </p>
+                  )}
+                  {filteredAccountantCustodyFunds.map((cf) => (
                     <div key={cf.id} className="bg-[#0F1528]/80 border border-white/10 rounded-2xl p-4 flex flex-col gap-3 w-full">
                       <div className="flex flex-wrap items-center justify-between gap-3 w-full">
-                      <div>
-                        <p className="font-bold text-white">{cf.title}</p>
-                        <p className="text-xs text-zinc-400">{t('finance.custodyAmountSummary', { amount: cf.totalAmount.toLocaleString(dateLocale), currency, manager: cf.productionManagerName, status: getCustodyStatusLabel(cf.status, t) })}</p>
-                        {cf.journalEntryPaymentId && <p className="text-[10px] text-teal-400 mt-1">{t('finance.custodyPaymentJournal', { id: cf.journalEntryPaymentId })}</p>}
-                        {(cf.journalEntrySettlementId || cf.journalEntryId) && (
-                          <p className="text-[10px] text-emerald-400 mt-1">{t('finance.custodySettlementJournal', { id: cf.journalEntrySettlementId || cf.journalEntryId })}</p>
-                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-bold text-white">{cf.title}</p>
+                            <span className={custodyStatusBadgeClass(cf.status)}>{getCustodyStatusLabel(cf.status, t)}</span>
+                          </div>
+                          <p className="text-xs text-zinc-400 mt-1">
+                            {formatCustodyAmountLabel(cf)} — {cf.productionManagerName || '—'}
+                          </p>
+                          {cf.description && <p className="text-[11px] text-zinc-500 mt-1">{cf.description}</p>}
+                          {cf.journalEntryPaymentId && (
+                            <p className="text-[10px] text-teal-400 mt-1">
+                              {t('finance.custodyPaymentJournal', { id: cf.journalEntryPaymentId })}
+                            </p>
+                          )}
+                          {(cf.journalEntrySettlementId || cf.journalEntryId) && (
+                            <p className="text-[10px] text-emerald-400 mt-1">
+                              {t('finance.custodySettlementJournal', { id: cf.journalEntrySettlementId || cf.journalEntryId })}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {(accountantCanEditCustodyFundFull(cf) || accountantCanEditCustodyFundLimited(cf)) && (
+                            <button
+                              type="button"
+                              onClick={() => openCustodyEdit(cf)}
+                              className="px-3 py-1.5 rounded-xl bg-white/10 text-white text-xs font-black"
+                            >
+                              {t('finance.editCustody')}
+                            </button>
+                          )}
+                          {(cf.status === 'مسودة' || cf.status === 'مرفوض_طلب') && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const ok = await submitCustodyDraftToOwner(cf.id);
+                                if (ok) toast.success(t('finance.toastCustodySubmitted'));
+                                else toast.error(t('finance.toastCustodySubmitFailed'));
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-[#7C6BFF] text-white text-xs font-black"
+                            >
+                              {t('finance.submitToOwner')}
+                            </button>
+                          )}
+                          {cf.status === 'بانتظار_دفع_محاسب' && (
+                            <>
+                              {cf.currency === 'USD' && (!cf.exchangeRate || cf.exchangeRate <= 0) && (
+                                <span className="text-[10px] text-amber-300 self-center">{t('finance.custodyNeedExchangeRate')}</span>
+                              )}
+                              <button
+                                type="button"
+                                disabled={cf.currency === 'USD' && (!cf.exchangeRate || cf.exchangeRate <= 0)}
+                                onClick={async () => {
+                                  const ok = await accountantRecordCustodyPayment(cf.id, 'كاش');
+                                  if (ok) toast.success(t('finance.toastCustodyPaidCash'));
+                                  else toast.error(t('finance.toastCustodyPayFailed'));
+                                }}
+                                className="px-3 py-1.5 rounded-xl bg-teal-500 text-slate-950 text-xs font-black disabled:opacity-45"
+                              >
+                                {t('finance.payCashWithJournal')}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={cf.currency === 'USD' && (!cf.exchangeRate || cf.exchangeRate <= 0)}
+                                onClick={async () => {
+                                  const ok = await accountantRecordCustodyPayment(cf.id, 'تحويل');
+                                  if (ok) toast.success(t('finance.toastCustodyPaidTransfer'));
+                                  else toast.error(t('finance.toastCustodyPayFailed'));
+                                }}
+                                className="px-3 py-1.5 rounded-xl bg-indigo-500 text-white text-xs font-black disabled:opacity-45"
+                              >
+                                {t('finance.payTransferWithJournal')}
+                              </button>
+                            </>
+                          )}
+                          {cf.status === 'تسوية_بانتظار_محاسب' && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const ok = await accountantApproveCustodySettlement(cf.id);
+                                  if (ok) toast.success(t('finance.toastCustodySettlementApproved'));
+                                  else toast.error(t('finance.toastCustodySettlementFailed'));
+                                }}
+                                className="px-3 py-1.5 rounded-xl bg-emerald-500 text-slate-950 text-xs font-black"
+                              >
+                                {t('finance.approveSettlement')}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const ok = await accountantRejectCustodySettlement(cf.id);
+                                  if (ok) toast.info(t('finance.toastCustodyReturned'));
+                                  else toast.error(t('finance.toastCustodyReturnFailed'));
+                                }}
+                                className="px-3 py-1.5 rounded-xl bg-rose-500/80 text-white text-xs font-black"
+                              >
+                                {t('finance.rejectReturn')}
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        {(cf.status === 'مسودة' || cf.status === 'مرفوض_طلب') && (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const ok = await submitCustodyDraftToOwner(cf.id);
-                              if (ok) toast.success(t('finance.toastCustodySubmitted'));
-                              else toast.error(t('finance.toastCustodySubmitFailed'));
-                            }}
-                            className="px-3 py-1.5 rounded-xl bg-[#7C6BFF] text-white text-xs font-black"
-                          >
-                            {t('finance.submitToOwner')}
-                          </button>
-                        )}
-                        {cf.status === 'بانتظار_دفع_محاسب' && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                const ok = await accountantRecordCustodyPayment(cf.id, 'كاش');
-                                if (ok) toast.success(t('finance.toastCustodyPaidCash'));
-                                else toast.error(t('finance.toastCustodyPayFailed'));
-                              }}
-                              className="px-3 py-1.5 rounded-xl bg-teal-500 text-slate-950 text-xs font-black"
-                            >
-                              {t('finance.payCashWithJournal')}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                const ok = await accountantRecordCustodyPayment(cf.id, 'تحويل');
-                                if (ok) toast.success(t('finance.toastCustodyPaidTransfer'));
-                                else toast.error(t('finance.toastCustodyPayFailed'));
-                              }}
-                              className="px-3 py-1.5 rounded-xl bg-indigo-500 text-white text-xs font-black"
-                            >
-                              {t('finance.payTransferWithJournal')}
-                            </button>
-                          </>
-                        )}
-                        {cf.status === 'تسوية_بانتظار_محاسب' && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                const ok = await accountantApproveCustodySettlement(cf.id);
-                                if (ok) toast.success(t('finance.toastCustodySettlementApproved'));
-                                else toast.error(t('finance.toastCustodySettlementFailed'));
-                              }}
-                              className="px-3 py-1.5 rounded-xl bg-emerald-500 text-slate-950 text-xs font-black"
-                            >
-                              {t('finance.approveSettlement')}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                const ok = await accountantRejectCustodySettlement(cf.id);
-                                if (ok) toast.info(t('finance.toastCustodyReturned'));
-                                else toast.error(t('finance.toastCustodyReturnFailed'));
-                              }}
-                              className="px-3 py-1.5 rounded-xl bg-rose-500/80 text-white text-xs font-black"
-                            >
-                              {t('finance.rejectReturn')}
-                            </button>
-                          </>
-                        )}
-                      </div>
-                      </div>
+                      <CustodyFundStagesTimeline fund={cf} dateLocale={dateLocale} />
+                      {cf.spendLines.length > 0 && cf.status !== 'تسوية_بانتظار_محاسب' && (
+                        <div className="w-full pt-2 border-t border-white/10 space-y-2">
+                          <p className="text-[11px] font-black text-zinc-300">{t('finance.custodySpendPreview')}</p>
+                          <CustodySettlementReviewBlock lines={cf.spendLines} fund={cf} />
+                        </div>
+                      )}
                       {cf.status === 'تسوية_بانتظار_محاسب' && (
                         <div className="w-full pt-2 border-t border-white/10 space-y-2">
                           <p className="text-[11px] font-black text-amber-200/95">{t('finance.custodyReviewHint')}</p>
-                          <CustodySettlementReviewBlock lines={cf.spendLines} />
+                          <CustodySettlementReviewBlock lines={cf.spendLines} fund={cf} />
+                        </div>
+                      )}
+                      {custodyEditId === cf.id && (
+                        <div className="w-full pt-3 border-t border-white/10 grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <input
+                            className="bg-[#0B1020] border border-white/10 rounded-xl px-3 py-2 text-sm"
+                            value={custodyEditForm.title}
+                            disabled={!accountantCanEditCustodyFundFull(cf)}
+                            onChange={(e) => setCustodyEditForm((p) => ({ ...p, title: e.target.value }))}
+                          />
+                          <input
+                            type="number"
+                            min={0}
+                            className="bg-[#0B1020] border border-white/10 rounded-xl px-3 py-2 text-sm"
+                            value={custodyEditForm.totalAmount}
+                            disabled={!accountantCanEditCustodyFundFull(cf)}
+                            onChange={(e) => setCustodyEditForm((p) => ({ ...p, totalAmount: e.target.value }))}
+                          />
+                          <select
+                            className="bg-[#0B1020] border border-white/10 rounded-xl px-3 py-2 text-sm"
+                            value={custodyEditForm.currency}
+                            disabled={!accountantCanEditCustodyFundFull(cf)}
+                            onChange={(e) =>
+                              setCustodyEditForm((p) => ({
+                                ...p,
+                                currency: e.target.value === 'USD' ? 'USD' : 'EGP',
+                                exchangeRate: e.target.value === 'USD' ? p.exchangeRate : '',
+                              }))
+                            }
+                          >
+                            <option value="EGP">{t('finance.custodyCurrencyEgp')}</option>
+                            <option value="USD">{t('finance.custodyCurrencyUsd')}</option>
+                          </select>
+                          {(custodyEditForm.currency === 'USD' || cf.currency === 'USD') && (
+                            <input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              className="bg-[#0B1020] border border-white/10 rounded-xl px-3 py-2 text-sm"
+                              placeholder={t('finance.custodyExchangeRatePh')}
+                              value={custodyEditForm.exchangeRate}
+                              onChange={(e) => setCustodyEditForm((p) => ({ ...p, exchangeRate: e.target.value }))}
+                            />
+                          )}
+                          <select
+                            className="bg-[#0B1020] border border-white/10 rounded-xl px-3 py-2 text-sm md:col-span-2"
+                            value={custodyEditForm.productionManagerId}
+                            disabled={!accountantCanEditCustodyFundFull(cf)}
+                            onChange={(e) => setCustodyEditForm((p) => ({ ...p, productionManagerId: e.target.value }))}
+                          >
+                            <option value="">{t('finance.selectProductionManager')}</option>
+                            {users.filter((u) => u.role === 'مدير إنتاج').map((u) => (
+                              <option key={u.id} value={u.id}>{u.name}</option>
+                            ))}
+                          </select>
+                          <textarea
+                            className="bg-[#0B1020] border border-white/10 rounded-xl px-3 py-2 text-sm md:col-span-2 min-h-[72px]"
+                            value={custodyEditForm.description}
+                            onChange={(e) => setCustodyEditForm((p) => ({ ...p, description: e.target.value }))}
+                          />
+                          <div className="md:col-span-2 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void (async () => {
+                                  const ok = await updateCustodyDraft(cf.id, {
+                                    title: custodyEditForm.title,
+                                    description: custodyEditForm.description,
+                                    totalAmount: Number(custodyEditForm.totalAmount) || 0,
+                                    productionManagerId: custodyEditForm.productionManagerId,
+                                    currency: custodyEditForm.currency,
+                                    exchangeRate:
+                                      custodyEditForm.currency === 'USD'
+                                        ? Number(custodyEditForm.exchangeRate) || 0
+                                        : undefined,
+                                  });
+                                  if (ok) {
+                                    toast.success(t('finance.toastCustodyUpdated'));
+                                    setCustodyEditId(null);
+                                  } else toast.error(t('finance.toastCustodyUpdateFailed'));
+                                })();
+                              }}
+                              className="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 text-xs font-black"
+                            >
+                              {t('common.save')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCustodyEditId(null)}
+                              className="px-4 py-2 rounded-xl bg-white/10 text-white text-xs font-black"
+                            >
+                              {t('common.cancel')}
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -9191,10 +9458,111 @@ function custodyAttachmentHref(a: CustodySpendAttachment): string | null {
   return `data:${mime};base64,${a.dataBase64}`;
 }
 
-/** عرض بنود التسوية للمحاسب مع روابط المرفقات */
-const CustodySettlementReviewBlock = ({ lines }: { lines: CustodySpendLine[] }) => {
+const CustodyFundStagesTimeline = ({
+  fund,
+  dateLocale,
+}: {
+  fund: CustodyFund;
+  dateLocale: string;
+}) => {
   const { t } = useTranslation();
+  const fmt = (iso?: string) => (iso ? new Date(iso).toLocaleString(dateLocale) : '—');
+  const spendSum = fund.spendLines.reduce((s, l) => s + (Number(l.amount) || 0), 0);
+  const statusRank: Record<CustodyFund['status'], number> = {
+    مسودة: 0,
+    مرفوض_طلب: 0,
+    طلب_بانتظار_المالك: 1,
+    بانتظار_دفع_محاسب: 2,
+    جاهزة_للاستلام: 3,
+    نشطة: 4,
+    تسوية_بانتظار_محاسب: 5,
+    مرفوض_تسوية: 4,
+    مقفلة: 6,
+  };
+  const rank = statusRank[fund.status] ?? 0;
+  const stages: { key: string; label: string; done: boolean; current: boolean; detail?: string }[] = [
+    { key: 'create', label: t('finance.custodyStageCreate'), done: true, current: rank === 0, detail: fmt(fund.createdAt) },
+    {
+      key: 'owner',
+      label: t('finance.custodyStageOwner'),
+      done: rank >= 2 || Boolean(fund.approvedAt),
+      current: rank === 1,
+      detail: fund.approvedAt ? fmt(fund.approvedAt) : fund.status === 'طلب_بانتظار_المالك' ? t('finance.custodyStagePending') : undefined,
+    },
+    {
+      key: 'pay',
+      label: t('finance.custodyStagePay'),
+      done: Boolean(fund.paymentAt),
+      current: rank === 2,
+      detail: fund.paymentAt ? `${fmt(fund.paymentAt)}${fund.paymentMethod ? ` · ${fund.paymentMethod}` : ''}` : undefined,
+    },
+    {
+      key: 'receive',
+      label: t('finance.custodyStageReceive'),
+      done: Boolean(fund.receivedAt),
+      current: rank === 3,
+      detail: fund.receivedAt ? fmt(fund.receivedAt) : undefined,
+    },
+    {
+      key: 'spend',
+      label: t('finance.custodyStageSpend'),
+      done: rank >= 5 || fund.status === 'مقفلة',
+      current: rank === 4,
+      detail:
+        fund.spendLines.length > 0
+          ? t('finance.custodyStageSpendDetail', {
+              spent: spendSum.toLocaleString(dateLocale),
+              total: fund.totalAmount.toLocaleString(dateLocale),
+            })
+          : rank >= 4
+            ? t('finance.custodyStageNoSpendYet')
+            : undefined,
+    },
+    {
+      key: 'settlement',
+      label: t('finance.custodyStageSettlement'),
+      done: rank >= 5 || fund.status === 'مقفلة',
+      current: rank === 5,
+      detail: fund.settlementSubmittedAt ? fmt(fund.settlementSubmittedAt) : undefined,
+    },
+    {
+      key: 'closed',
+      label: t('finance.custodyStageClosed'),
+      done: fund.status === 'مقفلة',
+      current: fund.status === 'مقفلة',
+      detail: fund.journalEntrySettlementId || fund.journalEntryId || undefined,
+    },
+  ];
+  return (
+    <div className="w-full pt-2 border-t border-white/10">
+      <p className="text-[11px] font-black text-zinc-300 mb-2">{t('finance.custodyStagesTitle')}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+        {stages.map((stage) => (
+          <div
+            key={stage.key}
+            className={`rounded-xl border px-3 py-2 text-[11px] ${
+              stage.current
+                ? 'border-[#7C6BFF]/50 bg-[#7C6BFF]/10 text-violet-100'
+                : stage.done
+                  ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100'
+                  : 'border-white/10 bg-[#0B1020]/60 text-zinc-500'
+            }`}
+          >
+            <p className="font-black">{stage.label}</p>
+            {stage.detail && <p className="mt-0.5 opacity-90 break-all">{stage.detail}</p>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/** عرض بنود التسوية للمحاسب مع روابط المرفقات */
+const CustodySettlementReviewBlock = ({ lines, fund }: { lines: CustodySpendLine[]; fund?: CustodyFund }) => {
+  const { t } = useTranslation();
+  const { dateLocale } = useAppDirection();
   if (lines.length === 0) return <p className="text-xs text-zinc-500">{t('productionFund.noSpendLines')}</p>;
+  const curLabel = fund?.currency === 'USD' ? 'USD' : t('common.currency');
   return (
     <div className="w-full overflow-x-auto rounded-xl border border-white/10 bg-[#0B1020]/80">
       <table className="w-full text-right text-xs min-w-[640px]">
@@ -9212,7 +9580,14 @@ const CustodySettlementReviewBlock = ({ lines }: { lines: CustodySpendLine[] }) 
           {lines.map((line) => (
             <tr key={line.id} className="border-b border-white/5">
               <td className="p-2 text-zinc-200">{line.title || '—'}</td>
-              <td className="p-2 text-emerald-300 font-bold">{Number(line.amount || 0).toLocaleString()}</td>
+              <td className="p-2 text-emerald-300 font-bold">
+                {Number(line.amount || 0).toLocaleString(dateLocale)} {curLabel}
+                {fund?.currency === 'USD' && fund.exchangeRate ? (
+                  <span className="block text-[10px] text-zinc-400 font-normal">
+                    ≈ {custodyLineAmountInEgp(Number(line.amount) || 0, fund).toLocaleString(dateLocale)} {t('common.currency')}
+                  </span>
+                ) : null}
+              </td>
               <td className="p-2">{getExpenseCategoryLabel(line.category, t)}</td>
               <td className="p-2 text-zinc-400">{line.costCenter || '—'}</td>
               <td className="p-2 text-zinc-500 max-w-[160px] break-words">{line.note || '—'}</td>
@@ -11109,7 +11484,7 @@ const Root = () => {
   const openAccountantSubTab = (
     financeTab: 'invoices' | 'expenses' | 'ledger' | 'reports' | 'coa' | 'journals' | 'reps' | 'codebook' | 'custody',
     notAvailableMessage: string,
-    quick?: { invoiceQuickFilter?: InvoiceQuickFilter; expenseQuickFilter?: ExpenseQuickFilter }
+    quick?: { invoiceQuickFilter?: InvoiceQuickFilter; expenseQuickFilter?: ExpenseQuickFilter; custodyStageFilter?: 'all' | 'draft' | 'owner' | 'pay' | 'active' | 'settlement' | 'closed' }
   ) => {
     if (!allowedTabs.includes('accountant')) {
       toast.info(notAvailableMessage);
@@ -11378,6 +11753,8 @@ const Root = () => {
       const overdueInstallments = safeInvoices.filter((inv) => Number(inv.remainingAmount || 0) > 0 && inv.nextDueDate && inv.nextDueDate < todayDateKey).length;
       const dueTodayInstallments = safeInvoices.filter((inv) => Number(inv.remainingAmount || 0) > 0 && inv.nextDueDate === todayDateKey).length;
       const custodySettlementPending = custodyFunds.filter((f) => f.status === 'تسوية_بانتظار_محاسب').length;
+      const custodyPayPending = custodyFunds.filter((f) => f.status === 'بانتظار_دفع_محاسب').length;
+      const custodyActive = custodyFunds.filter((f) => f.status === 'جاهزة_للاستلام' || f.status === 'نشطة').length;
       const financialClaimsPending = safeShootBookings.filter((b) => b.financialStatus === 'بانتظار_تنفيذ_محاسب').length
         + safeEquipmentBookings.filter((b) => b.financialStatus === 'بانتظار_تنفيذ_محاسب').length
         + safeMeetingBookings.filter((m) => m.financialStatus === 'بانتظار_تنفيذ_محاسب').length;
@@ -11385,7 +11762,9 @@ const Root = () => {
         { id: 'acc-overdue-installments', label: t('homeFocus.accOverdueInstallments'), value: overdueInstallments, onClick: () => openAccountantSubTab('invoices', errFinance, { invoiceQuickFilter: 'overdue_installments' }) },
         { id: 'acc-due-today-installments', label: t('homeFocus.accDueTodayInstallments'), value: dueTodayInstallments, onClick: () => openAccountantSubTab('invoices', errFinance, { invoiceQuickFilter: 'due_today_installments' }) },
         { id: 'acc-financial-claims', label: t('homeFocus.accFinancialClaims'), value: financialClaimsPending, onClick: () => openBookingsWithIntent('financial_claims_pending_execution', errClaims) },
-        { id: 'acc-custody-settlement', label: t('homeFocus.accCustodySettlement'), value: custodySettlementPending, onClick: () => openAccountantSubTab('custody', errFinance) },
+        { id: 'acc-custody-pay', label: t('homeFocus.accCustodyPay'), value: custodyPayPending, onClick: () => openAccountantSubTab('custody', errFinance, { custodyStageFilter: 'pay' }) },
+        { id: 'acc-custody-active', label: t('homeFocus.accCustodyActive'), value: custodyActive, onClick: () => openAccountantSubTab('custody', errFinance, { custodyStageFilter: 'active' }) },
+        { id: 'acc-custody-settlement', label: t('homeFocus.accCustodySettlement'), value: custodySettlementPending, onClick: () => openAccountantSubTab('custody', errFinance, { custodyStageFilter: 'settlement' }) },
       ];
     }
     if (currentRole === 'مدير إنتاج') {
