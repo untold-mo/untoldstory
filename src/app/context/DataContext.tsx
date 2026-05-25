@@ -3229,6 +3229,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (Array.isArray(custodyList)) {
           setCustodyFunds(custodyList.map(migrateCustodyFund));
         }
+        if (
+          currentUser &&
+          ['مالك', 'محاسب', 'مدير إنتاج'].includes(currentUser.role)
+        ) {
+          try {
+            const freshCustody = await fetchCustodyFundsApi();
+            if (epoch === workspaceApplyEpochRef.current && Array.isArray(freshCustody)) {
+              setCustodyFunds(freshCustody.map(migrateCustodyFund));
+            }
+          } catch (e) {
+            console.warn('[custody] dedicated fetch failed', e);
+          }
+        }
         if (shootList !== undefined) {
           const uid = bookingMirrorUidRef.current;
           const filteredShootList = shootList.filter((b) => !deletedShootIdsRef.current.has(b.id));
