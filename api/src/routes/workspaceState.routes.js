@@ -43,6 +43,9 @@ const ACCOUNTING_KEYS = new Set([
   'expenseEscalations',
 ]);
 
+/** خصومات يدوية على مندوبي المبيعات — مالك ومدير إنتاج */
+const PAYROLL_SALES_DISCOUNT_KEYS = new Set(['payrollSalesDiscounts']);
+
 const EQUIPMENT_KEYS = new Set(['equipmentItems']);
 
 /** حجوزات عامة ببيان حر — يشاركها الجميع (حتى وجود مسار REST مخصص) */
@@ -59,6 +62,7 @@ function canPatchKey(key, role) {
   if (BOOKING_MISC_KEYS.has(key)) return ALL_ROLES.includes(role);
   if (OWNER_KEYS.has(key)) return role === 'مالك';
   if (ACCOUNTING_KEYS.has(key)) return role === 'مالك' || role === 'محاسب';
+  if (PAYROLL_SALES_DISCOUNT_KEYS.has(key)) return role === 'مالك' || role === 'مدير إنتاج';
   if (EQUIPMENT_KEYS.has(key)) return role === 'مالك' || role === 'محاسب' || role === 'مدير إنتاج';
   return false;
 }

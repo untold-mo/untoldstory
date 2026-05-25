@@ -15,6 +15,17 @@ function parseLeadDateIso(raw) {
   return d.toISOString();
 }
 
+function placeholderImportEmail(rowKey) {
+  const key = String(rowKey || 'row').replace(/[^\w-]/g, '').slice(0, 40);
+  return `import-${key}-${Math.random().toString(36).slice(2, 8)}@lead.local`;
+}
+
+function placeholderImportPhone(rowKey) {
+  const digits = String(rowKey || '0').replace(/\D/g, '').slice(-6).padStart(6, '0');
+  const rnd = Math.floor(Math.random() * 90 + 10);
+  return `0199${digits}${rnd}`.slice(0, 11);
+}
+
 /**
  * @param {object} opts
  * @param {import('@prisma/client').PrismaClient} opts.prisma
@@ -38,17 +49,23 @@ export async function importLeadsCsvBatch(opts) {
   }
 
   for (const row of rows) {
-    const name = String(row.name || '').trim().slice(0, 200);
+    let name = String(row.name || '').trim().slice(0, 200);
     const company = String(row.company || '—').trim().slice(0, 200);
-    const phone = String(row.phone || '').trim();
+    let phone = String(row.phone || '').trim();
     let email = normEmail(row.email);
-    if (!name || !phone) {
+    const rowKey = row.linkedinRowIndex || name || company;
+    if (!name) {
+      name = company && company !== '—' ? company : 'عميل مستورد';
+    }
+    if (!name) {
       failed += 1;
       continue;
     }
-    if (!email) email = `import-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@lead.local`;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      email = `import-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@lead.local`;
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      email = placeholderImportEmail(rowKey);
+    }
+    if (!phone) {
+      phone = placeholderImportPhone(rowKey);
     }
 
     const np = normPhone(phone);

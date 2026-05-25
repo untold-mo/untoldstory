@@ -868,6 +868,19 @@ export interface PayrollApproval {
   approvedByName: string;
 }
 
+/** خصم يدوي على مندوب مبيعات — يظهر في كشف رواتب المحاسب */
+export interface PayrollSalesDiscount {
+  id: string;
+  repId: string;
+  repName: string;
+  monthKey: string;
+  amount: number;
+  reason: string;
+  createdById: string;
+  createdByName: string;
+  createdAt: string;
+}
+
 export interface PayrollApprovalRequest {
   id: string;
   monthKey: string;
@@ -1252,6 +1265,15 @@ interface DataContextType {
   logAttendance: (repId: string, type: 'in' | 'out', source?: 'machine' | 'manual') => Promise<boolean>;
   payrollApprovals: PayrollApproval[];
   payrollApprovalRequests: PayrollApprovalRequest[];
+  payrollSalesDiscounts: PayrollSalesDiscount[];
+  addPayrollSalesDiscount: (input: {
+    repId: string;
+    monthKey?: string;
+    amount: number;
+    reason: string;
+  }) => Promise<boolean>;
+  removePayrollSalesDiscount: (id: string) => Promise<boolean>;
+  getPayrollSalesDiscountTotal: (repId: string, monthKey: string) => number;
   financialReopenRequests: FinancialPeriodReopenRequest[];
   approvePayroll: (monthKey: string) => Promise<boolean>;
   reopenPayroll: (monthKey: string) => Promise<boolean>;
@@ -2199,6 +2221,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [payrollApprovals, setPayrollApprovals] = useState<PayrollApproval[]>([]);
   const [payrollApprovalRequests, setPayrollApprovalRequests] = useState<PayrollApprovalRequest[]>([]);
+  const [payrollSalesDiscounts, setPayrollSalesDiscounts] = useState<PayrollSalesDiscount[]>([]);
   const [financialReopenRequests, setFinancialReopenRequests] = useState<FinancialPeriodReopenRequest[]>([]);
   const [shootBookings, setShootBookings] = useState<ShootBooking[]>([]);
   const [equipmentBookings, setEquipmentBookings] = useState<EquipmentBooking[]>([]);
@@ -2331,6 +2354,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const savedAttendance = localStorage.getItem('prod_system_attendance_records');
     const savedPayrollApprovals = localStorage.getItem('prod_system_payroll_approvals');
     const savedPayrollApprovalRequests = localStorage.getItem('prod_system_payroll_approval_requests');
+    const savedPayrollSalesDiscounts = localStorage.getItem('prod_system_payroll_sales_discounts');
     const savedFinancialReopenRequests = localStorage.getItem('prod_system_financial_reopen_requests');
     const savedShootBookings = localStorage.getItem('prod_system_shoot_bookings');
     const savedEquipmentBookings = localStorage.getItem('prod_system_equipment_bookings');
@@ -2598,6 +2622,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!isServerDataMode() && savedPayrollApprovalRequests) {
         const rawRequests = parseSafe<any[]>(savedPayrollApprovalRequests);
         if (Array.isArray(rawRequests)) setPayrollApprovalRequests(rawRequests);
+      }
+      if (!isServerDataMode() && savedPayrollSalesDiscounts) {
+        const rawDiscounts = parseSafe<PayrollSalesDiscount[]>(savedPayrollSalesDiscounts);
+        if (Array.isArray(rawDiscounts)) setPayrollSalesDiscounts(rawDiscounts.slice(0, 500));
       }
       if (!isServerDataMode() && savedFinancialReopenRequests) {
         const rawReopenRequests = parseSafe<any[]>(savedFinancialReopenRequests);
@@ -3334,6 +3362,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (Array.isArray(ws.payrollApprovalRequests)) {
             setPayrollApprovalRequests(ws.payrollApprovalRequests as PayrollApprovalRequest[]);
           }
+          if (Array.isArray(ws.payrollSalesDiscounts)) {
+            setPayrollSalesDiscounts(
+              (ws.payrollSalesDiscounts as PayrollSalesDiscount[]).slice(0, 500),
+            );
+          }
           if (Array.isArray(ws.financialReopenRequests)) {
             setFinancialReopenRequests(ws.financialReopenRequests as FinancialPeriodReopenRequest[]);
           }
@@ -3691,6 +3724,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('prod_system_attendance_records', JSON.stringify(attendanceRecords));
       localStorage.setItem('prod_system_payroll_approvals', JSON.stringify(payrollApprovals));
       localStorage.setItem('prod_system_payroll_approval_requests', JSON.stringify(payrollApprovalRequests));
+      localStorage.setItem('prod_system_payroll_sales_discounts', JSON.stringify(payrollSalesDiscounts));
       localStorage.setItem('prod_system_financial_reopen_requests', JSON.stringify(financialReopenRequests));
       localStorage.setItem('prod_system_shoot_bookings', JSON.stringify(shootBookings));
       localStorage.setItem('prod_system_equipment_bookings', JSON.stringify(equipmentBookings));
@@ -3839,6 +3873,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             break;
           case 'prod_system_payroll_approval_requests':
             if (event.newValue) setPayrollApprovalRequests(JSON.parse(event.newValue));
+            break;
+          case 'prod_system_payroll_sales_discounts':
+            if (event.newValue) setPayrollSalesDiscounts(JSON.parse(event.newValue));
             break;
           case 'prod_system_financial_reopen_requests':
             if (event.newValue) setFinancialReopenRequests(JSON.parse(event.newValue));
@@ -6637,6 +6674,89 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       details: reason || '',
     });
     return true;
+  };
+
+  const syncPayrollSalesDiscounts = async (next: PayrollSalesDiscount[]): Promise<boolean> => {
+    const capped = next.slice(0, 500);
+    if (isServerDataMode()) {
+      try {
+        await patchWorkspaceStateApi({ payrollSalesDiscounts: capped });
+        setPayrollSalesDiscounts(capped);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    setPayrollSalesDiscounts(capped);
+    return true;
+  };
+
+  const getPayrollSalesDiscountTotal = useCallback(
+    (repId: string, monthKey: string) =>
+      payrollSalesDiscounts
+        .filter((d) => d.repId === repId && d.monthKey === monthKey)
+        .reduce((s, d) => s + Math.max(0, Math.round(Number(d.amount) || 0)), 0),
+    [payrollSalesDiscounts],
+  );
+
+  const addPayrollSalesDiscount = async (input: {
+    repId: string;
+    monthKey?: string;
+    amount: number;
+    reason: string;
+  }): Promise<boolean> => {
+    const role = currentUser?.role;
+    if (role !== 'مالك' && role !== 'مدير إنتاج') return false;
+    const mk =
+      input.monthKey?.trim() ||
+      new Date().toISOString().slice(0, 7);
+    if (isPayrollApproved(mk)) return false;
+    const rep = users.find((u) => u.id === input.repId);
+    if (!rep || rep.role !== 'مندوب') return false;
+    const amount = Math.max(0, Math.round(Number(input.amount) || 0));
+    const reason = String(input.reason || '').trim().slice(0, 500);
+    if (amount <= 0 || !reason) return false;
+    const entry: PayrollSalesDiscount = {
+      id: `psd-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      repId: rep.id,
+      repName: rep.name,
+      monthKey: mk,
+      amount,
+      reason,
+      createdById: currentUser!.id,
+      createdByName: currentUser!.name,
+      createdAt: new Date().toISOString(),
+    };
+    const next = [entry, ...payrollSalesDiscounts];
+    const ok = await syncPayrollSalesDiscounts(next);
+    if (ok) {
+      addAuditEvent({
+        action: 'خصم على مندوب مبيعات',
+        entityType: 'user',
+        entityId: rep.id,
+        details: `${amount} — ${mk} — ${reason.slice(0, 80)}`,
+      });
+    }
+    return ok;
+  };
+
+  const removePayrollSalesDiscount = async (id: string): Promise<boolean> => {
+    const role = currentUser?.role;
+    if (role !== 'مالك' && role !== 'مدير إنتاج') return false;
+    const target = payrollSalesDiscounts.find((d) => d.id === id);
+    if (!target) return false;
+    if (isPayrollApproved(target.monthKey)) return false;
+    const next = payrollSalesDiscounts.filter((d) => d.id !== id);
+    const ok = await syncPayrollSalesDiscounts(next);
+    if (ok) {
+      addAuditEvent({
+        action: 'إلغاء خصم مندوب',
+        entityType: 'user',
+        entityId: target.repId,
+        details: `${target.amount} — ${target.monthKey}`,
+      });
+    }
+    return ok;
   };
 
   const updateAccountingPolicy = async (patch: Partial<AccountingPolicy>) => {
@@ -9784,7 +9904,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       desktopNotifyWhenVisible, setDesktopNotifyWhenVisible,
       closedFiscalYears, closeFiscalYear, reopenFiscalYear, getOpeningBalances,
       attendanceRecords, logAttendance,
-      payrollApprovals, payrollApprovalRequests, financialReopenRequests, approvePayroll, reopenPayroll, isPayrollApproved, requestPayrollApproval, ownerApprovePayrollRequest, ownerRejectPayrollRequest, requestMonthReopen, ownerApproveMonthReopenRequest, ownerRejectMonthReopenRequest, getSystemNotifications, refreshServerWorkspace,
+      payrollApprovals, payrollApprovalRequests, payrollSalesDiscounts, addPayrollSalesDiscount, removePayrollSalesDiscount, getPayrollSalesDiscountTotal, financialReopenRequests, approvePayroll, reopenPayroll, isPayrollApproved, requestPayrollApproval, ownerApprovePayrollRequest, ownerRejectPayrollRequest, requestMonthReopen, ownerApproveMonthReopenRequest, ownerRejectMonthReopenRequest, getSystemNotifications, refreshServerWorkspace,
       auditEvents, addAuditEvent,
       shootBookings: shootBookings.filter((b) => !deletedShootIdsRef.current.has(b.id)),
       equipmentBookings: equipmentBookings.filter((b) => !deletedEquipIdsRef.current.has(b.id)),

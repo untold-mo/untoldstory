@@ -85,6 +85,7 @@ import {
 import PageViewsHub from './components/PageViewsHub';
 import { LeadRepUpdateProvider, useLeadRepUpdate } from './components/LeadRepUpdateModal';
 import { BulkLeadsUploadModal } from './components/BulkLeadsUploadModal';
+import { PayrollSalesDiscountsPanel } from './components/PayrollSalesDiscountsPanel';
 import { RepSkillsEditor } from './components/RepSkillsEditor';
 import { REP_SKILL_PRESETS } from '@/lib/repSkills';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
@@ -599,7 +600,7 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
   const { t } = useTranslation();
   const { dateLocale, dir } = useAppDirection();
   const currency = t('common.currency');
-  const { currentUser, invoices, expenses, leads, users, addInvoice, updateInvoiceStatus, recordInvoiceCollection, addExpense, updateExpenseStatus, approveExpense, rejectExpense, closedMonths, closeMonth, reopenMonth, isMonthClosed, chartOfAccounts, addChartAccount, removeChartAccount, manualJournalEntries, addManualJournalEntry, removeManualJournalEntry, journalCodingRules, setJournalCodingRules, expenseCodingRules, setExpenseCodingRules, customerCodePrefix, setCustomerCodePrefix, expenseSavedViews, setExpenseSavedViews, payrollAutoSendDay, setPayrollAutoSendDay, closedFiscalYears, closeFiscalYear, reopenFiscalYear, getOpeningBalances, getRepSnapshots, attendanceRecords, logAttendance, payrollApprovals, payrollApprovalRequests, financialReopenRequests, approvePayroll, reopenPayroll, isPayrollApproved, requestPayrollApproval, ownerApprovePayrollRequest, ownerRejectPayrollRequest, requestMonthReopen, ownerApproveMonthReopenRequest, ownerRejectMonthReopenRequest, printBrandingSettings, addEmployee, updateEmployeeSalary, accountingPolicy, updateAccountingPolicy, priceQuotes, custodyFunds, custodyAccountByCategory, updateCustodyAccountByCategory, createCustodyFund, updateCustodyDraft, submitCustodyDraftToOwner, ownerApproveCustodyRequest, ownerRejectCustodyRequest, accountantRecordCustodyPayment, accountantApproveCustodySettlement, accountantRejectCustodySettlement } = useData();
+  const { currentUser, invoices, expenses, leads, users, addInvoice, updateInvoiceStatus, recordInvoiceCollection, addExpense, updateExpenseStatus, approveExpense, rejectExpense, closedMonths, closeMonth, reopenMonth, isMonthClosed, chartOfAccounts, addChartAccount, removeChartAccount, manualJournalEntries, addManualJournalEntry, removeManualJournalEntry, journalCodingRules, setJournalCodingRules, expenseCodingRules, setExpenseCodingRules, customerCodePrefix, setCustomerCodePrefix, expenseSavedViews, setExpenseSavedViews, payrollAutoSendDay, setPayrollAutoSendDay, closedFiscalYears, closeFiscalYear, reopenFiscalYear, getOpeningBalances, getRepSnapshots, attendanceRecords, logAttendance, payrollApprovals, payrollApprovalRequests, getPayrollSalesDiscountTotal, financialReopenRequests, approvePayroll, reopenPayroll, isPayrollApproved, requestPayrollApproval, ownerApprovePayrollRequest, ownerRejectPayrollRequest, requestMonthReopen, ownerApproveMonthReopenRequest, ownerRejectMonthReopenRequest, printBrandingSettings, addEmployee, updateEmployeeSalary, accountingPolicy, updateAccountingPolicy, priceQuotes, custodyFunds, custodyAccountByCategory, updateCustodyAccountByCategory, createCustodyFund, updateCustodyDraft, submitCustodyDraftToOwner, ownerApproveCustodyRequest, ownerRejectCustodyRequest, accountantRecordCustodyPayment, accountantApproveCustodySettlement, accountantRejectCustodySettlement } = useData();
   const [activeFinanceTab, setActiveFinanceTab] = useState<'invoices' | 'expenses' | 'ledger' | 'reports' | 'coa' | 'journals' | 'reps' | 'codebook' | 'custody'>('invoices');
   const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
   const [isCreateExpenseOpen, setIsCreateExpenseOpen] = useState(false);
@@ -1112,7 +1113,13 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
       const callsShortage = isSalesRep ? Math.max(0, (snap?.callsTarget || 80) - (snap?.callsCount || 0)) : 0;
       const callsPenalty = isSalesRep ? callsShortage * 35 : 0;
       const attendancePenalty = lateAttendanceDays.size * 75;
-      const totalPenalty = Math.round(lateResponsePenalty + followUpPenalty + callsPenalty + attendancePenalty);
+      const autoPenalty = Math.round(
+        lateResponsePenalty + followUpPenalty + callsPenalty + attendancePenalty,
+      );
+      const salesDiscountPenalty = isSalesRep
+        ? getPayrollSalesDiscountTotal(rep.id, currentMonthKey)
+        : 0;
+      const totalPenalty = autoPenalty + salesDiscountPenalty;
       const netSalary = Math.max(0, baseSalary - totalPenalty);
 
       return {
@@ -1132,11 +1139,13 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
           followUpPenalty,
           callsPenalty,
           attendancePenalty,
+          salesDiscountPenalty,
+          autoPenalty,
           totalPenalty,
         },
       };
     });
-  }, [users, getRepSnapshots, leads, attendanceRecords]);
+  }, [users, getRepSnapshots, leads, attendanceRecords, getPayrollSalesDiscountTotal, currentMonthKey]);
 
   const repsPayrollSummary = useMemo(() => {
     const totalBase = repsFinance.reduce((sum, row) => sum + row.baseSalary, 0);
@@ -1482,7 +1491,7 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
 
   const exportPayrollCsv = () => {
     const rows = [
-      ['rep_name', 'attendance_days', 'late_days', 'calls', 'calls_target', 'avg_response_mins', 'overdue_followups', 'late_response_penalty', 'followup_penalty', 'calls_penalty', 'attendance_penalty', 'total_penalty', 'base_salary', 'net_salary'],
+      ['rep_name', 'attendance_days', 'late_days', 'calls', 'calls_target', 'avg_response_mins', 'overdue_followups', 'late_response_penalty', 'followup_penalty', 'calls_penalty', 'attendance_penalty', 'sales_discount_penalty', 'total_penalty', 'base_salary', 'net_salary'],
       ...filteredRepsFinance.map(r => [
         r.repName,
         String(r.attendanceDays),
@@ -1495,6 +1504,7 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
         String(r.penalties.followUpPenalty),
         String(r.penalties.callsPenalty),
         String(r.penalties.attendancePenalty),
+        String(r.penalties.salesDiscountPenalty ?? 0),
         String(r.penalties.totalPenalty),
         String(r.baseSalary),
         String(r.netSalary),
@@ -2558,6 +2568,10 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
                   </select>
                   <span className="text-[11px] text-zinc-400">{t('finance.rowsShown', { count: filteredRepsFinance.length })}</span>
                 </div>
+                <PayrollSalesDiscountsPanel
+                  monthKey={currentMonthKey}
+                  readOnly={currentUser?.role === 'محاسب'}
+                />
                 <div className="overflow-x-auto max-h-[560px] overflow-y-auto rounded-2xl border border-white/5">
                   <table className="w-full min-w-[1100px]">
                     <thead>
@@ -2604,6 +2618,11 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
                             <div className="text-[11px] text-zinc-500">
                               {t('finance.penaltyBreakdown', { resp: row.penalties.lateResponsePenalty, fup: row.penalties.followUpPenalty, calls: row.penalties.callsPenalty, att: row.penalties.attendancePenalty })}
                             </div>
+                            {(row.penalties.salesDiscountPenalty ?? 0) > 0 && (
+                              <div className="text-[11px] text-amber-300/90 mt-0.5">
+                                {t('finance.salesDiscountPenaltyLine', { amount: (row.penalties.salesDiscountPenalty ?? 0).toLocaleString(dateLocale), currency })}
+                              </div>
+                            )}
                           </td>
                           <td className="p-3">
                             <input
@@ -8512,6 +8531,10 @@ const TeamPerformanceHub = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }
   const { dateLocale } = useAppDirection();
   const currency = t('common.currency');
   const { currentUser, leads, getRepSnapshots, reviewLeadActivity, updateMonthlyTarget } = useData();
+  const payrollMonthKey = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }, []);
   const snapshots = useMemo(
     () => getRepSnapshots().sort((a, b) => b.revenue - a.revenue),
     [getRepSnapshots]
@@ -8623,6 +8646,10 @@ const TeamPerformanceHub = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }
       <div className="flex items-center gap-3">
         <button onClick={exportPerformanceCsv} className="px-4 py-2 rounded-xl text-sm font-black bg-[#0F1528] border border-white/10 text-zinc-200">{t('teamPerf.exportCsv')}</button>
       </div>
+
+      {currentUser?.role === 'مالك' && (
+        <PayrollSalesDiscountsPanel monthKey={payrollMonthKey} />
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard title={t('teamPerf.assignedLeads')} value={kpis.totalAssigned} icon={Users} color="blue" onClick={() => goLeads(false)} />
@@ -9979,6 +10006,10 @@ const ProductionCustodyDashboard = () => {
   };
 
   const statusLabel = (status: string) => getCustodyStatusLabel(status, t);
+  const payrollMonthKey = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }, []);
 
   return (
     <div className="animate-in fade-in duration-500 space-y-6">
@@ -9987,6 +10018,8 @@ const ProductionCustodyDashboard = () => {
         subtitle={t('productionFund.dashSubtitle')}
         icon={Briefcase}
       />
+
+      <PayrollSalesDiscountsPanel monthKey={payrollMonthKey} compact />
 
       {/* Tab navigation */}
       <div className="flex items-center gap-1 bg-[#0F1528]/70 border border-white/10 rounded-2xl p-1 w-fit">

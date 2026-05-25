@@ -327,6 +327,25 @@ function parseCategory(raw: string): LeadCategory {
   return 'إعلانات';
 }
 
+function placeholderImportEmail(rowKey: string | number): string {
+  const key = String(rowKey).replace(/[^\w-]/g, '').slice(0, 40) || 'row';
+  return `excel-${key}-${Date.now().toString(36).slice(2, 6)}@lead.local`;
+}
+
+/** جوال فريد للصفوف بدون رقم — لتجنب تكرار 01000000000 */
+function placeholderImportPhone(rowKey: string | number): string {
+  const digits = String(rowKey).replace(/\D/g, '').slice(-6).padStart(6, '0');
+  const rnd = Math.floor(Math.random() * 90 + 10);
+  return `0199${digits}${rnd}`.slice(0, 11);
+}
+
+function rowHasAnyLeadData(raw: Record<string, string>): boolean {
+  return Object.entries(raw).some(([k, v]) => {
+    if (k === '_fileRow' || k === '_sheet') return false;
+    return String(v ?? '').trim() !== '';
+  });
+}
+
 function parseCompanySize(raw: string): 'صغير' | 'متوسط' | 'كبير' {
   const t = String(raw || '').trim().toLowerCase();
   if (/كبير|large|enterprise/.test(t)) return 'كبير';
@@ -407,7 +426,12 @@ export function parseSpreadsheetObjects(objects: Record<string, string>[]): Spre
     if (!company && interest) company = interest.replace(/\s*·\s*/g, ' / ');
     if (!company && jobTitle) company = jobTitle;
 
-    if (!name) name = company || `عميل صف ${rowNum}`;
+    if (!rowHasAnyLeadData(raw)) {
+      skipped += 1;
+      return;
+    }
+
+    if (!name) name = company && company !== '—' ? company : `عميل صف ${rowNum}`;
     if (!company) company = '—';
 
     let category = parseCategory(pick(raw, ['category']));
@@ -415,16 +439,11 @@ export function parseSpreadsheetObjects(objects: Record<string, string>[]): Spre
       category = 'إنجليزي';
     }
 
-    if (!email && !phone) {
-      skipped += 1;
-      errors.push(`صف ${rowNum}: لا يوجد بريد أو جوال — تم تخطيه`);
-      return;
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      email = placeholderImportEmail(rowNum);
     }
-
-    if (!email) email = `excel-row-${rowNum}@lead.local`;
-    if (!phone) phone = '01000000000';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      email = `excel-row-${rowNum}@lead.local`;
+    if (!phone) {
+      phone = placeholderImportPhone(rowNum);
     }
 
     const leadDate = parseSpreadsheetDate(pick(raw, ['date'])) ?? undefined;

@@ -30,6 +30,8 @@ const ACCOUNTING_KEYS = new Set([
   'expenseEscalations',
 ]);
 
+const PAYROLL_SALES_DISCOUNT_KEYS = new Set(['payrollSalesDiscounts']);
+
 const EQUIPMENT_KEYS = new Set(['equipmentItems']);
 const BOOKING_MISC_KEYS = new Set(['otherBookings']);
 const PERSONAL_KEYS = new Set(['personalTodosByUserId', 'notifyForegroundByUserId']);
@@ -41,6 +43,7 @@ function canPatchKey(key: string, role: string): boolean {
   if (BOOKING_MISC_KEYS.has(key)) return ALL_ROLES.includes(role);
   if (OWNER_KEYS.has(key)) return role === 'مالك';
   if (ACCOUNTING_KEYS.has(key)) return role === 'مالك' || role === 'محاسب';
+  if (PAYROLL_SALES_DISCOUNT_KEYS.has(key)) return role === 'مالك' || role === 'مدير إنتاج';
   if (EQUIPMENT_KEYS.has(key)) return role === 'مالك' || role === 'محاسب' || role === 'مدير إنتاج';
   return false;
 }

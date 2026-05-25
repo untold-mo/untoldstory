@@ -227,17 +227,24 @@ export async function supabaseImportLeadsCsv(payload: {
   let failed = 0;
 
   for (const row of payload.leads) {
-    const name = String(row.name || '').trim().slice(0, 200);
+    let name = String(row.name || '').trim().slice(0, 200);
     const company = String(row.company || '—').trim().slice(0, 200);
-    const phone = String(row.phone || '').trim();
+    let phone = String(row.phone || '').trim();
     let email = String(row.email || '').trim().toLowerCase();
-    if (!name || !phone) {
+    const rowKey = row.linkedinRowIndex || name || company;
+    if (!name) {
+      name = company && company !== '—' ? company : 'عميل مستورد';
+    }
+    if (!name) {
       failed += 1;
       continue;
     }
-    if (!email) email = `import-${Date.now()}@lead.local`;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      email = `import-${Date.now()}@lead.local`;
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      email = `import-${String(rowKey).replace(/\D/g, '').slice(0, 12) || Date.now()}@lead.local`;
+    }
+    if (!phone) {
+      const digits = String(rowKey).replace(/\D/g, '').slice(-6).padStart(6, '0');
+      phone = `0199${digits}${Math.floor(Math.random() * 90 + 10)}`.slice(0, 11);
     }
 
     const { data: byEmail } = await sb.from('leads').select('id').eq('email', email).limit(1);
