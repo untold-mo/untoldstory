@@ -660,6 +660,7 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
     currency: 'EGP' as CustodyCurrency,
     exchangeRate: '',
   });
+  const [custodySendToOwnerOnCreate, setCustodySendToOwnerOnCreate] = useState(true);
   type CustodyStageFilter = 'all' | 'draft' | 'owner' | 'pay' | 'active' | 'settlement' | 'closed';
   const [custodyStageFilter, setCustodyStageFilter] = useState<CustodyStageFilter>('all');
   const [custodyEditId, setCustodyEditId] = useState<string | null>(null);
@@ -1716,7 +1717,17 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
             )}
           </div>
         )}
-        {pendingCustodyForOwner.length === 0 && custodyDraftsNotSentToOwner === 0 && (
+        {pendingCustodyForOwner.length === 0 && custodyFunds.length > 0 && (
+          <p className="text-sm text-amber-200/90 px-1 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+            {t('ownerApprovalsPanel.custodyStatusBreakdown', {
+              total: custodyFunds.length,
+              draft: custodyDraftsNotSentToOwner,
+              pending: accCustodyStats.owner,
+              active: accCustodyStats.active + accCustodyStats.pay,
+            })}
+          </p>
+        )}
+        {pendingCustodyForOwner.length === 0 && custodyFunds.length === 0 && (
           <p className="text-sm text-zinc-500 px-1">{t('ownerApprovalsPanel.noCustodyPending')}</p>
         )}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
@@ -3194,6 +3205,15 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
                       onChange={(e) => setCustodyForm((p) => ({ ...p, description: e.target.value }))}
                     />
                   </div>
+                  <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={custodySendToOwnerOnCreate}
+                      onChange={(e) => setCustodySendToOwnerOnCreate(e.target.checked)}
+                      className="rounded border-white/20"
+                    />
+                    {t('finance.custodySendToOwnerOnCreate')}
+                  </label>
                   <button
                     type="button"
                     onClick={() => {
@@ -3206,9 +3226,14 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
                           currency: custodyForm.currency,
                           exchangeRate:
                             custodyForm.currency === 'USD' ? Number(custodyForm.exchangeRate) || 0 : undefined,
+                          sendToOwner: custodySendToOwnerOnCreate,
                         });
                         if (ok) {
-                          toast.success(t('finance.toastCustodyDraftCreated'));
+                          toast.success(
+                            custodySendToOwnerOnCreate
+                              ? t('finance.toastCustodyCreatedAndSent')
+                              : t('finance.toastCustodyDraftCreated'),
+                          );
                           setCustodyForm({
                             title: '',
                             description: '',
@@ -3222,7 +3247,7 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
                     }}
                     className="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 text-sm font-black"
                   >
-                    {t('finance.saveCustodyDraft')}
+                    {custodySendToOwnerOnCreate ? t('finance.saveCustodyAndSend') : t('finance.saveCustodyDraft')}
                   </button>
                 </div>
                 <div className="space-y-3">
@@ -3255,6 +3280,27 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
                         {label} ({count})
                       </button>
                     ))}
+                    {currentUser?.role === 'محاسب' && accCustodyStats.draft > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void (async () => {
+                            const drafts = custodyFunds.filter(
+                              (f) => f.status === 'مسودة' || f.status === 'مرفوض_طلب',
+                            );
+                            let n = 0;
+                            for (const f of drafts) {
+                              if (await submitCustodyDraftToOwner(f.id)) n += 1;
+                            }
+                            if (n > 0) toast.success(t('finance.toastCustodyBatchSent', { count: n }));
+                            else toast.error(t('finance.toastCustodySubmitFailed'));
+                          })();
+                        }}
+                        className="px-3 py-1.5 rounded-xl text-xs font-black bg-amber-500 text-slate-950 border border-amber-400/40"
+                      >
+                        {t('finance.submitAllCustodyDrafts', { count: accCustodyStats.draft })}
+                      </button>
+                    )}
                   </div>
                   {filteredAccountantCustodyFunds.length === 0 && (
                     <p className="text-sm text-zinc-500">

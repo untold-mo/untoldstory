@@ -1361,6 +1361,8 @@ interface DataContextType {
     productionManagerId: string;
     currency?: CustodyCurrency;
     exchangeRate?: number;
+    /** افتراضي true — تصل للمالك فوراً بحالة بانتظار اعتماد المالك */
+    sendToOwner?: boolean;
   }) => Promise<boolean>;
   updateCustodyDraft: (
     id: string,
@@ -9277,6 +9279,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     productionManagerId: string;
     currency?: CustodyCurrency;
     exchangeRate?: number;
+    sendToOwner?: boolean;
   }): Promise<boolean> => {
     if (currentUser?.role !== 'محاسب') return false;
     const pm = users.find(u => u.id === data.productionManagerId);
@@ -9289,6 +9292,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const exchangeRate =
       currency === 'USD' ? Math.max(0, Number(data.exchangeRate) || 0) : undefined;
     if (currency === 'USD' && (!exchangeRate || exchangeRate <= 0)) return false;
+    const sendToOwner = data.sendToOwner !== false;
     const row: CustodyFund = {
       id: `CF-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
       title,
@@ -9296,7 +9300,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       totalAmount: amt,
       currency,
       exchangeRate: currency === 'USD' ? exchangeRate : undefined,
-      status: 'مسودة',
+      status: sendToOwner ? 'طلب_بانتظار_المالك' : 'مسودة',
       createdAt: new Date().toISOString(),
       createdById: currentUser.id,
       createdByName: currentUser.name,
@@ -9315,11 +9319,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCustodyFunds((prev) => [row, ...prev]);
     }
     addAuditEvent({
-      action: 'إنشاء عهدة إنتاج (مسودة محاسب)',
+      action: sendToOwner ? 'إنشاء عهدة وإرسالها للمالك' : 'إنشاء عهدة إنتاج (مسودة محاسب)',
       entityType: 'system',
       entityId: row.id,
       details: row.title,
     });
+    if (sendToOwner && isServerDataMode()) {
+      try {
+        const fresh = await fetchCustodyFundsApi();
+        setCustodyFunds(fresh.map(migrateCustodyFund));
+      } catch {
+        /* ignore */
+      }
+    }
     return true;
   };
 
