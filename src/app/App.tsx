@@ -4003,7 +4003,7 @@ function readLeadsPageSize(): number {
 }
 
 const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void }) => {
-  const { leads, users, invoices, expenses, priceQuotes, shootBookings, equipmentBookings, meetingBookings, manualCustomers, currentUser, addLead, addManualCustomer, assignLead, assignLeadsBulk, updateLeadStatus, deleteLead, deleteLeadsBulk } = useData();
+  const { leads, users, invoices, expenses, priceQuotes, shootBookings, equipmentBookings, meetingBookings, manualCustomers, currentUser, addLead, addManualCustomer, assignLead, assignLeadsBulk, updateLeadStatus, deleteLead, deleteLeadsBulk, leadDataQualitySettings } = useData();
   const { t } = useTranslation();
   const { dir, dateLocale } = useAppDirection();
   const { openLeadUpdate, canUpdateLead, isOpen: leadUpdateModalOpen } = useLeadRepUpdate();
@@ -4405,15 +4405,23 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
   }, [leads, isLeadsDistributionHub]);
 
   const handleCreateLead = () => {
-    const budget = Number(leadForm.budget);
-    if (!leadForm.name.trim() || !leadForm.company.trim() || !leadForm.phone.trim() || !budget || budget <= 0) {
-      toast.error(t('leadForm.completeRequired'));
+    const budget = leadForm.budget.trim() ? Number(leadForm.budget) : 0;
+    if (!leadForm.name.trim() || !leadForm.phone.trim()) {
+      toast.error(t('leadForm.completeRequiredBasic'));
+      return;
+    }
+    if (leadDataQualitySettings.requireCompany && !leadForm.company.trim()) {
+      toast.error(t('leadForm.companyRequired'));
+      return;
+    }
+    if (leadDataQualitySettings.requireBudget && (!budget || budget <= 0)) {
+      toast.error(t('leadForm.budgetRequired'));
       return;
     }
 
     const ok = addLead({
       name: leadForm.name.trim(),
-      company: leadForm.company.trim(),
+      company: leadForm.company.trim() || '—',
       phone: leadForm.phone.trim(),
       email: leadForm.email.trim() || `${leadForm.name.replace(/\s+/g, '.').toLowerCase()}@mail.com`,
       status: 'جديد',
@@ -5373,10 +5381,10 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <input value={leadForm.name} onChange={(e) => setLeadForm(prev => ({ ...prev, name: e.target.value }))} placeholder={t('leadForm.customerName')} className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
-                <input value={leadForm.company} onChange={(e) => setLeadForm(prev => ({ ...prev, company: e.target.value }))} placeholder={t('leadForm.companyName')} className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
+                <input value={leadForm.company} onChange={(e) => setLeadForm(prev => ({ ...prev, company: e.target.value }))} placeholder={leadDataQualitySettings.requireCompany ? t('leadForm.companyName') : t('leadForm.companyOptional')} className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
                 <input value={leadForm.phone} onChange={(e) => setLeadForm(prev => ({ ...prev, phone: e.target.value }))} placeholder={t('leadForm.phoneIntlHint')} className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" dir="ltr" />
                 <input value={leadForm.email} onChange={(e) => setLeadForm(prev => ({ ...prev, email: e.target.value }))} placeholder={t('leadForm.emailOptional')} className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
-                <input type="number" min={1} value={leadForm.budget} onChange={(e) => setLeadForm(prev => ({ ...prev, budget: e.target.value }))} placeholder={t('leadForm.budget')} className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
+                <input type="number" min={leadDataQualitySettings.requireBudget ? 1 : 0} value={leadForm.budget} onChange={(e) => setLeadForm(prev => ({ ...prev, budget: e.target.value }))} placeholder={leadDataQualitySettings.requireBudget ? t('leadForm.budget') : t('leadForm.budgetOptional')} className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm" />
                 <select value={leadForm.source} onChange={(e) => setLeadForm(prev => ({ ...prev, source: e.target.value }))} className="bg-[#0F1528] border border-white/15 rounded-2xl px-4 py-3 text-sm">
                   <option value="يدوي">{t('leads.sourceManual')}</option>
                   <option value="facebook">facebook</option>
