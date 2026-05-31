@@ -6,6 +6,7 @@ import { syncMetaLeadAdsForOwner } from '../lib/metaLeadAdsSync.js';
 import { syncLinkedInLeadGenForOwner } from '../lib/linkedinLeadSync.js';
 import { syncGoogleAdsLeadFormsForOwner } from '../lib/googleAdsLeadSync.js';
 import { importLeadsCsvBatch } from '../lib/importLeadsCsv.js';
+import { normalizeLeadPhone } from '../lib/leadPhone.js';
 
 const router = Router();
 
@@ -166,7 +167,7 @@ router.post('/', requireAuth(), async (req, res) => {
     const body = req.body || {};
     const name = String(body.name || '').trim();
     const company = String(body.company || '').trim();
-    const phone = String(body.phone || '').trim();
+    const phone = normalizeLeadPhone(String(body.phone || '').trim());
     const email = String(body.email || '').trim().toLowerCase();
     const status = String(body.status || 'جديد').trim();
     const budget = Math.max(0, Number(body.budget) || 0);

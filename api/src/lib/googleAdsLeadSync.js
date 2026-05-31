@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import { getIntegrationTokenStorePath } from './integrationTokenPath.js';
 import { persistTokens } from './integrationsOAuthEngine.js';
 import { leadToJson } from './leadSerialize.js';
+import { normalizeLeadPhone } from './leadPhone.js';
 
 const API_VER = () => process.env.GOOGLE_ADS_API_VERSION?.trim() || 'v17';
 
@@ -369,7 +370,7 @@ export async function syncGoogleAdsLeadFormsForOwner(opts) {
         [];
       const parsed = parseSubmissionFields(fields);
       let email = (parsed.email || '').toLowerCase().trim();
-      let phone = (parsed.phone || '').replace(/\s+/g, '').trim();
+      let phone = normalizeLeadPhone((parsed.phone || '').replace(/\s+/g, '').trim());
       const name = (parsed.fullName || 'عميل إعلان').trim().slice(0, 200) || 'عميل إعلان';
       const company = (parsed.company || `Google Ads — ${cid}` || '—').trim().slice(0, 200) || '—';
       if (!email && !phone) {

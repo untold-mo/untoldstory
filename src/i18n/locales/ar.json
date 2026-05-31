@@ -164,6 +164,7 @@
     "companyName": "اسم الشركة",
     "companyOptional": "اسم الشركة (اختياري)",
     "phone": "رقم الهاتف",
+    "phoneIntlHint": "01xxxxxxxxx أو +971547711772",
     "emailOptional": "البريد الإلكتروني (اختياري)",
     "budget": "الميزانية المتوقعة",
     "sourceExample": "المصدر (مثال: صيانة / زيارة مباشرة)",

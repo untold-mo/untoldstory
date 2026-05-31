@@ -1,4 +1,5 @@
 import { csvRowsToObjects, parseCsvText } from '@/lib/csv/parseCsvText';
+import { normalizeLeadPhone } from '@/lib/leadPhone';
 
 export type LinkedInCsvLeadRow = {
   name: string;
@@ -25,10 +26,6 @@ function pick(row: Record<string, string>, keys: string[]): string {
     if (v != null && String(v).trim() !== '') return String(v).trim();
   }
   return '';
-}
-
-function normalizePhone(phone: string): string {
-  return String(phone || '').replace(/\s+/g, '').trim();
 }
 
 function normalizeEmail(email: string): string {
@@ -62,7 +59,7 @@ export function parseLinkedInLeadsCsv(fileText: string): LinkedInCsvParseResult 
         'emailaddress',
       ]),
     );
-    let phone = normalizePhone(
+    let phone = normalizeLeadPhone(
       pick(raw, [
         'phone',
         'phone_number',

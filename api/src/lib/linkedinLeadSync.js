@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import { getIntegrationTokenStorePath } from './integrationTokenPath.js';
 import { persistTokens } from './integrationsOAuthEngine.js';
 import { leadToJson } from './leadSerialize.js';
+import { normalizeLeadPhone } from './leadPhone.js';
 
 function readLinkedInBundle(userId) {
   const p = getIntegrationTokenStorePath();
@@ -293,7 +294,7 @@ export async function syncLinkedInLeadGenForOwner(opts) {
         const strings = extractStringsFromLeadResponse(row);
         const parsed = parseLinkedInStrings(strings);
         let email = (parsed.email || '').toLowerCase().trim();
-        let phone = (parsed.phone || '').replace(/\s+/g, '').trim();
+        let phone = normalizeLeadPhone((parsed.phone || '').replace(/\s+/g, '').trim());
         const name = (parsed.fullName || 'عميل إعلان').trim().slice(0, 200) || 'عميل إعلان';
         const company = (acctName || '—').trim().slice(0, 200) || '—';
         if (!email && !phone) {

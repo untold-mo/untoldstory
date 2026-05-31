@@ -164,6 +164,7 @@
     "companyName": "Company name",
     "companyOptional": "Company name (optional)",
     "phone": "Phone number",
+    "phoneIntlHint": "01xxxxxxxxx or +971547711772",
     "emailOptional": "Email (optional)",
     "budget": "Expected budget",
     "sourceExample": "Source (e.g. maintenance / walk-in)",

@@ -2,6 +2,11 @@ import * as XLSX from 'xlsx';
 import { parseCsvText } from '@/lib/csv/parseCsvText';
 import type { ImportCsvLeadInput } from '@/lib/api/leadsApi';
 import type { LeadCategory } from '@/app/context/DataContext';
+import {
+  normalizeLeadPhone,
+  isLikelySpreadsheetPhoneNumber,
+  isValidLeadPhone,
+} from '@/lib/leadPhone';
 
 export type SpreadsheetLeadRow = ImportCsvLeadInput & {
   source: 'excel';
@@ -153,12 +158,11 @@ export function parseSpreadsheetDate(raw: string | number): string | null {
 }
 
 function isLikelyPhoneNumber(n: number): boolean {
-  return (n >= 1e8 && n < 1e12) || (n >= 1e9 && n < 2e11);
+  return isLikelySpreadsheetPhoneNumber(n);
 }
 
 function formatPhoneFromNumber(n: number): string {
-  const rounded = Math.round(n);
-  return normalizeSpreadsheetPhone(rounded);
+  return normalizeLeadPhone(Math.round(n));
 }
 
 function excelSerialToYmd(serial: number): string {
@@ -169,24 +173,13 @@ function excelSerialToYmd(serial: number): string {
   return `${y}/${m}/${day}`;
 }
 
-/** يحافظ على صفر بداية أرقام الجوال بعد قراءة Excel كرقم */
+/** @deprecated — استخدم normalizeLeadPhone من @/lib/leadPhone */
 export function normalizeSpreadsheetPhone(raw: string | number): string {
-  let s = String(raw ?? '')
-    .trim()
-    .replace(/[^\d+]/g, '');
-  if (!s) return '';
-  if (s.startsWith('+20')) s = '0' + s.slice(3);
-  else if (s.startsWith('20') && s.length === 12) s = '0' + s.slice(2);
-  const digits = s.replace(/\D/g, '');
-  if (digits.length === 10 && digits.startsWith('1')) return `0${digits}`;
-  if (digits.length === 11 && digits.startsWith('01')) return digits;
-  if (digits.length >= 9 && digits.length <= 15) return digits;
-  return digits;
+  return normalizeLeadPhone(raw);
 }
 
 function cellLooksLikePhone(val: string): boolean {
-  const digits = val.replace(/\D/g, '');
-  return digits.length >= 9 && digits.length <= 15;
+  return isValidLeadPhone(val);
 }
 
 function looksLikeHeaderRow(row: string[]): boolean {
@@ -228,7 +221,7 @@ function findPhoneInRow(line: string[]): string {
   for (let i = line.length - 1; i >= 0; i--) {
     const raw = String(line[i] ?? '').trim();
     if (!raw) continue;
-    if (cellLooksLikePhone(raw)) return normalizeSpreadsheetPhone(raw);
+    if (cellLooksLikePhone(raw)) return normalizeLeadPhone(raw);
   }
   return '';
 }
@@ -250,7 +243,7 @@ function positionalMatrixToObjects(matrix: string[][]): Record<string, string>[]
     if (!line.some((c) => String(c ?? '').trim() !== '')) continue;
 
     const name = String(line[0] ?? '').trim();
-    const phone = findPhoneInRow(line) || normalizeSpreadsheetPhone(line[3] ?? line[2] ?? '');
+    const phone = findPhoneInRow(line) || normalizeLeadPhone(line[3] ?? line[2] ?? '');
     const interest =
       String(line[2] ?? '').trim() && !cellLooksLikePhone(String(line[2] ?? ''))
         ? String(line[2] ?? '').trim()
@@ -284,12 +277,12 @@ function sheetMatrixToObjects(matrix: string[][]): Record<string, string>[] {
       const val = String(line[c] ?? '').trim();
       if (!val) continue;
       if (key === 'phone') {
-        obj.phone = normalizeSpreadsheetPhone(val);
+        obj.phone = normalizeLeadPhone(val);
         continue;
       }
       obj[key] = obj[key] ? `${obj[key]} · ${val}` : val;
     }
-    if (obj.phone) obj.phone = normalizeSpreadsheetPhone(obj.phone);
+    if (obj.phone) obj.phone = normalizeLeadPhone(obj.phone);
     out.push(obj);
   }
   return out;
@@ -419,7 +412,7 @@ export function parseSpreadsheetObjects(objects: Record<string, string>[]): Spre
     if (!name) name = [first, last].filter(Boolean).join(' ').trim();
 
     let email = pick(raw, ['email']).toLowerCase();
-    let phone = normalizeSpreadsheetPhone(pick(raw, ['phone']));
+    let phone = normalizeLeadPhone(pick(raw, ['phone']));
     const interest = pick(raw, ['interest', 'product', 'model']);
     let company = pick(raw, ['company']);
     const jobTitle = pick(raw, ['job_title']);
@@ -442,7 +435,7 @@ export function parseSpreadsheetObjects(objects: Record<string, string>[]): Spre
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       email = placeholderImportEmail(rowNum);
     }
-    if (!phone) {
+    if (!phone || !isValidLeadPhone(phone)) {
       phone = placeholderImportPhone(rowNum);
     }
 

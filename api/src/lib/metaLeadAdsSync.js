@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import { getIntegrationTokenStorePath } from './integrationTokenPath.js';
 import { leadToJson } from './leadSerialize.js';
+import { normalizeLeadPhone } from './leadPhone.js';
 
 const GRAPH = () => process.env.META_GRAPH_VERSION || 'v21.0';
 
@@ -161,7 +162,7 @@ export async function syncMetaLeadAdsForOwner(opts) {
         if (created >= maxLeadsTotal) break outer;
         const parsed = parseLeadgenFieldData(row.field_data);
         let email = (parsed.email || '').toLowerCase().trim();
-        let phone = (parsed.phone || '').replace(/\s+/g, '').trim();
+        let phone = normalizeLeadPhone((parsed.phone || '').replace(/\s+/g, '').trim());
         const name = (parsed.fullName || 'عميل إعلان').trim().slice(0, 200) || 'عميل إعلان';
         const company = (parsed.company || pageName || '—').trim().slice(0, 200) || '—';
         if (!email && !phone) {

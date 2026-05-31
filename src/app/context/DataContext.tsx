@@ -76,6 +76,7 @@ import { notifyClientChannel } from '@/lib/clientChannelNotify';
 import { fetchLeadsSb } from '@/lib/supabase/directApiSb';
 import { toast } from 'sonner';
 import { syncWorkspacePatch, type WorkspaceStatePatch } from './workspaceSync';
+import { normalizeLeadPhone, leadPhoneDigitsKey, isValidLeadPhone } from '@/lib/leadPhone';
 
 /** حذف قيد يومية أثناء التراجع — لا يرمي للأعلى */
 async function tryDeleteManualJournal(journalId: string): Promise<void> {
@@ -4471,11 +4472,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const findDuplicateLead = (leadInput: Partial<Lead>, currentLeads: Lead[]) => {
     if (!leadDataQualitySettings.rejectDuplicateLeads) return null;
-    const phone = (leadInput.phone || '').replace(/\D+/g, '');
+    const phone = leadPhoneDigitsKey(leadInput.phone || '');
     const email = (leadInput.email || '').trim().toLowerCase();
     return currentLeads.find((l) => {
       if (leadDataQualitySettings.duplicatePhone) {
-        const existingPhone = (l.phone || '').replace(/\D+/g, '');
+        const existingPhone = leadPhoneDigitsKey(l.phone || '');
         if (phone && existingPhone && phone === existingPhone) return true;
       }
       if (leadDataQualitySettings.duplicateEmail) {
@@ -4900,6 +4901,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const addLead = (leadData: Omit<Lead, 'id' | 'createdAt' | 'updatedAt' | 'score' | 'slaStatus' | 'timeline'>): boolean => {
     if (!(currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات')) return false;
+    const phone = normalizeLeadPhone(leadData.phone);
+    if (!isValidLeadPhone(phone)) {
+      toast.error('رقم الجوال غير صالح — استخدم 01xxxxxxxxx أو +971… / +44…');
+      return false;
+    }
     if (leadDataQualitySettings.requireCompany && !(leadData.company || '').trim()) {
       toast.error('حقل الشركة مطلوب حسب سياسة جودة البيانات');
       return false;
@@ -4917,6 +4923,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const tempId = `t-${Date.now()}`;
       const tempLead: Lead = {
         ...leadData,
+        phone,
         id: tempId,
         customerCode: leadData.customerCode || buildCustomerCodeFromSeed(tempId),
         createdAt: new Date().toISOString(),
@@ -4938,7 +4945,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const created = await serverCreateLead({
             name: leadData.name,
             company: leadData.company,
-            phone: leadData.phone,
+            phone,
             email: leadData.email,
             status: leadData.status,
             budget: leadData.budget,
@@ -4980,6 +4987,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Create lead object first to pass to autoDistribute
     const lead: Lead = {
       ...leadData,
+      phone,
       id,
       customerCode: leadData.customerCode || buildCustomerCodeFromSeed(id),
       createdAt: new Date().toISOString(),
@@ -5060,7 +5068,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const row = await serverCreateLead({
             name: ld.name,
             company: ld.company,
-            phone: ld.phone,
+            phone: normalizeLeadPhone(ld.phone),
             email: ld.email,
             status: ld.status,
             budget: ld.budget,
@@ -5097,6 +5105,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const when = ld.createdAt || new Date().toISOString();
       const lead: Lead = {
         ...ld,
+        phone: normalizeLeadPhone(ld.phone),
         id,
         customerCode: ld.customerCode || buildCustomerCodeFromSeed(id),
         createdAt: when,

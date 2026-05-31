@@ -2,6 +2,7 @@ import { getSupabase } from '@/lib/supabase/client';
 import type { Lead, Activity } from '@/app/context/DataContext';
 import { mapLeadFromRow } from '@/lib/supabase/postgrestMappers';
 import { getSupabaseActor } from '@/lib/supabase/getActor';
+import { normalizeLeadPhone, leadPhoneDigitsKey } from '@/lib/leadPhone';
 
 async function getActor(): Promise<{ id: string; name: string; role: string }> {
   return getSupabaseActor();
@@ -42,7 +43,7 @@ export async function supabaseCreateLead(payload: {
     customer_code: payload.customerCode ?? null,
     name: payload.name.trim(),
     company: payload.company.trim(),
-    phone: payload.phone.trim(),
+    phone: normalizeLeadPhone(payload.phone.trim()),
     email: payload.email.trim().toLowerCase(),
     status: payload.status || 'جديد',
     budget: Math.max(0, Number(payload.budget) || 0),
@@ -229,7 +230,7 @@ export async function supabaseImportLeadsCsv(payload: {
   for (const row of payload.leads) {
     let name = String(row.name || '').trim().slice(0, 200);
     const company = String(row.company || '—').trim().slice(0, 200);
-    let phone = String(row.phone || '').trim();
+    let phone = normalizeLeadPhone(String(row.phone || '').trim());
     let email = String(row.email || '').trim().toLowerCase();
     const rowKey = row.linkedinRowIndex || name || company;
     if (!name) {

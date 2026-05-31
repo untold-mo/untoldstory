@@ -1,7 +1,8 @@
 import { leadToJson } from './leadSerialize.js';
+import { normalizeLeadPhone, leadPhoneDigitsKey } from './leadPhone.js';
 
 function normPhone(p) {
-  return String(p || '').replace(/\D+/g, '');
+  return leadPhoneDigitsKey(p);
 }
 
 function normEmail(e) {
@@ -51,7 +52,7 @@ export async function importLeadsCsvBatch(opts) {
   for (const row of rows) {
     let name = String(row.name || '').trim().slice(0, 200);
     const company = String(row.company || '—').trim().slice(0, 200);
-    let phone = String(row.phone || '').trim();
+    let phone = normalizeLeadPhone(String(row.phone || '').trim());
     let email = normEmail(row.email);
     const rowKey = row.linkedinRowIndex || name || company;
     if (!name) {
