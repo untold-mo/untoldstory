@@ -310,6 +310,8 @@
     "sourceManual": "يدوي",
     "filterMine": "الخاص بي",
     "filterUnassigned": "غير موزع",
+    "filterAllReps": "كل المناديب",
+    "filterBySalesRep": "فلتر حسب المندوب",
     "overdueFilterActive": "فلتر المتأخر مفعل الآن",
     "notificationFocusActive": "عرض {{count}} ليدز من التنبيه — اضغط على صف لفتح التفاصيل",
     "repFilterActive": "فلتر المندوب مفعل: {{name}}",

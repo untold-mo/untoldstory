@@ -310,6 +310,8 @@
     "sourceManual": "Manual",
     "filterMine": "Mine",
     "filterUnassigned": "Unassigned",
+    "filterAllReps": "All sales reps",
+    "filterBySalesRep": "Filter by sales rep",
     "overdueFilterActive": "Overdue filter is active",
     "notificationFocusActive": "Showing {{count}} lead(s) from this alert — click a row for details",
     "repFilterActive": "Rep filter active: {{name}}",

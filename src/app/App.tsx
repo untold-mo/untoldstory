@@ -4050,6 +4050,16 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
   const leadStatuses: LeadStatus[] = ['جديد', 'قيد التواصل', 'عرض سعر', 'تفاوض', 'مغلق - فوز', 'مغلق - خسارة'];
   const leadCategories: LeadCategory[] = ['إنجليزي', 'شركات كبرى', 'شركات صغيرة', 'إعلانات', 'سوشيال ميديا'];
   const reps = users.filter(u => u.role === 'مندوب');
+  const canFilterBySalesRep =
+    currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات';
+  const repLeadCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const lead of leads) {
+      if (!lead.assignedTo) continue;
+      counts.set(lead.assignedTo, (counts.get(lead.assignedTo) || 0) + 1);
+    }
+    return counts;
+  }, [leads]);
   const salesManager = users.find(u => u.role === 'مدير مبيعات');
   const canCreateLead = currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات';
   const canAddManualCustomer = currentUser?.role === 'محاسب' || currentUser?.role === 'مالك';
@@ -4801,6 +4811,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                   setSourceFilter('all');
                   setStatusFilter('الكل');
                   setOverdueOnly(false);
+                  setRepUserFilterId('');
                 }}
                 className={`px-3 py-1.5 rounded-xl text-[11px] font-black border ${
                   assignedFilter === 'unassigned' && sourceFilter === 'all'
@@ -4821,6 +4832,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                       setSourceFilter(src);
                       setStatusFilter('الكل');
                       setOverdueOnly(false);
+                      setRepUserFilterId('');
                     }}
                     className={`px-3 py-1.5 rounded-xl text-[11px] font-black border ${leadSourceBadgeClass(src)} ${
                       assignedFilter === 'unassigned' && sourceFilter === src ? 'ring-2 ring-white/40' : ''
@@ -4836,6 +4848,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                 onClick={() => {
                   setAssignedFilter('all');
                   setSourceFilter('all');
+                  setRepUserFilterId('');
                 }}
                 className="px-3 py-1.5 rounded-xl text-[11px] font-black bg-[#0F1528] text-zinc-400 border border-white/10"
               >
@@ -4889,13 +4902,37 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
 
           {entityMode === 'leads' && currentUser?.role !== 'محاسب' && (<select
             value={assignedFilter}
-            onChange={(e) => setAssignedFilter(e.target.value as 'all' | 'mine' | 'unassigned')}
+            onChange={(e) => {
+              const next = e.target.value as 'all' | 'mine' | 'unassigned';
+              setAssignedFilter(next);
+              if (next !== 'all') setRepUserFilterId('');
+            }}
             className="bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-sm"
           >
             <option value="all">{t('common.all')}</option>
             <option value="mine">{t('leads.filterMine')}</option>
             <option value="unassigned">{t('leads.filterUnassigned')}</option>
           </select>)}
+
+          {entityMode === 'leads' && canFilterBySalesRep && reps.length > 0 && (
+            <select
+              value={repUserFilterId}
+              onChange={(e) => {
+                const id = e.target.value;
+                setRepUserFilterId(id);
+                if (id) setAssignedFilter('all');
+              }}
+              className="bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-sm"
+              aria-label={t('leads.filterBySalesRep')}
+            >
+              <option value="">{t('leads.filterAllReps')}</option>
+              {reps.map((rep) => (
+                <option key={rep.id} value={rep.id}>
+                  {rep.name} ({repLeadCounts.get(rep.id) || 0})
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         {entityMode === 'leads' && focusLeadIds.length > 0 && (
