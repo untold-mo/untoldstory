@@ -2976,6 +2976,14 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
                   <input value={journalForm.description} onChange={(e) => setJournalForm(prev => ({ ...prev, description: e.target.value }))} className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm md:col-span-2" placeholder={t('finance.journalDescPh')} />
                 </div>
                 <div className="space-y-2">
+                  <div className="hidden md:grid grid-cols-5 gap-2 px-1 pb-1 border-b border-white/5">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{t('finance.colAccount')}</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">{t('finance.colDebit')}</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-rose-400">{t('finance.colCredit')}</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{t('finance.colCostCenter')}</span>
+                    <span className="sr-only">{t('finance.colActions')}</span>
+                  </div>
+                  <p className="hidden md:block text-[11px] text-zinc-500 leading-relaxed">{t('finance.journalAmountHint')}</p>
                   {journalForm.lines.map((line, idx) => (
                     <div key={`line-${idx}`} className="grid grid-cols-1 md:grid-cols-5 gap-2">
                       <select value={line.accountCode} onChange={(e) => updateJournalLine(idx, { accountCode: e.target.value })} className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm">

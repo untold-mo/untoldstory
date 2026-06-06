@@ -1033,6 +1033,7 @@
     "journalDescPh": "Journal description",
     "debitPh": "Debit",
     "creditPh": "Credit",
+    "journalAmountHint": "Enter the amount in Debit or Credit only — not in cost center. One amount per line; total debit must equal total credit.",
     "deleteLine": "Delete line",
     "addLine": "Add line",
     "saveJournal": "Save journal",
