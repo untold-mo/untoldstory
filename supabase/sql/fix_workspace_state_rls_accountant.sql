@@ -20,3 +20,14 @@ SET doc_json = jsonb_set(
 WHERE id = 'default'
   AND jsonb_typeof(doc_json->'journalCodebook') = 'object'
   AND (doc_json->'journalCodebook') = '{}'::jsonb;
+
+UPDATE public.workspace_state
+SET doc_json = jsonb_set(
+  doc_json,
+  '{chartOfAccounts}',
+  '[]'::jsonb,
+  true
+)
+WHERE id = 'default'
+  AND jsonb_typeof(doc_json->'chartOfAccounts') = 'object'
+  AND (doc_json->'chartOfAccounts') = '{}'::jsonb;

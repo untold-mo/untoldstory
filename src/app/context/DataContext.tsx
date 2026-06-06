@@ -1266,8 +1266,10 @@ interface DataContextType {
   reopenMonth: (monthKey: string) => Promise<boolean>;
   isMonthClosed: (monthKey: string) => boolean;
   chartOfAccounts: ChartOfAccount[];
-  addChartAccount: (account: Omit<ChartOfAccount, 'isSystem'>) => boolean;
-  removeChartAccount: (code: string) => boolean;
+  addChartAccount: (account: Omit<ChartOfAccount, 'isSystem'>) => Promise<boolean>;
+  removeChartAccount: (code: string) => Promise<boolean>;
+  addJournalCodingRule: (rule: Omit<JournalCodingRule, 'id'>) => Promise<boolean>;
+  removeJournalCodingRule: (id: string) => Promise<boolean>;
   manualJournalEntries: ManualJournalEntry[];
   addManualJournalEntry: (entry: Omit<ManualJournalEntry, 'id'>) => Promise<boolean>;
   removeManualJournalEntry: (id: string) => Promise<boolean>;
@@ -1462,6 +1464,39 @@ const DEFAULT_WORK_ORDER_CHECKLIST: NonNullable<ShootBooking['workOrderChecklist
 ];
 
 const CUSTODY_ASSET_ACCOUNT_CODE = '1150';
+
+const VALID_COA_TYPES = new Set<ChartOfAccount['type']>(['asset', 'liability', 'equity', 'revenue', 'expense']);
+
+function normalizeChartOfAccounts(raw: unknown): ChartOfAccount[] {
+  if (raw == null) return [];
+  const arr = Array.isArray(raw)
+    ? raw
+    : typeof raw === 'object'
+      ? Object.values(raw as Record<string, unknown>)
+      : [];
+  const out: ChartOfAccount[] = [];
+  const seen = new Set<string>();
+  for (const item of arr) {
+    if (!item || typeof item !== 'object') continue;
+    const o = item as Record<string, unknown>;
+    const code = String(o.code ?? '').trim();
+    const name = String(o.name ?? '').trim();
+    const typeRaw = String(o.type ?? 'expense') as ChartOfAccount['type'];
+    const type = VALID_COA_TYPES.has(typeRaw) ? typeRaw : 'expense';
+    if (!code || !name || seen.has(code)) continue;
+    seen.add(code);
+    out.push({ code, name, type, isSystem: Boolean(o.isSystem) });
+  }
+  return out;
+}
+
+function ensureCustodyAccountInChart(accounts: ChartOfAccount[]): ChartOfAccount[] {
+  if (accounts.some((a) => a.code === CUSTODY_ASSET_ACCOUNT_CODE)) return accounts;
+  return [
+    ...accounts,
+    { code: CUSTODY_ASSET_ACCOUNT_CODE, name: 'عهدة إنتاج (أمانة)', type: 'asset', isSystem: true },
+  ];
+}
 
 const DEFAULT_CHART_OF_ACCOUNTS: ChartOfAccount[] = [
   { code: '1010', name: 'الصندوق/البنك', type: 'asset', isSystem: true },
@@ -2548,13 +2583,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setAuditEvents(DEMO_AUDIT_EVENTS);
       }
       if (!isServerDataMode() && savedChart) {
-        const rawChart = parseSafe<any[]>(savedChart);
-        if (Array.isArray(rawChart)) {
-          const merged = [...rawChart];
-          if (!merged.some((a) => a?.code === CUSTODY_ASSET_ACCOUNT_CODE)) {
-            merged.push({ code: CUSTODY_ASSET_ACCOUNT_CODE, name: 'عهدة إنتاج (أمانة)', type: 'asset' as const, isSystem: true });
-          }
-          setChartOfAccounts(merged);
+        const rawChart = parseSafe<unknown>(savedChart);
+        const normalized = normalizeChartOfAccounts(rawChart);
+        if (normalized.length > 0) {
+          setChartOfAccounts(ensureCustodyAccountInChart(normalized));
         }
       }
       else if (!isServerDataMode()) setChartOfAccounts(DEFAULT_CHART_OF_ACCOUNTS);
@@ -3388,13 +3420,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setOtherBookings([]);
         }
         if (Object.keys(ws).length > 0) {
-          const chart = ws.chartOfAccounts;
-          if (Array.isArray(chart) && chart.length > 0) {
-            const merged = [...chart];
-            if (!merged.some((a: ChartOfAccount) => a?.code === CUSTODY_ASSET_ACCOUNT_CODE)) {
-              merged.push({ code: CUSTODY_ASSET_ACCOUNT_CODE, name: 'عهدة إنتاج (أمانة)', type: 'asset', isSystem: true });
-            }
-            setChartOfAccounts(merged);
+          if (ws.chartOfAccounts !== undefined) {
+            const fromServer = normalizeChartOfAccounts(ws.chartOfAccounts);
+            setChartOfAccounts((prev) => {
+              const base = fromServer.length > 0 ? fromServer : prev.length > 0 ? prev : DEFAULT_CHART_OF_ACCOUNTS;
+              return ensureCustodyAccountInChart(base);
+            });
           }
           if (Array.isArray(ws.closedFiscalYears)) setClosedFiscalYears(ws.closedFiscalYears as string[]);
           if (ws.openingBalancesByYear && typeof ws.openingBalancesByYear === 'object') {
@@ -3833,7 +3864,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (event.newValue) setAuditEvents(JSON.parse(event.newValue));
             break;
           case 'prod_system_chart_of_accounts':
-            if (event.newValue) setChartOfAccounts(JSON.parse(event.newValue));
+            if (event.newValue) {
+              const normalized = normalizeChartOfAccounts(parseSafe<unknown>(event.newValue));
+              if (normalized.length > 0) setChartOfAccounts(ensureCustodyAccountInChart(normalized));
+            }
             break;
           case 'prod_system_manual_journals':
             if (event.newValue) setManualJournalEntries(JSON.parse(event.newValue));
@@ -4097,19 +4131,66 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
+  const persistJournalCodebook = async (next: JournalCodingRule[]): Promise<boolean> => {
+    const normalized = normalizeJournalCodingRulesFromArray(next);
+    if (isServerDataMode()) {
+      try {
+        await patchWorkspaceStateApi({ journalCodebook: normalized });
+      } catch {
+        toast.error('تعذر حفظ أكواد اليومية — تحقق من الصلاحيات أو الاتصال');
+        return false;
+      }
+    }
+    setJournalCodingRulesState(normalized);
+    return true;
+  };
+
   const setJournalCodingRules = useCallback((updater: React.SetStateAction<JournalCodingRule[]>) => {
     setJournalCodingRulesState((prev) => {
       const nextRaw = typeof updater === 'function' ? (updater as (p: JournalCodingRule[]) => JournalCodingRule[])(prev) : updater;
       const next = normalizeJournalCodingRulesFromArray(nextRaw);
-      if (isServerDataMode()) {
-        void syncWorkspacePatch({ journalCodebook: next }, () => {
-          setJournalCodingRulesState(prev);
-          toast.error('تعذر حفظ أكواد اليومية — تحقق من الصلاحيات أو الاتصال');
-        });
-      }
+      void persistJournalCodebook(next).then((ok) => {
+        if (!ok) setJournalCodingRulesState(prev);
+      });
       return next;
     });
   }, []);
+
+  const addJournalCodingRule = async (rule: Omit<JournalCodingRule, 'id'>): Promise<boolean> => {
+    if (!(currentUser?.role === 'محاسب' || currentUser?.role === 'مالك')) return false;
+    const title = String(rule.title || '').trim();
+    const accountCode = String(rule.accountCode || '').trim();
+    if (!title || !accountCode) return false;
+    const entry: JournalCodingRule = {
+      id: `jr-${Date.now()}`,
+      title,
+      accountCode,
+      costCenter: String(rule.costCenter || 'عام').trim() || 'عام',
+    };
+    const next = [...journalCodingRules, entry];
+    const ok = await persistJournalCodebook(next);
+    if (!ok) return false;
+    addAuditEvent({
+      action: 'إضافة كود يومية جاهز',
+      entityType: 'system',
+      details: `${entry.title} (${entry.accountCode})`,
+    });
+    return true;
+  };
+
+  const removeJournalCodingRule = async (id: string): Promise<boolean> => {
+    if (!(currentUser?.role === 'محاسب' || currentUser?.role === 'مالك')) return false;
+    const next = journalCodingRules.filter((r) => r.id !== id);
+    if (next.length === journalCodingRules.length) return false;
+    const ok = await persistJournalCodebook(next);
+    if (!ok) return false;
+    addAuditEvent({
+      action: 'حذف كود يومية جاهز',
+      entityType: 'system',
+      details: id,
+    });
+    return true;
+  };
 
   const setExpenseCodingRules = useCallback((updater: React.SetStateAction<ExpenseCodingRule[]>) => {
     setExpenseCodingRulesState((prev) => {
@@ -6240,34 +6321,54 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return true;
   };
 
-  const addChartAccount = (account: Omit<ChartOfAccount, 'isSystem'>) => {
+  const addChartAccount = async (account: Omit<ChartOfAccount, 'isSystem'>): Promise<boolean> => {
     if (!(currentUser?.role === 'محاسب' || currentUser?.role === 'مالك')) return false;
-    const exists = chartOfAccounts.some(a => a.code === account.code);
-    if (exists) return false;
+    const code = String(account.code || '').trim();
+    const name = String(account.name || '').trim();
+    if (!code || !name) return false;
+    let nextAccounts: ChartOfAccount[] | null = null;
     setChartOfAccounts((prev) => {
-      const next = [...prev, { ...account, isSystem: false }];
-      if (isServerDataMode()) void syncWorkspacePatch({ chartOfAccounts: next }, () => { setChartOfAccounts(prev); });
-      return next;
+      if (prev.some((a) => a.code === code)) return prev;
+      nextAccounts = [...prev, { ...account, code, name, isSystem: false as const }];
+      return nextAccounts;
     });
+    if (!nextAccounts) return false;
+    if (isServerDataMode()) {
+      try {
+        await patchWorkspaceStateApi({ chartOfAccounts: nextAccounts });
+      } catch {
+        setChartOfAccounts((prev) => prev.filter((a) => a.code !== code));
+        toast.error('تعذر حفظ الحساب في دليل الحسابات — تحقق من الصلاحيات أو الاتصال');
+        return false;
+      }
+    }
     addAuditEvent({
       action: 'إضافة حساب بدليل الحسابات',
       entityType: 'system',
-      details: `${account.code} - ${account.name}`,
+      details: `${code} - ${name}`,
     });
     return true;
   };
 
-  const removeChartAccount = (code: string) => {
+  const removeChartAccount = async (code: string): Promise<boolean> => {
     if (!(currentUser?.role === 'محاسب' || currentUser?.role === 'مالك')) return false;
-    const target = chartOfAccounts.find(a => a.code === code);
+    const target = chartOfAccounts.find((a) => a.code === code);
     if (!target || target.isSystem) return false;
-    const inUseByJournals = manualJournalEntries.some(e => e.lines.some(l => l.accountCode === code));
+    const inUseByJournals = manualJournalEntries.some((e) => e.lines.some((l) => l.accountCode === code));
     if (inUseByJournals) return false;
-    setChartOfAccounts((prev) => {
-      const next = prev.filter((a) => a.code !== code);
-      if (isServerDataMode()) void syncWorkspacePatch({ chartOfAccounts: next }, () => { setChartOfAccounts(prev); });
-      return next;
-    });
+    const snapshot = chartOfAccounts;
+    const next = snapshot.filter((a) => a.code !== code);
+    if (isServerDataMode()) {
+      try {
+        await patchWorkspaceStateApi({ chartOfAccounts: next });
+        setChartOfAccounts(next);
+      } catch {
+        toast.error('تعذر حذف الحساب — تحقق من الصلاحيات أو الاتصال');
+        return false;
+      }
+    } else {
+      setChartOfAccounts(next);
+    }
     addAuditEvent({
       action: 'حذف حساب من دليل الحسابات',
       entityType: 'system',
@@ -10002,7 +10103,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       closedMonths, closeMonth, reopenMonth, isMonthClosed,
       chartOfAccounts, addChartAccount, removeChartAccount,
       manualJournalEntries, addManualJournalEntry, removeManualJournalEntry,
-      journalCodingRules, setJournalCodingRules,
+      journalCodingRules, setJournalCodingRules, addJournalCodingRule, removeJournalCodingRule,
       expenseCodingRules, setExpenseCodingRules,
       customerCodePrefix, setCustomerCodePrefix,
       expenseSavedViews, setExpenseSavedViews,

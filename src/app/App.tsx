@@ -601,7 +601,7 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
   const { t } = useTranslation();
   const { dateLocale, dir } = useAppDirection();
   const currency = t('common.currency');
-  const { currentUser, invoices, expenses, leads, users, addInvoice, updateInvoiceStatus, recordInvoiceCollection, addExpense, updateExpenseStatus, approveExpense, rejectExpense, closedMonths, closeMonth, reopenMonth, isMonthClosed, chartOfAccounts, addChartAccount, removeChartAccount, manualJournalEntries, addManualJournalEntry, removeManualJournalEntry, journalCodingRules, setJournalCodingRules, expenseCodingRules, setExpenseCodingRules, customerCodePrefix, setCustomerCodePrefix, expenseSavedViews, setExpenseSavedViews, payrollAutoSendDay, setPayrollAutoSendDay, closedFiscalYears, closeFiscalYear, reopenFiscalYear, getOpeningBalances, saveOpeningBalancesForYear, openingBalancesByYear, getRepSnapshots, attendanceRecords, logAttendance, payrollApprovals, payrollApprovalRequests, getPayrollSalesDiscountTotal, financialReopenRequests, approvePayroll, reopenPayroll, isPayrollApproved, requestPayrollApproval, ownerApprovePayrollRequest, ownerRejectPayrollRequest, requestMonthReopen, ownerApproveMonthReopenRequest, ownerRejectMonthReopenRequest, printBrandingSettings, addEmployee, updateEmployeeSalary, accountingPolicy, updateAccountingPolicy, priceQuotes, custodyFunds, custodyAccountByCategory, updateCustodyAccountByCategory, createCustodyFund, updateCustodyDraft, submitCustodyDraftToOwner, submitAllCustodyDraftsToOwner, ownerApproveCustodyRequest, ownerRejectCustodyRequest, accountantRecordCustodyPayment, accountantApproveCustodySettlement, accountantRejectCustodySettlement } = useData();
+  const { currentUser, invoices, expenses, leads, users, addInvoice, updateInvoiceStatus, recordInvoiceCollection, addExpense, updateExpenseStatus, approveExpense, rejectExpense, closedMonths, closeMonth, reopenMonth, isMonthClosed, chartOfAccounts, addChartAccount, removeChartAccount, manualJournalEntries, addManualJournalEntry, removeManualJournalEntry, journalCodingRules, setJournalCodingRules, addJournalCodingRule, removeJournalCodingRule, expenseCodingRules, setExpenseCodingRules, customerCodePrefix, setCustomerCodePrefix, expenseSavedViews, setExpenseSavedViews, payrollAutoSendDay, setPayrollAutoSendDay, closedFiscalYears, closeFiscalYear, reopenFiscalYear, getOpeningBalances, saveOpeningBalancesForYear, openingBalancesByYear, getRepSnapshots, attendanceRecords, logAttendance, payrollApprovals, payrollApprovalRequests, getPayrollSalesDiscountTotal, financialReopenRequests, approvePayroll, reopenPayroll, isPayrollApproved, requestPayrollApproval, ownerApprovePayrollRequest, ownerRejectPayrollRequest, requestMonthReopen, ownerApproveMonthReopenRequest, ownerRejectMonthReopenRequest, printBrandingSettings, addEmployee, updateEmployeeSalary, accountingPolicy, updateAccountingPolicy, priceQuotes, custodyFunds, custodyAccountByCategory, updateCustodyAccountByCategory, createCustodyFund, updateCustodyDraft, submitCustodyDraftToOwner, submitAllCustodyDraftsToOwner, ownerApproveCustodyRequest, ownerRejectCustodyRequest, accountantRecordCustodyPayment, accountantApproveCustodySettlement, accountantRejectCustodySettlement } = useData();
   const [activeFinanceTab, setActiveFinanceTab] = useState<'invoices' | 'expenses' | 'ledger' | 'reports' | 'coa' | 'journals' | 'reps' | 'codebook' | 'custody'>('invoices');
   const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
   const [isCreateExpenseOpen, setIsCreateExpenseOpen] = useState(false);
@@ -1306,20 +1306,20 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
     )));
   };
 
-  const handleAddJournalCodingRule = () => {
+  const handleAddJournalCodingRule = async () => {
     if (!newJournalCoding.title.trim() || !newJournalCoding.accountCode.trim()) {
       toast.error(t('finance.toastCodeNameRequired'));
       return;
     }
-    setJournalCodingRules(prev => [
-      ...prev,
-      {
-        id: `jr-${Date.now()}`,
-        title: newJournalCoding.title.trim(),
-        accountCode: newJournalCoding.accountCode.trim(),
-        costCenter: newJournalCoding.costCenter.trim() || 'عام',
-      },
-    ]);
+    const ok = await addJournalCodingRule({
+      title: newJournalCoding.title.trim(),
+      accountCode: newJournalCoding.accountCode.trim(),
+      costCenter: newJournalCoding.costCenter.trim() || 'عام',
+    });
+    if (!ok) {
+      toast.error(t('finance.toastJournalCodeSaveFailed'));
+      return;
+    }
     setNewJournalCoding({ title: '', accountCode: chartOfAccounts[0]?.code || '1010', costCenter: 'عام' });
     toast.success(t('finance.toastJournalCodeAdded'));
   };
@@ -1400,18 +1400,23 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
     }
   }, [expenseForm.title]);
 
-  const handleAddAccount = () => {
+  const handleAddAccount = async () => {
     if (!coaForm.code.trim() || !coaForm.name.trim()) {
       toast.error(t('finance.toastCoaRequired'));
       return;
     }
-    const created = addChartAccount({
-      code: coaForm.code.trim(),
+    const code = coaForm.code.trim();
+    if (chartOfAccounts.some((a) => a.code === code)) {
+      toast.error(t('finance.toastCoaDuplicate'));
+      return;
+    }
+    const created = await addChartAccount({
+      code,
       name: coaForm.name.trim(),
       type: coaForm.type,
     });
     if (!created) {
-      toast.error(t('finance.toastCoaDuplicate'));
+      toast.error(t('finance.toastCoaSaveFailed'));
       return;
     }
     setCoaForm({ code: '', name: '', type: 'expense' });
@@ -2866,7 +2871,7 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
                       <span className="font-bold">{acc.name}</span>
                       <span className="text-zinc-400">{getCoaAccountTypeLabel(acc.type, t)}</span>
                       <span className={`text-xs font-black ${acc.isSystem ? 'text-amber-300' : 'text-emerald-300'}`}>{acc.isSystem ? t('finance.coaSystem') : t('finance.coaCustom')}</span>
-                      <button onClick={() => { const ok = removeChartAccount(acc.code); if (!ok) { toast.error(t('finance.toastCoaDeleteFailed')); return; } toast.success(t('finance.coaDeleted')); }} className="bg-rose-500/20 text-rose-300 rounded-lg px-3 py-1 text-xs font-black">
+                      <button onClick={async () => { const ok = await removeChartAccount(acc.code); if (!ok) { toast.error(t('finance.toastCoaDeleteFailed')); return; } toast.success(t('finance.coaDeleted')); }} className="bg-rose-500/20 text-rose-300 rounded-lg px-3 py-1 text-xs font-black">
                         {t('common.delete')}
                       </button>
                     </div>
@@ -2980,7 +2985,14 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
                           <p className="text-[11px] text-zinc-400">{rule.accountCode} | {rule.costCenter || t('finance.generalCostCenter')}</p>
                         </div>
                         <button
-                          onClick={() => setJournalCodingRules(prev => prev.filter(r => r.id !== rule.id))}
+                          onClick={async () => {
+                            const ok = await removeJournalCodingRule(rule.id);
+                            if (!ok) {
+                              toast.error(t('finance.toastJournalCodeSaveFailed'));
+                              return;
+                            }
+                            toast.success(t('finance.toastJournalCodeDeleted'));
+                          }}
                           className="px-2 py-1 rounded-lg text-xs font-black bg-rose-500/20 text-rose-300"
                         >
                           {t('common.delete')}
