@@ -5,7 +5,6 @@ const SINGLE_ID = 'default';
 
 const OWNER_KEYS = new Set([
   'closedFiscalYears',
-  'openingBalancesByYear',
   'printBranding',
   'leadIngestion',
   'slaEscalation',
@@ -22,6 +21,7 @@ const ACCOUNTING_KEYS = new Set([
   'payrollApprovals',
   'payrollApprovalRequests',
   'financialReopenRequests',
+  'openingBalancesByYear',
   'journalCodebook',
   'customerCodePrefix',
   'expenseCodebook',

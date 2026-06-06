@@ -1295,6 +1295,8 @@ interface DataContextType {
   closeFiscalYear: (year: string, openingBalancesForNextYear: { accountCode: string; balance: number }[]) => Promise<boolean>;
   reopenFiscalYear: (year: string) => Promise<boolean>;
   getOpeningBalances: (year: string) => { accountCode: string; balance: number }[];
+  saveOpeningBalancesForYear: (year: string, balances: { accountCode: string; balance: number }[]) => Promise<boolean>;
+  openingBalancesByYear: Record<string, { accountCode: string; balance: number }[]>;
   attendanceRecords: AttendanceRecord[];
   logAttendance: (repId: string, type: 'in' | 'out', source?: 'machine' | 'manual') => Promise<boolean>;
   payrollApprovals: PayrollApproval[];
@@ -6417,6 +6419,45 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const getOpeningBalances = (year: string) => openingBalancesByYear[year] || [];
 
+  const saveOpeningBalancesForYear = async (
+    year: string,
+    balances: { accountCode: string; balance: number }[]
+  ): Promise<boolean> => {
+    if (!(currentUser?.role === 'مالك' || currentUser?.role === 'محاسب')) return false;
+    const yearKey = String(year || '').trim();
+    if (!/^\d{4}$/.test(yearKey)) return false;
+    if (closedFiscalYears.includes(yearKey)) return false;
+    const validCodes = new Set(chartOfAccounts.map((a) => a.code));
+    const normalized = balances
+      .map((b) => ({
+        accountCode: String(b.accountCode || '').trim(),
+        balance: Number(b.balance) || 0,
+      }))
+      .filter((b) => b.accountCode && validCodes.has(b.accountCode) && Math.abs(b.balance) > 0.001);
+    const nextOpenings = { ...openingBalancesByYear, [yearKey]: normalized };
+    if (isServerDataMode()) {
+      try {
+        await patchWorkspaceStateApi({ openingBalancesByYear: nextOpenings });
+        setOpeningBalancesByYear(nextOpenings);
+        addAuditEvent({
+          action: 'تحديث أرصدة افتتاحية',
+          entityType: 'system',
+          details: `year=${yearKey} accounts=${normalized.length}`,
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    setOpeningBalancesByYear(nextOpenings);
+    addAuditEvent({
+      action: 'تحديث أرصدة افتتاحية',
+      entityType: 'system',
+      details: `year=${yearKey} accounts=${normalized.length}`,
+    });
+    return true;
+  };
+
   const logAttendance = async (repId: string, type: 'in' | 'out', source: 'machine' | 'manual' = 'machine'): Promise<boolean> => {
     if (!(currentUser?.role === 'محاسب' || currentUser?.role === 'مالك')) return false;
     const nowIso = new Date().toISOString();
@@ -9971,7 +10012,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       uiVisualMode, setUiVisualMode,
       personalTodos, setPersonalTodos,
       desktopNotifyWhenVisible, setDesktopNotifyWhenVisible,
-      closedFiscalYears, closeFiscalYear, reopenFiscalYear, getOpeningBalances,
+      closedFiscalYears, closeFiscalYear, reopenFiscalYear, getOpeningBalances, saveOpeningBalancesForYear, openingBalancesByYear,
       attendanceRecords, logAttendance,
       payrollApprovals, payrollApprovalRequests, payrollSalesDiscounts, addPayrollSalesDiscount, removePayrollSalesDiscount, getPayrollSalesDiscountTotal, financialReopenRequests, approvePayroll, reopenPayroll, isPayrollApproved, requestPayrollApproval, ownerApprovePayrollRequest, ownerRejectPayrollRequest, requestMonthReopen, ownerApproveMonthReopenRequest, ownerRejectMonthReopenRequest, getSystemNotifications, refreshServerWorkspace,
       auditEvents, addAuditEvent,

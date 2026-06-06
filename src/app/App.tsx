@@ -601,7 +601,7 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
   const { t } = useTranslation();
   const { dateLocale, dir } = useAppDirection();
   const currency = t('common.currency');
-  const { currentUser, invoices, expenses, leads, users, addInvoice, updateInvoiceStatus, recordInvoiceCollection, addExpense, updateExpenseStatus, approveExpense, rejectExpense, closedMonths, closeMonth, reopenMonth, isMonthClosed, chartOfAccounts, addChartAccount, removeChartAccount, manualJournalEntries, addManualJournalEntry, removeManualJournalEntry, journalCodingRules, setJournalCodingRules, expenseCodingRules, setExpenseCodingRules, customerCodePrefix, setCustomerCodePrefix, expenseSavedViews, setExpenseSavedViews, payrollAutoSendDay, setPayrollAutoSendDay, closedFiscalYears, closeFiscalYear, reopenFiscalYear, getOpeningBalances, getRepSnapshots, attendanceRecords, logAttendance, payrollApprovals, payrollApprovalRequests, getPayrollSalesDiscountTotal, financialReopenRequests, approvePayroll, reopenPayroll, isPayrollApproved, requestPayrollApproval, ownerApprovePayrollRequest, ownerRejectPayrollRequest, requestMonthReopen, ownerApproveMonthReopenRequest, ownerRejectMonthReopenRequest, printBrandingSettings, addEmployee, updateEmployeeSalary, accountingPolicy, updateAccountingPolicy, priceQuotes, custodyFunds, custodyAccountByCategory, updateCustodyAccountByCategory, createCustodyFund, updateCustodyDraft, submitCustodyDraftToOwner, submitAllCustodyDraftsToOwner, ownerApproveCustodyRequest, ownerRejectCustodyRequest, accountantRecordCustodyPayment, accountantApproveCustodySettlement, accountantRejectCustodySettlement } = useData();
+  const { currentUser, invoices, expenses, leads, users, addInvoice, updateInvoiceStatus, recordInvoiceCollection, addExpense, updateExpenseStatus, approveExpense, rejectExpense, closedMonths, closeMonth, reopenMonth, isMonthClosed, chartOfAccounts, addChartAccount, removeChartAccount, manualJournalEntries, addManualJournalEntry, removeManualJournalEntry, journalCodingRules, setJournalCodingRules, expenseCodingRules, setExpenseCodingRules, customerCodePrefix, setCustomerCodePrefix, expenseSavedViews, setExpenseSavedViews, payrollAutoSendDay, setPayrollAutoSendDay, closedFiscalYears, closeFiscalYear, reopenFiscalYear, getOpeningBalances, saveOpeningBalancesForYear, openingBalancesByYear, getRepSnapshots, attendanceRecords, logAttendance, payrollApprovals, payrollApprovalRequests, getPayrollSalesDiscountTotal, financialReopenRequests, approvePayroll, reopenPayroll, isPayrollApproved, requestPayrollApproval, ownerApprovePayrollRequest, ownerRejectPayrollRequest, requestMonthReopen, ownerApproveMonthReopenRequest, ownerRejectMonthReopenRequest, printBrandingSettings, addEmployee, updateEmployeeSalary, accountingPolicy, updateAccountingPolicy, priceQuotes, custodyFunds, custodyAccountByCategory, updateCustodyAccountByCategory, createCustodyFund, updateCustodyDraft, submitCustodyDraftToOwner, submitAllCustodyDraftsToOwner, ownerApproveCustodyRequest, ownerRejectCustodyRequest, accountantRecordCustodyPayment, accountantApproveCustodySettlement, accountantRejectCustodySettlement } = useData();
   const [activeFinanceTab, setActiveFinanceTab] = useState<'invoices' | 'expenses' | 'ledger' | 'reports' | 'coa' | 'journals' | 'reps' | 'codebook' | 'custody'>('invoices');
   const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
   const [isCreateExpenseOpen, setIsCreateExpenseOpen] = useState(false);
@@ -676,6 +676,7 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
   const [reopenMonthReason, setReopenMonthReason] = useState('');
   const canApproveExpenses = currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات';
   const canCloseMonths = currentUser?.role === 'مالك';
+  const canManageOpeningBalances = currentUser?.role === 'مالك' || currentUser?.role === 'محاسب';
   const canRequestMonthReopen = currentUser?.role === 'محاسب' || currentUser?.role === 'مالك';
   const goClient360 = (leadId?: string) => {
     if (!leadId || leadId === 'manual') return;
@@ -994,8 +995,33 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
     return rows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [invoices, expenses, manualJournalEntries, chartOfAccounts]);
 
+  const currentYear = useMemo(() => String(new Date().getFullYear()), []);
+  const [openingBalanceYear, setOpeningBalanceYear] = useState(() => String(new Date().getFullYear()));
+  const [openingBalanceDraft, setOpeningBalanceDraft] = useState<{ accountCode: string; balance: string }[]>([]);
+  useEffect(() => {
+    setOpeningBalanceDraft(
+      getOpeningBalances(openingBalanceYear).map((row) => ({
+        accountCode: row.accountCode,
+        balance: String(row.balance),
+      }))
+    );
+  }, [openingBalanceYear, openingBalancesByYear, getOpeningBalances]);
+
   const trialBalance = useMemo(() => {
     const map = new Map<string, { debit: number; credit: number }>();
+    const applyOpening = (accountLabel: string, balance: number) => {
+      const prev = map.get(accountLabel) || { debit: 0, credit: 0 };
+      if (balance >= 0) {
+        map.set(accountLabel, { debit: prev.debit + balance, credit: prev.credit });
+      } else {
+        map.set(accountLabel, { debit: prev.debit, credit: prev.credit + Math.abs(balance) });
+      }
+    };
+    getOpeningBalances(currentYear).forEach((ob) => {
+      const acc = chartOfAccounts.find((a) => a.code === ob.accountCode);
+      const accountLabel = acc?.name || ob.accountCode;
+      applyOpening(accountLabel, Number(ob.balance) || 0);
+    });
     accountingEntries.forEach((entry) => {
       const prev = map.get(entry.account) || { debit: 0, credit: 0 };
       map.set(entry.account, { debit: prev.debit + entry.debit, credit: prev.credit + entry.credit });
@@ -1006,8 +1032,7 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
       credit: sums.credit,
       balance: sums.debit - sums.credit,
     }));
-  }, [accountingEntries]);
-  const currentYear = useMemo(() => String(new Date().getFullYear()), []);
+  }, [accountingEntries, chartOfAccounts, currentYear, getOpeningBalances, openingBalancesByYear]);
   const nextYearOpening = useMemo(
     () => trialBalance.map(t => ({ accountCode: t.account, balance: t.balance })),
     [trialBalance]
@@ -1983,6 +2008,18 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
           </button>
         )}
         <span className="text-xs text-zinc-400">{t('finance.openingBalancesCount', { year: String(Number(currentYear) + 1), count: getOpeningBalances(String(Number(currentYear) + 1)).length })}</span>
+        {canManageOpeningBalances && (
+          <button
+            type="button"
+            onClick={() => {
+              setOpeningBalanceYear(currentYear);
+              setActiveFinanceTab('reports');
+            }}
+            className="px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-500/20 text-indigo-200 border border-indigo-400/30 hover:bg-indigo-500/30"
+          >
+            {t('finance.manageOpeningBalances')}
+          </button>
+        )}
       </div>
       <div className="bg-slate-900/40 border border-slate-800 rounded-[2rem] p-4 space-y-3">
         <p className="text-sm text-zinc-200 font-black">{t('finance.reopenRequestTitle')}</p>
@@ -3068,6 +3105,101 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
             )}
             {activeFinanceTab === 'reports' && (
               <div className="p-8 space-y-6">
+                {canManageOpeningBalances && (
+                  <div id="opening-balances-panel" className="bg-slate-950/30 border border-indigo-500/20 rounded-2xl p-6 space-y-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h5 className="font-black text-lg">{t('finance.openingBalancesTitle')}</h5>
+                        <p className="text-xs text-zinc-500 mt-1">{t('finance.openingBalancesHint')}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs text-zinc-400">{t('finance.openingBalanceYearLabel')}</label>
+                        <input
+                          type="number"
+                          min={2000}
+                          max={2100}
+                          value={openingBalanceYear}
+                          onChange={(e) => setOpeningBalanceYear(e.target.value.slice(0, 4))}
+                          className="w-24 bg-[#0F1528] border border-white/15 rounded-xl px-3 py-2 text-sm font-mono"
+                        />
+                      </div>
+                    </div>
+                    {closedFiscalYears.includes(openingBalanceYear) ? (
+                      <p className="text-sm text-rose-300">{t('finance.openingBalancesYearClosed', { year: openingBalanceYear })}</p>
+                    ) : (
+                      <>
+                        <div className="hidden md:grid grid-cols-[1fr_160px_120px] gap-2 px-1 pb-1 border-b border-white/5">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{t('finance.colAccount')}</span>
+                          <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{t('finance.openingBalanceAmount')}</span>
+                          <span className="sr-only">{t('finance.colActions')}</span>
+                        </div>
+                        <div className="space-y-2">
+                          {openingBalanceDraft.map((row, idx) => (
+                            <div key={`ob-${idx}-${row.accountCode}`} className="grid grid-cols-1 md:grid-cols-[1fr_160px_120px] gap-2">
+                              <select
+                                value={row.accountCode}
+                                onChange={(e) => setOpeningBalanceDraft((prev) => prev.map((r, i) => (i === idx ? { ...r, accountCode: e.target.value } : r)))}
+                                className="bg-[#0F1528] border border-white/15 rounded-xl px-3 py-2 text-sm"
+                              >
+                                <option value="">{t('finance.selectAccount')}</option>
+                                {chartOfAccounts.map((acc) => (
+                                  <option key={`ob-acc-${acc.code}`} value={acc.code}>{acc.code} - {acc.name}</option>
+                                ))}
+                              </select>
+                              <input
+                                type="number"
+                                value={row.balance}
+                                onChange={(e) => setOpeningBalanceDraft((prev) => prev.map((r, i) => (i === idx ? { ...r, balance: e.target.value } : r)))}
+                                className="bg-[#0F1528] border border-white/15 rounded-xl px-3 py-2 text-sm font-mono"
+                                placeholder={t('finance.openingBalanceAmountPh')}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setOpeningBalanceDraft((prev) => prev.filter((_, i) => i !== idx))}
+                                className="bg-rose-500/20 text-rose-300 rounded-xl px-3 py-2 text-xs font-black"
+                              >
+                                {t('common.delete')}
+                              </button>
+                            </div>
+                          ))}
+                          {openingBalanceDraft.length === 0 && (
+                            <p className="text-sm text-zinc-500">{t('finance.openingBalancesEmpty')}</p>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setOpeningBalanceDraft((prev) => [...prev, { accountCode: chartOfAccounts[0]?.code || '1010', balance: '' }])}
+                            className="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-sm font-black"
+                          >
+                            {t('finance.addOpeningBalanceRow')}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const parsed = openingBalanceDraft
+                                .map((row) => ({
+                                  accountCode: row.accountCode.trim(),
+                                  balance: Number(row.balance),
+                                }))
+                                .filter((row) => row.accountCode && Number.isFinite(row.balance) && Math.abs(row.balance) > 0.001);
+                              const ok = await saveOpeningBalancesForYear(openingBalanceYear, parsed);
+                              if (!ok) {
+                                toast.error(t('finance.toastOpeningBalancesSaveFailed'));
+                                return;
+                              }
+                              toast.success(t('finance.toastOpeningBalancesSaved', { year: openingBalanceYear }));
+                            }}
+                            className="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 text-sm font-black"
+                          >
+                            {t('finance.saveOpeningBalances')}
+                          </button>
+                          <span className="text-xs text-zinc-500">{t('finance.openingBalanceSignHint')}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="bg-slate-950/30 border border-white/10 rounded-2xl p-6 space-y-3">
                     <h5 className="font-black text-lg">{t('finance.reportPnlTitle')}</h5>

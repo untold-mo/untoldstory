@@ -8,7 +8,6 @@ const SINGLE_ID = 'default';
 /** مفاتيح يعدّلها المالك فقط */
 const OWNER_KEYS = new Set([
   'closedFiscalYears',
-  'openingBalancesByYear',
   'printBranding',
   'leadIngestion',
   'slaEscalation',
@@ -29,6 +28,8 @@ const ACCOUNTING_KEYS = new Set([
   'payrollApprovals',
   'payrollApprovalRequests',
   'financialReopenRequests',
+  /** أرصدة افتتاحية لكل سنة مالية (محاسب/مالك) */
+  'openingBalancesByYear',
   /** أكواد اليومية المحفوظة (محاسب/مالك) */
   'journalCodebook',
   /** بادئة كود العميل اليدوي (CUS-0001) */
