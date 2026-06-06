@@ -251,6 +251,36 @@ const trafficRowClass = (tone: 'safe' | 'warn' | 'danger' | 'neutral') => {
   return 'border-r-2 border-transparent hover:bg-white/[0.03]';
 };
 
+type GlRow = {
+  date: string;
+  account: string;
+  accountCode: string;
+  debit: number;
+  credit: number;
+  note: string;
+  costCenter: string;
+  journalId?: string;
+  source: 'invoice' | 'expense' | 'journal';
+};
+
+const CASH_ACCOUNT_CODES = new Set(['1010', '1020']);
+
+function isCashAccountCode(code: string, chart: ChartOfAccount[]): boolean {
+  if (CASH_ACCOUNT_CODES.has(code)) return true;
+  const acc = chart.find((a) => a.code === code);
+  return acc ? /صندوق|بنك/i.test(acc.name) : false;
+}
+
+function isCashAccountLabel(label: string, chart: ChartOfAccount[]): boolean {
+  if (/صندوق|بنك/i.test(label)) return true;
+  const acc = chart.find((a) => a.name === label);
+  return acc ? isCashAccountCode(acc.code, chart) : false;
+}
+
+function resolveAccountCode(label: string, chart: ChartOfAccount[]): string {
+  return chart.find((a) => a.name === label)?.code || '';
+}
+
 const escapeHtml = (value: string) =>
   String(value || '')
     .replaceAll('&', '&amp;')
@@ -947,16 +977,16 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
     };
   }, [invoices, expenses]);
 
-  const accountingEntries = useMemo(() => {
-    const rows: { date: string; account: string; debit: number; credit: number; note: string; costCenter: string }[] = [];
+  const accountingEntries = useMemo((): GlRow[] => {
+    const rows: GlRow[] = [];
     const accountName = (code: string) => chartOfAccounts.find(a => a.code === code)?.name || code;
     invoices.forEach((inv) => {
       const vatAmount = inv.vatAmount ?? Math.round(inv.amount * ((inv.vatRate ?? 14) / 100));
       const gross = inv.totalAmount ?? inv.amount + vatAmount;
       const counterAccount = inv.status === 'مدفوع' ? 'الصندوق/البنك' : 'العملاء (ذمم مدينة)';
-      rows.push({ date: inv.date, account: counterAccount, debit: gross, credit: 0, note: `فاتورة ${inv.id}`, costCenter: inv.costCenter || 'عام' });
-      rows.push({ date: inv.date, account: 'إيراد خدمات', debit: 0, credit: inv.amount, note: `إثبات الإيراد ${inv.id}`, costCenter: inv.costCenter || 'عام' });
-      rows.push({ date: inv.date, account: 'ضريبة قيمة مضافة مخرجات', debit: 0, credit: vatAmount, note: `VAT مخرجات ${inv.id}`, costCenter: inv.costCenter || 'عام' });
+      rows.push({ date: inv.date, account: counterAccount, accountCode: resolveAccountCode(counterAccount, chartOfAccounts), debit: gross, credit: 0, note: `فاتورة ${inv.id}`, costCenter: inv.costCenter || 'عام', source: 'invoice' });
+      rows.push({ date: inv.date, account: 'إيراد خدمات', accountCode: resolveAccountCode('إيراد خدمات', chartOfAccounts) || '4110', debit: 0, credit: inv.amount, note: `إثبات الإيراد ${inv.id}`, costCenter: inv.costCenter || 'عام', source: 'invoice' });
+      rows.push({ date: inv.date, account: 'ضريبة قيمة مضافة مخرجات', accountCode: resolveAccountCode('ضريبة قيمة مضافة مخرجات', chartOfAccounts) || '2210', debit: 0, credit: vatAmount, note: `VAT مخرجات ${inv.id}`, costCenter: inv.costCenter || 'عام', source: 'invoice' });
     });
     expenses.forEach((exp) => {
       const vatAmount = exp.vatAmount ?? Math.round(exp.amount * ((exp.vatRate ?? 14) / 100));
@@ -969,15 +999,17 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
             : exp.paymentMethod === 'بنك'
               ? 'البنك'
               : 'الصندوق/البنك';
-      rows.push({ date: exp.date, account: `مصروف ${exp.category}`, debit: exp.amount, credit: 0, note: `مصروف ${exp.id}`, costCenter: exp.costCenter || 'عام' });
-      rows.push({ date: exp.date, account: 'ضريبة قيمة مضافة مدخلات', debit: vatAmount, credit: 0, note: `VAT مدخلات ${exp.id}`, costCenter: exp.costCenter || 'عام' });
+      rows.push({ date: exp.date, account: `مصروف ${exp.category}`, accountCode: resolveAccountCode(`مصروف ${exp.category}`, chartOfAccounts), debit: exp.amount, credit: 0, note: `مصروف ${exp.id}`, costCenter: exp.costCenter || 'عام', source: 'expense' });
+      rows.push({ date: exp.date, account: 'ضريبة قيمة مضافة مدخلات', accountCode: resolveAccountCode('ضريبة قيمة مضافة مدخلات', chartOfAccounts) || '1220', debit: vatAmount, credit: 0, note: `VAT مدخلات ${exp.id}`, costCenter: exp.costCenter || 'عام', source: 'expense' });
       rows.push({
         date: exp.date,
         account: counterAccount,
+        accountCode: resolveAccountCode(counterAccount, chartOfAccounts) || (exp.paymentMethod === 'بنك' ? '1020' : '1010'),
         debit: 0,
         credit: gross,
         note: `إثبات الالتزام ${exp.id}${exp.status === 'مدفوع' && exp.paymentMethod ? ` — ${exp.paymentMethod}` : ''}`,
         costCenter: exp.costCenter || 'عام',
+        source: 'expense',
       });
     });
     manualJournalEntries.forEach((entry) => {
@@ -985,10 +1017,13 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
         rows.push({
           date: entry.date,
           account: accountName(line.accountCode),
+          accountCode: line.accountCode,
           debit: line.debit,
           credit: line.credit,
-          note: `قيد يدوي ${entry.id} - ${entry.description}`,
+          note: `قيد ${entry.id} — ${entry.description}`,
           costCenter: line.costCenter || 'عام',
+          journalId: entry.id,
+          source: 'journal',
         });
       });
     });
@@ -1033,6 +1068,48 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
       balance: sums.debit - sums.credit,
     }));
   }, [accountingEntries, chartOfAccounts, currentYear, getOpeningBalances, openingBalancesByYear]);
+  const glSummary = useMemo(() => {
+    let revenue = 0;
+    let expense = 0;
+    let cashBalance = 0;
+    trialBalance.forEach((row) => {
+      const acc = chartOfAccounts.find((a) => a.name === row.account);
+      const code = acc?.code || resolveAccountCode(row.account, chartOfAccounts);
+      if (acc?.type === 'revenue') revenue += row.credit - row.debit;
+      else if (acc?.type === 'expense') expense += row.debit - row.credit;
+      if (isCashAccountLabel(row.account, chartOfAccounts) || isCashAccountCode(code, chartOfAccounts)) {
+        cashBalance += row.balance;
+      }
+    });
+    return { revenue, expense, netProfit: revenue - expense, cashBalance };
+  }, [trialBalance, chartOfAccounts]);
+  const bankRunningLedger = useMemo(() => {
+    let running = getOpeningBalances(currentYear)
+      .filter((ob) => isCashAccountCode(ob.accountCode, chartOfAccounts))
+      .reduce((s, ob) => s + (Number(ob.balance) || 0), 0);
+    const cashRows = accountingEntries
+      .filter((e) => isCashAccountLabel(e.account, chartOfAccounts) || isCashAccountCode(e.accountCode, chartOfAccounts))
+      .sort((a, b) => {
+        const dateDiff = new Date(a.date).getTime() - new Date(b.date).getTime();
+        if (dateDiff !== 0) return dateDiff;
+        return a.note.localeCompare(b.note);
+      });
+    return cashRows.map((e) => {
+      running += e.debit - e.credit;
+      return { ...e, runningBalance: running };
+    });
+  }, [accountingEntries, chartOfAccounts, currentYear, getOpeningBalances, openingBalancesByYear]);
+  const bankBalanceAfterJournal = useMemo(() => {
+    const map = new Map<string, number>();
+    bankRunningLedger.forEach((row) => {
+      if (row.journalId) map.set(row.journalId, row.runningBalance);
+    });
+    return map;
+  }, [bankRunningLedger]);
+  const displayedGlRows = useMemo(() => {
+    if (journalFocusId) return accountingEntries.filter((e) => e.journalId === journalFocusId);
+    return accountingEntries;
+  }, [accountingEntries, journalFocusId]);
   const nextYearOpening = useMemo(
     () => trialBalance.map(t => ({ accountCode: t.account, balance: t.balance })),
     [trialBalance]
@@ -3110,6 +3187,44 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
                           <span>{line.costCenter || t('finance.generalCostCenter')}</span>
                         </div>
                       ))}
+                      <div className="mt-2 pt-2 border-t border-white/10 space-y-2">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-indigo-300">{t('finance.journalGlTitle')}</p>
+                        {entry.lines.map((line, li) => {
+                          const accName = chartOfAccounts.find((a) => a.code === line.accountCode)?.name || line.accountCode;
+                          return (
+                            <div key={`gl-${entry.id}-${li}`} className="grid grid-cols-5 gap-2 text-[11px] text-zinc-400">
+                              <span className="font-mono">{line.accountCode}</span>
+                              <span className="md:col-span-2">{accName}</span>
+                              <span className="text-emerald-300">{line.debit > 0 ? line.debit.toLocaleString(dateLocale) : '—'}</span>
+                              <span className="text-rose-300">{line.credit > 0 ? line.credit.toLocaleString(dateLocale) : '—'}</span>
+                            </div>
+                          );
+                        })}
+                        {(() => {
+                          const cashLines = entry.lines.filter((l) => isCashAccountCode(l.accountCode, chartOfAccounts));
+                          if (cashLines.length === 0) return null;
+                          const netChange = cashLines.reduce((s, l) => s + l.debit - l.credit, 0);
+                          const balanceAfter = bankBalanceAfterJournal.get(entry.id);
+                          return (
+                            <p className="text-xs text-amber-300">
+                              {t('finance.journalBankImpact', {
+                                change: `${netChange >= 0 ? '+' : ''}${netChange.toLocaleString(dateLocale)} ${currency}`,
+                                balance: balanceAfter != null ? `${balanceAfter.toLocaleString(dateLocale)} ${currency}` : '—',
+                              })}
+                            </p>
+                          );
+                        })()}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setJournalFocusId(entry.id);
+                            setActiveFinanceTab('reports');
+                          }}
+                          className="text-[11px] font-black text-indigo-300 hover:text-indigo-200 underline underline-offset-2"
+                        >
+                          {t('finance.viewGlInReports')}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -3213,11 +3328,17 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
                   </div>
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="bg-slate-950/30 border border-white/10 rounded-2xl p-6 space-y-3">
-                    <h5 className="font-black text-lg">{t('finance.reportPnlTitle')}</h5>
-                    <div className="flex justify-between text-zinc-300"><span>{t('finance.reportCollectedRevenue')}</span><span className="font-black text-emerald-400">{accountingReport.revenueRecognized.toLocaleString(dateLocale)} {currency}</span></div>
-                    <div className="flex justify-between text-zinc-300"><span>{t('finance.reportPaidExpenses')}</span><span className="font-black text-rose-400">{accountingReport.expenseRecognized.toLocaleString(dateLocale)} {currency}</span></div>
-                    <div className="border-t border-white/10 pt-3 flex justify-between"><span className="font-black">{t('finance.reportOperatingProfit')}</span><span className={`font-black ${accountingReport.grossProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{accountingReport.grossProfit.toLocaleString(dateLocale)} {currency}</span></div>
+                  <div className="bg-slate-950/30 border border-indigo-500/25 rounded-2xl p-6 space-y-3">
+                    <h5 className="font-black text-lg">{t('finance.reportPnlGlTitle')}</h5>
+                    <p className="text-[11px] text-zinc-500">{t('finance.reportPnlGlHint')}</p>
+                    <div className="flex justify-between text-zinc-300"><span>{t('finance.glRevenue')}</span><span className="font-black text-emerald-400">{glSummary.revenue.toLocaleString(dateLocale)} {currency}</span></div>
+                    <div className="flex justify-between text-zinc-300"><span>{t('finance.glExpenses')}</span><span className="font-black text-rose-400">{glSummary.expense.toLocaleString(dateLocale)} {currency}</span></div>
+                    <div className="border-t border-white/10 pt-3 flex justify-between"><span className="font-black">{t('finance.glNetProfit')}</span><span className={`font-black ${glSummary.netProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{glSummary.netProfit.toLocaleString(dateLocale)} {currency}</span></div>
+                    <div className="border-t border-white/5 pt-3 space-y-1 text-xs text-zinc-500">
+                      <p className="font-black text-zinc-400">{t('finance.reportPnlOperational')}</p>
+                      <div className="flex justify-between"><span>{t('finance.reportCollectedRevenue')}</span><span>{accountingReport.revenueRecognized.toLocaleString(dateLocale)}</span></div>
+                      <div className="flex justify-between"><span>{t('finance.reportPaidExpenses')}</span><span>{accountingReport.expenseRecognized.toLocaleString(dateLocale)}</span></div>
+                    </div>
                   </div>
                   <div className="bg-slate-950/30 border border-white/10 rounded-2xl p-6 space-y-3">
                     <h5 className="font-black text-lg">{t('finance.reportVatTitle')}</h5>
@@ -3225,12 +3346,84 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
                     <div className="flex justify-between text-zinc-300"><span>{t('finance.vatInput')}</span><span className="font-black text-indigo-300">{vatSummary.inputVat.toLocaleString(dateLocale)} {currency}</span></div>
                     <div className="border-t border-white/10 pt-3 flex justify-between"><span className="font-black">{t('finance.netVat')}</span><span className={`font-black ${vatSummary.netVatPayable >= 0 ? 'text-rose-300' : 'text-emerald-300'}`}>{vatSummary.netVatPayable.toLocaleString(dateLocale)} {currency}</span></div>
                   </div>
-                  <div className="bg-slate-950/30 border border-white/10 rounded-2xl p-6 space-y-3">
+                  <div className="bg-slate-950/30 border border-emerald-500/20 rounded-2xl p-6 space-y-3">
                     <h5 className="font-black text-lg">{t('finance.reportTrialBalanceQuick')}</h5>
-                    <div className="flex justify-between text-zinc-300"><span>{t('finance.cashAccount')}</span><span className="font-black">{stats.netCash.toLocaleString(dateLocale)} {currency}</span></div>
+                    <div className="flex justify-between text-zinc-300"><span>{t('finance.bankCashGlBalance')}</span><span className="font-black text-emerald-300">{glSummary.cashBalance.toLocaleString(dateLocale)} {currency}</span></div>
+                    <div className="text-[11px] text-zinc-500">{t('finance.bankGlHint')}</div>
+                    <div className="border-t border-white/5 pt-2 flex justify-between text-zinc-400 text-xs"><span>{t('finance.cashAccount')} ({t('finance.reportPnlOperational')})</span><span>{stats.netCash.toLocaleString(dateLocale)} {currency}</span></div>
                     <div className="flex justify-between text-zinc-300"><span>{t('finance.receivables')}</span><span className="font-black text-amber-300">{accountingReport.receivables.toLocaleString(dateLocale)} {currency}</span></div>
                     <div className="flex justify-between text-zinc-300"><span>{t('finance.payables')}</span><span className="font-black text-rose-300">{accountingReport.payables.toLocaleString(dateLocale)} {currency}</span></div>
-                    <div className="text-xs text-zinc-500 pt-2">{t('finance.reportOperationalHint')}</div>
+                  </div>
+                </div>
+                {journalFocusId && (
+                  <div className="flex flex-wrap items-center gap-3 bg-indigo-500/10 border border-indigo-400/30 rounded-xl px-4 py-3">
+                    <span className="text-sm text-indigo-200">{t('finance.glFilterJournal', { id: journalFocusId })}</span>
+                    <button type="button" onClick={() => setJournalFocusId(null)} className="text-xs font-black text-indigo-300 underline underline-offset-2">{t('finance.glClearFilter')}</button>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-slate-950/30 border border-white/10 rounded-2xl p-6">
+                    <h5 className="font-black text-lg mb-1">{t('finance.generalLedgerTitle')}</h5>
+                    <p className="text-xs text-zinc-500 mb-4">{t('finance.generalLedgerHint')}</p>
+                    <div className="overflow-x-auto max-h-80 overflow-y-auto rounded-xl border border-white/5">
+                      <table className="w-full text-right min-w-[680px]">
+                        <thead>
+                          <tr className="bg-[#0B1020]/95">
+                            <th className="sticky top-0 z-20 p-2 text-[10px] uppercase tracking-widest text-zinc-400 bg-[#0B1020]/95">{t('finance.colDate')}</th>
+                            <th className="sticky top-0 z-20 p-2 text-[10px] uppercase tracking-widest text-zinc-400 bg-[#0B1020]/95">{t('finance.colAccount')}</th>
+                            <th className="sticky top-0 z-20 p-2 text-[10px] uppercase tracking-widest text-zinc-400 bg-[#0B1020]/95">{t('finance.colDebit')}</th>
+                            <th className="sticky top-0 z-20 p-2 text-[10px] uppercase tracking-widest text-zinc-400 bg-[#0B1020]/95">{t('finance.colCredit')}</th>
+                            <th className="sticky top-0 z-20 p-2 text-[10px] uppercase tracking-widest text-zinc-400 bg-[#0B1020]/95">{t('finance.colNote')}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {displayedGlRows.map((row, idx) => (
+                            <tr key={`gl-${idx}-${row.note}-${row.account}`} className={`${idx % 2 === 0 ? 'bg-[#0E152B]/45' : 'bg-[#0B1224]/45'} hover:bg-[#1A2440]/45`}>
+                              <td className="p-2 text-xs text-zinc-400">{new Date(row.date).toLocaleDateString(dateLocale)}</td>
+                              <td className="p-2 text-xs"><span className="font-mono text-zinc-500">{row.accountCode}</span> {row.account}</td>
+                              <td className="p-2 text-xs text-emerald-300">{row.debit > 0 ? row.debit.toLocaleString(dateLocale) : '—'}</td>
+                              <td className="p-2 text-xs text-rose-300">{row.credit > 0 ? row.credit.toLocaleString(dateLocale) : '—'}</td>
+                              <td className="p-2 text-xs text-zinc-400">{row.note}</td>
+                            </tr>
+                          ))}
+                          {displayedGlRows.length === 0 && (
+                            <tr><td colSpan={5} className="p-4 text-sm text-zinc-500 text-center">{t('finance.generalLedgerEmpty')}</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div className="bg-slate-950/30 border border-emerald-500/15 rounded-2xl p-6">
+                    <h5 className="font-black text-lg mb-1">{t('finance.bankLedgerTitle')}</h5>
+                    <p className="text-xs text-zinc-500 mb-4">{t('finance.bankLedgerHint')}</p>
+                    <div className="overflow-x-auto max-h-80 overflow-y-auto rounded-xl border border-white/5">
+                      <table className="w-full text-right min-w-[620px]">
+                        <thead>
+                          <tr className="bg-[#0B1020]/95">
+                            <th className="sticky top-0 z-20 p-2 text-[10px] uppercase tracking-widest text-zinc-400 bg-[#0B1020]/95">{t('finance.colDate')}</th>
+                            <th className="sticky top-0 z-20 p-2 text-[10px] uppercase tracking-widest text-zinc-400 bg-[#0B1020]/95">{t('finance.colNote')}</th>
+                            <th className="sticky top-0 z-20 p-2 text-[10px] uppercase tracking-widest text-zinc-400 bg-[#0B1020]/95">{t('finance.colDebit')}</th>
+                            <th className="sticky top-0 z-20 p-2 text-[10px] uppercase tracking-widest text-zinc-400 bg-[#0B1020]/95">{t('finance.colCredit')}</th>
+                            <th className="sticky top-0 z-20 p-2 text-[10px] uppercase tracking-widest text-zinc-400 bg-[#0B1020]/95">{t('finance.colRunningBalance')}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {[...bankRunningLedger].reverse().map((row, idx) => (
+                            <tr key={`bank-${idx}-${row.note}`} className={`${idx % 2 === 0 ? 'bg-[#0E152B]/45' : 'bg-[#0B1224]/45'} hover:bg-[#1A2440]/45`}>
+                              <td className="p-2 text-xs text-zinc-400">{new Date(row.date).toLocaleDateString(dateLocale)}</td>
+                              <td className="p-2 text-xs text-zinc-300">{row.note}{row.journalId ? ` (${row.journalId})` : ''}</td>
+                              <td className="p-2 text-xs text-emerald-300">{row.debit > 0 ? row.debit.toLocaleString(dateLocale) : '—'}</td>
+                              <td className="p-2 text-xs text-rose-300">{row.credit > 0 ? row.credit.toLocaleString(dateLocale) : '—'}</td>
+                              <td className={`p-2 text-xs font-black ${row.runningBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{row.runningBalance.toLocaleString(dateLocale)}</td>
+                            </tr>
+                          ))}
+                          {bankRunningLedger.length === 0 && (
+                            <tr><td colSpan={5} className="p-4 text-sm text-zinc-500 text-center">{t('finance.bankLedgerEmpty')}</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-xs text-emerald-300 mt-3 font-black">{t('finance.bankCurrentBalance')}: {glSummary.cashBalance.toLocaleString(dateLocale)} {currency}</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
