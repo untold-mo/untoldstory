@@ -1445,15 +1445,19 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
   };
 
   const ledgerRows = useMemo(() => {
-    const incomeRows = invoices.map(inv => ({
-      id: inv.id,
-      type: 'إيراد' as const,
-      title: `فاتورة ${inv.customerName}`,
-      amount: inv.totalAmount ?? inv.amount + (inv.vatAmount ?? Math.round(inv.amount * ((inv.vatRate ?? 14) / 100))),
-      status: inv.status,
-      date: inv.date,
-      sign: inv.status === 'مدفوع' ? '+' : '0',
-    }));
+    const incomeRows = invoices.map(inv => {
+      const linkedJournal = (inv.collections || []).find(c => c.journalEntryId)?.journalEntryId;
+      return {
+        id: inv.id,
+        type: 'إيراد' as const,
+        title: `فاتورة ${inv.customerName}`,
+        amount: inv.totalAmount ?? inv.amount + (inv.vatAmount ?? Math.round(inv.amount * ((inv.vatRate ?? 14) / 100))),
+        status: inv.status,
+        date: inv.date,
+        sign: inv.status === 'مدفوع' ? '+' as const : '0' as const,
+        journalEntryId: linkedJournal,
+      };
+    });
     const expenseRows = expenses.map(exp => {
       const submitter = expenseSubmitterDisplay(exp, users);
       const payTag = exp.status === 'مدفوع' && exp.paymentMethod ? ` — ${exp.paymentMethod}` : '';
@@ -1464,16 +1468,31 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
         amount: exp.totalAmount ?? exp.amount + (exp.vatAmount ?? Math.round(exp.amount * ((exp.vatRate ?? 14) / 100))),
         status: exp.status,
         date: exp.date,
-        sign: exp.status === 'مدفوع' ? '-' : '0',
+        sign: exp.status === 'مدفوع' ? '-' as const : '0' as const,
+        journalEntryId: undefined as string | undefined,
       };
     });
-    return [...incomeRows, ...expenseRows].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [invoices, expenses, users]);
+    const journalRows = manualJournalEntries.map(entry => {
+      const total = entry.lines.reduce((s, l) => s + (Number(l.debit) || 0), 0);
+      const codes = entry.lines.map(l => l.accountCode).filter(Boolean).join(' / ');
+      return {
+        id: entry.id,
+        type: 'قيد' as const,
+        title: codes ? `${entry.description} (${codes})` : entry.description,
+        amount: total,
+        status: t('finance.ledgerJournalPosted'),
+        date: entry.date,
+        sign: 'journal' as const,
+        journalEntryId: entry.id,
+      };
+    });
+    return [...incomeRows, ...expenseRows, ...journalRows].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [invoices, expenses, users, manualJournalEntries, t]);
 
   const exportFinanceCsv = () => {
     const rows = [
-      ['type', 'id', 'title', 'amount', 'status', 'date'],
-      ...ledgerRows.map(r => [r.type, r.id, r.title, String(r.amount), r.status, new Date(r.date).toLocaleString('ar-EG')]),
+      ['type', 'id', 'title', 'journal_id', 'amount', 'status', 'date'],
+      ...ledgerRows.map(r => [r.type, r.id, r.title, r.journalEntryId || '', String(r.amount), r.status, new Date(r.date).toLocaleString('ar-EG')]),
       ['', '', '', '', '', ''],
       ['account', 'debit', 'credit', 'balance'],
       ...trialBalance.map(r => [r.account, String(r.debit), String(r.credit), String(r.balance)]),
@@ -2453,17 +2472,44 @@ const AccountantView = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }) =>
             )}
             {activeFinanceTab === 'ledger' && (
               <table className="w-full text-right border-collapse">
-                <thead><tr className="bg-slate-950/50"><th className="p-6 text-[10px] font-black text-slate-500 uppercase">{t('finance.ledgerColDate')}</th><th className="p-6 text-[10px] font-black text-slate-500 uppercase">{t('finance.ledgerColType')}</th><th className="p-6 text-[10px] font-black text-slate-500 uppercase">{t('finance.ledgerColDescription')}</th><th className="p-6 text-[10px] font-black text-slate-500 uppercase">{t('finance.ledgerColStatus')}</th><th className="p-6 text-[10px] font-black text-slate-500 uppercase">{t('finance.ledgerColMovement')}</th></tr></thead>
+                <thead><tr className="bg-slate-950/50"><th className="p-6 text-[10px] font-black text-slate-500 uppercase">{t('finance.ledgerColDate')}</th><th className="p-6 text-[10px] font-black text-slate-500 uppercase">{t('finance.ledgerColType')}</th><th className="p-6 text-[10px] font-black text-slate-500 uppercase">{t('finance.ledgerColDescription')}</th><th className="p-6 text-[10px] font-black text-slate-500 uppercase">{t('finance.colJournalId')}</th><th className="p-6 text-[10px] font-black text-slate-500 uppercase">{t('finance.ledgerColStatus')}</th><th className="p-6 text-[10px] font-black text-slate-500 uppercase">{t('finance.ledgerColMovement')}</th><th className="p-6 text-[10px] font-black text-slate-500 uppercase">{t('finance.openJournal')}</th></tr></thead>
                 <tbody className="divide-y divide-slate-800/50">
                   {ledgerRows.map(row => (
-                    <tr key={`${row.type}-${row.id}`} className={trafficRowClass(row.sign === '+' ? 'safe' : row.sign === '-' ? 'danger' : 'warn')}>
+                    <tr key={`${row.type}-${row.id}`} className={trafficRowClass(row.sign === '+' ? 'safe' : row.sign === '-' ? 'danger' : row.sign === 'journal' ? 'neutral' : 'warn')}>
                       <td className="p-6 text-xs text-zinc-400">{new Date(row.date).toLocaleDateString(dateLocale)}</td>
                       <td className="p-6">{row.type}</td>
                       <td className="p-6 font-bold">{row.title}</td>
+                      <td className="p-6 font-mono text-[11px] text-indigo-300">{row.journalEntryId || '—'}</td>
                       <td className="p-6 text-sm">{row.status}</td>
-                      <td className={`p-6 font-black ${row.sign === '+' ? 'text-emerald-400' : row.sign === '-' ? 'text-rose-400' : 'text-zinc-400'}`}>{row.sign === '0' ? '—' : `${row.sign}${row.amount.toLocaleString(dateLocale)} ${currency}`}</td>
+                      <td className={`p-6 font-black ${row.sign === '+' ? 'text-emerald-400' : row.sign === '-' ? 'text-rose-400' : row.sign === 'journal' ? 'text-indigo-300' : 'text-zinc-400'}`}>
+                        {row.sign === 'journal'
+                          ? t('finance.ledgerBalancedEntry', { amount: row.amount.toLocaleString(dateLocale), currency })
+                          : row.sign === '0' ? '—' : `${row.sign}${row.amount.toLocaleString(dateLocale)} ${currency}`}
+                      </td>
+                      <td className="p-6">
+                        {row.journalEntryId ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setJournalFocusId(row.journalEntryId || null);
+                              setActiveFinanceTab('journals');
+                              toast.success(t('finance.toastJournalOpened', { id: row.journalEntryId }));
+                            }}
+                            className="px-3 py-1.5 rounded-lg text-xs font-black bg-indigo-500/20 text-indigo-200 border border-indigo-400/30 hover:bg-indigo-500/30"
+                          >
+                            {t('finance.openJournal')}
+                          </button>
+                        ) : (
+                          <span className="text-zinc-500 text-xs">—</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
+                  {ledgerRows.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-zinc-500 text-sm">{t('finance.ledgerEmpty')}</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             )}

@@ -415,6 +415,24 @@ const DEFAULT_EXPENSE_CODING_RULES: ExpenseCodingRule[] = [
   { category: 'أخرى', prefix: 'EXP-OTH' },
 ];
 
+function normalizeJournalCodingRulesFromArray(raw: unknown): JournalCodingRule[] {
+  if (raw == null) return [];
+  const arr = Array.isArray(raw)
+    ? raw
+    : typeof raw === 'object'
+      ? Object.values(raw as Record<string, unknown>)
+      : [];
+  return arr
+    .filter((x) => x && typeof x === 'object')
+    .map((x: Record<string, unknown>) => ({
+      id: String(x.id ?? `jr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`),
+      title: String(x.title ?? '').trim(),
+      accountCode: String(x.accountCode ?? '').trim(),
+      costCenter: String(x.costCenter ?? 'عام').trim() || 'عام',
+    }))
+    .filter((x) => x.title && x.accountCode);
+}
+
 function mergeExpenseCodingRulesFromArray(raw: unknown): ExpenseCodingRule[] {
   const base = DEFAULT_EXPENSE_CODING_RULES.map((r) => ({ ...r }));
   if (!Array.isArray(raw)) return base;
@@ -2552,19 +2570,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setManualJournalEntries(DEMO_MANUAL_JOURNALS);
       }
       if (!isServerDataMode() && savedJournalCodebook) {
-        const rawJournalRules = parseSafe<any[]>(savedJournalCodebook);
-        if (Array.isArray(rawJournalRules)) {
-          setJournalCodingRulesState(
-            rawJournalRules
-              .filter((x) => x && typeof x === 'object')
-              .map((x: any) => ({
-                id: String(x.id ?? `jr-${Date.now()}`),
-                title: String(x.title ?? '').trim(),
-                accountCode: String(x.accountCode ?? '').trim(),
-                costCenter: String(x.costCenter ?? 'عام').trim() || 'عام',
-              }))
-          );
-        }
+        const rawJournalRules = parseSafe<unknown>(savedJournalCodebook);
+        setJournalCodingRulesState(normalizeJournalCodingRulesFromArray(rawJournalRules));
       }
       if (!isServerDataMode() && savedExpenseCodebook) {
         const rawExpRules = parseSafe<unknown>(savedExpenseCodebook);
@@ -3455,18 +3462,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
             setIntegrations(normalized);
           }
-          const jc = ws.journalCodebook;
-          if (Array.isArray(jc)) {
-            setJournalCodingRulesState(
-              jc
-                .filter((x: unknown) => x && typeof x === 'object')
-                .map((x: any) => ({
-                  id: String(x.id ?? `jr-${Date.now()}`),
-                  title: String(x.title ?? '').trim(),
-                  accountCode: String(x.accountCode ?? '').trim(),
-                  costCenter: String(x.costCenter ?? 'عام').trim() || 'عام',
-                }))
-            );
+          if (ws.journalCodebook !== undefined) {
+            setJournalCodingRulesState(normalizeJournalCodingRulesFromArray(ws.journalCodebook));
           }
           if (ws.expenseCodebook !== undefined) {
             setExpenseCodingRulesState(mergeExpenseCodingRulesFromArray(ws.expenseCodebook));
@@ -3841,19 +3838,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             break;
           case 'prod_system_journal_codebook':
             if (event.newValue) {
-              const jr = parseSafe<any[]>(event.newValue);
-              if (Array.isArray(jr)) {
-                setJournalCodingRulesState(
-                  jr
-                    .filter((x) => x && typeof x === 'object')
-                    .map((x: any) => ({
-                      id: String(x.id ?? `jr-${Date.now()}`),
-                      title: String(x.title ?? '').trim(),
-                      accountCode: String(x.accountCode ?? '').trim(),
-                      costCenter: String(x.costCenter ?? 'عام').trim() || 'عام',
-                    }))
-                );
-              }
+              setJournalCodingRulesState(normalizeJournalCodingRulesFromArray(parseSafe<unknown>(event.newValue)));
             }
             break;
           case 'prod_system_expense_codebook':
@@ -4112,8 +4097,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const setJournalCodingRules = useCallback((updater: React.SetStateAction<JournalCodingRule[]>) => {
     setJournalCodingRulesState((prev) => {
-      const next = typeof updater === 'function' ? (updater as (p: JournalCodingRule[]) => JournalCodingRule[])(prev) : updater;
-      if (isServerDataMode()) void syncWorkspacePatch({ journalCodebook: next }, () => { setJournalCodingRulesState(prev); });
+      const nextRaw = typeof updater === 'function' ? (updater as (p: JournalCodingRule[]) => JournalCodingRule[])(prev) : updater;
+      const next = normalizeJournalCodingRulesFromArray(nextRaw);
+      if (isServerDataMode()) {
+        void syncWorkspacePatch({ journalCodebook: next }, () => {
+          setJournalCodingRulesState(prev);
+          toast.error('تعذر حفظ أكواد اليومية — تحقق من الصلاحيات أو الاتصال');
+        });
+      }
       return next;
     });
   }, []);

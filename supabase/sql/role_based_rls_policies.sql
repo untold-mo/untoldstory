@@ -215,7 +215,7 @@ CREATE POLICY audit_events_insert ON public.audit_events
 CREATE POLICY workspace_state_role ON public.workspace_state
   FOR ALL TO authenticated
   USING (public.app_is_role(ARRAY['مالك', 'مدير مبيعات', 'محاسب', 'مدير إنتاج', 'مندوب']))
-  WITH CHECK (public.app_is_role(ARRAY['مالك']));
+  WITH CHECK (public.app_is_role(ARRAY['مالك', 'مدير مبيعات', 'محاسب', 'مدير إنتاج', 'مندوب']));
 
 -- ---------- manual_customers ----------
 CREATE POLICY manual_customers_role ON public.manual_customers
