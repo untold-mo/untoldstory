@@ -94,6 +94,45 @@ function makePlaceholderEmailSb(name: string): string {
   return `${base}-${rand}@staff.internal`.toLowerCase();
 }
 
+/** تعيين/تحديث كلمة مرور Supabase Auth لموظف — عبر Edge Function (service_role على الخادم فقط) */
+async function setEmployeeAuthPasswordSb(
+  targetUserId: string,
+  email: string,
+  password: string,
+): Promise<void> {
+  const sb = getSupabase();
+  const { data: sessionData } = await sb.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) throw new Error('لا توجد جلسة نشطة — سجّل الدخول مرة أخرى');
+
+  const base = String(import.meta.env.VITE_SUPABASE_URL || '').trim().replace(/\/+$/, '');
+  const anon = String(import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
+  if (!base || !anon) throw new Error('إعدادات Supabase ناقصة (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)');
+
+  const res = await fetch(`${base}/functions/v1/set-employee-password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: anon,
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ targetUserId, email, password }),
+  });
+  const j = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    const desc =
+      (typeof j.error === 'string' && j.error) ||
+      (typeof j.message === 'string' && j.message) ||
+      `HTTP ${res.status}`;
+    if (res.status === 404) {
+      throw new Error(
+        'دالة تعيين كلمة المرور غير منشورة على Supabase. انشرها بـ: supabase functions deploy set-employee-password — أو عيّن الباسورد من لوحة Supabase → Authentication → Users.',
+      );
+    }
+    throw new Error(desc);
+  }
+}
+
 /** تسجيل مستخدم Auth عبر REST حتى لا تتبدّل جلسة المالك في عميل supabase-js */
 async function authSignUpViaRest(email: string, password: string): Promise<void> {
   const base = String(import.meta.env.VITE_SUPABASE_URL || '').trim().replace(/\/+$/, '');
@@ -318,9 +357,24 @@ export async function patchUserSb(
     data.stats_json = patch.stats;
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'newPassword')) {
-    throw new Error(
-      'تعيين باسورد الموظف من الواجهة غير متاح في وضع Supabase المباشر. إمّا من لوحة Supabase ← Authentication ← Users، أو استخدم خادم التطبيق (Express + Prisma) حيث يُحدَّث bcrypt في قاعدة البيانات.',
-    );
+    if (!canOwner) throw new Error('غير مصرح');
+    if (isSelf) {
+      throw new Error('استخدم قسم «كلمة مرور حساب المالك» في الإعدادات لتغيير باسوردك');
+    }
+    if (existing.role === 'مالك') {
+      throw new Error('لا يمكن تغيير كلمة مرور حساب مالك آخر من هنا');
+    }
+    const np = String(patch.newPassword ?? '').trim();
+    if (np.length < 8) throw new Error('كلمة المرور ٨ أحرف أو أكثر');
+    const loginEmail = String(existing.email || '')
+      .trim()
+      .toLowerCase();
+    if (!loginEmail || loginEmail.endsWith('@staff.internal')) {
+      throw new Error(
+        'عيّن بريداً حقيقياً للموظف من تعديل بياناته أولاً (ليس @staff.internal)، ثم عيّن كلمة المرور.',
+      );
+    }
+    await setEmployeeAuthPasswordSb(id, loginEmail, np);
   }
   if (Object.keys(data).length === 0) return existing;
 
