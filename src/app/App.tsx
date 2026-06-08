@@ -4760,6 +4760,8 @@ function readLeadsPageSize(): number {
   return 25;
 }
 
+const BULK_UNASSIGN_REP_ID = '__unassigned__';
+
 const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void }) => {
   const { leads, users, invoices, expenses, priceQuotes, shootBookings, equipmentBookings, meetingBookings, manualCustomers, currentUser, addLead, addManualCustomer, assignLead, assignLeadsBulk, updateLeadStatus, deleteLead, deleteLeadsBulk, leadDataQualitySettings } = useData();
   const { t } = useTranslation();
@@ -5068,7 +5070,8 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
     }
     const ids = Array.from(selectedLeadIdsRef.current);
     if (ids.length === 0) return;
-    await runBulkAssign(ids, bulkAssignRepId);
+    const userId = bulkAssignRepId === BULK_UNASSIGN_REP_ID ? undefined : bulkAssignRepId;
+    await runBulkAssign(ids, userId);
   };
 
   const handleLeadAssignChange = (sourceLeadId: string, userId: string | undefined) => {
@@ -5809,6 +5812,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
             className="bg-[#0F1528] border border-white/15 rounded-xl px-3 py-2 text-xs min-w-[160px]"
           >
             <option value="">{t('leads.chooseRep')}</option>
+            <option value={BULK_UNASSIGN_REP_ID}>{t('leads.filterUnassigned')}</option>
             {reps.map((rep) => (
               <option key={rep.id} value={rep.id}>
                 {rep.name}
