@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   LayoutDashboard, Users, Briefcase, Settings, Bell, Search, Plus, Phone, Mail, 
@@ -104,6 +104,17 @@ const ALERT_HIGH_EXPENSE = 50000;
 const ALERT_MAX_OVERDUE_LEADS = 5;
 const NAV_INTENT_KEY = 'prod_system_nav_intent';
 const FINANCE_INTENT_KEY = 'prod_system_finance_intent';
+const FINANCE_TAB_IDS = new Set([
+  'invoices',
+  'expenses',
+  'ledger',
+  'reports',
+  'coa',
+  'journals',
+  'reps',
+  'codebook',
+  'custody',
+]);
 const BOOKING_INTENT_KEY = 'prod_system_booking_intent';
 type InvoiceQuickFilter = 'all' | 'overdue_installments' | 'due_today_installments' | 'missing_cost_center';
 type ExpenseQuickFilter = 'all' | 'pending_approval';
@@ -12388,6 +12399,7 @@ const Root = () => {
     logout,
     getSystemNotifications,
     refreshServerWorkspace,
+    refreshLeadsOnly,
     ownerReturnPriceQuoteToProduction,
     leads,
     invoices,
@@ -12611,6 +12623,35 @@ const Root = () => {
     window.dispatchEvent(new Event('finance-intent'));
     handleTabChange('accountant');
   };
+
+  const applyAppHash = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const hash = window.location.hash.replace(/^#/, '').trim();
+    if (!hash) return;
+    const [tab, sub] = hash.split('/').map((s) => s.trim()).filter(Boolean);
+    if (tab === 'accountant' && allowedTabs.includes('accountant')) {
+      if (sub && FINANCE_TAB_IDS.has(sub)) {
+        localStorage.setItem(
+          FINANCE_INTENT_KEY,
+          JSON.stringify({ tab: 'accountant', financeTab: sub }),
+        );
+        window.dispatchEvent(new Event('finance-intent'));
+      }
+      handleTabChange('accountant');
+      return;
+    }
+    if (tab && allowedTabs.includes(tab)) {
+      handleTabChange(tab);
+    }
+  }, [allowedTabs, handleTabChange]);
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    applyAppHash();
+    window.addEventListener('hashchange', applyAppHash);
+    return () => window.removeEventListener('hashchange', applyAppHash);
+  }, [currentUser?.id, applyAppHash]);
+
   const handleGoBackTab = () => {
     const previous = tabHistory[tabHistory.length - 1];
     if (!previous) {
@@ -12673,12 +12714,14 @@ const Root = () => {
   useEffect(() => {
     if (!isServerDataMode()) return;
     if (!currentUser || currentUser.authSource !== 'database') return;
+    const isRep = currentUser.role === 'مندوب';
     const sync = () => {
       if (document.visibilityState !== 'visible') return;
       const t = Date.now();
       if (t - notificationsBackgroundSyncAt.current < 60_000) return;
       notificationsBackgroundSyncAt.current = t;
-      void refreshServerWorkspace();
+      if (isRep) void refreshLeadsOnly();
+      else void refreshServerWorkspace();
     };
     document.addEventListener('visibilitychange', sync);
     window.addEventListener('focus', sync);
@@ -12686,7 +12729,7 @@ const Root = () => {
       document.removeEventListener('visibilitychange', sync);
       window.removeEventListener('focus', sync);
     };
-  }, [currentUser?.id, currentUser?.authSource, refreshServerWorkspace]);
+  }, [currentUser?.id, currentUser?.authSource, currentUser?.role, refreshServerWorkspace, refreshLeadsOnly]);
 
   useEffect(() => {
     if (activeTab !== 'approvals') return;

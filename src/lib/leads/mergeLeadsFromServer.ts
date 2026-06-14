@@ -15,6 +15,17 @@ export function mergeLeadsFromServer(prev: Lead[], server: Lead[]): Lead[] {
   return merged;
 }
 
+/**
+ * يطبّق لقطة ليدز من السيرفر — إن فشل الجلب لا يمسح الليدز المعروضة (يمنع «مرة تظهر ومرة لا»).
+ */
+export function applyServerLeadsSnapshot(prev: Lead[], server: Lead[], fetchOk: boolean): Lead[] {
+  if (!fetchOk) {
+    if (prev.length > 0) return prev;
+    return mergeLeadsFromServer(prev, server);
+  }
+  return mergeLeadsFromServer(prev, server);
+}
+
 export function upsertLeadInList(prev: Lead[], lead: Lead): Lead[] {
   const withoutTempDupes = prev.filter(
     (l) => l.id !== lead.id && !(isOptimisticLeadId(l.id) && l.phone === lead.phone),

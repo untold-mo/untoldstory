@@ -81,6 +81,7 @@ import { notifyClientChannel } from '@/lib/clientChannelNotify';
 import { fetchLeadsSb } from '@/lib/supabase/directApiSb';
 import {
   mergeLeadsFromServer,
+  applyServerLeadsSnapshot,
   removeLeadFromList,
   upsertLeadInList,
 } from '@/lib/leads/mergeLeadsFromServer';
@@ -1347,6 +1348,8 @@ interface DataContextType {
    * في الوضع المحلي ترجع true دون شبكة.
    */
   refreshServerWorkspace: () => Promise<boolean>;
+  /** جلب الليدز فقط — خفيف للمندوبين (بدون تحميل الفواتير/المصروفات/…) */
+  refreshLeadsOnly: () => Promise<boolean>;
   getRepSnapshots: () => RepSnapshot[];
   monthlyTargets: MonthlyTarget[];
   updateMonthlyTarget: (repId: string, patch: Partial<Omit<MonthlyTarget, 'repId'>>) => Promise<void>;
@@ -3172,16 +3175,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   /** يمنع تطبيق Workspace قديم بعد إعادة تشغيل التأثير (Strict Mode أو تغيير المستخدم). */
   const workspaceApplyEpochRef = useRef(0);
+  const workspaceLoadInFlightRef = useRef(false);
+  const workspaceLoadQueuedRef = useRef(false);
   /** جلب الحجوزات مع أول تشغيل — لا ينتظر currentUser لتفادي بقاء القائمة [] بعد الرفريش. */
   const bookingBootstrapEpochRef = useRef(0);
 
   const loadServerWorkspaceImplRef = useRef<() => Promise<boolean>>(async () => false);
 
   loadServerWorkspaceImplRef.current = async (): Promise<boolean> => {
+    if (workspaceLoadInFlightRef.current) {
+      workspaceLoadQueuedRef.current = true;
+      return false;
+    }
+    workspaceLoadInFlightRef.current = true;
     workspaceApplyEpochRef.current += 1;
     const epoch = workspaceApplyEpochRef.current;
     try {
         let leadsList: Lead[];
+        let leadsFetchOk = false;
         let rawUsers: User[];
         let customers: ManualCustomer[];
         let invs: Invoice[];
@@ -3209,6 +3220,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               })
             : snapRaw;
           leadsList = snap.leadsList;
+          leadsFetchOk = snap.leadsFetchOk;
           rawUsers = snap.rawUsers;
           customers = snap.customers;
           invs = snap.invsRaw.map((raw) => normalizeInvoice(raw));
@@ -3227,9 +3239,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           workspaceDoc = snap.workspaceDoc;
           attendanceRec = snap.attendanceRec;
         } else {
+          try {
+            leadsList = await fetchLeadsApi();
+            leadsFetchOk = true;
+          } catch (e) {
+            console.warn('[workspace] leads fetch failed', e);
+            leadsList = [];
+            leadsFetchOk = false;
+          }
           const tuple = await Promise.all([
-            /** خطأ ليدز أو مستخدمين كان يُلغي المزامنة كلها → الحجوزات تظل [] بعد الريفريش رغم أن GET الحجوزات يعمل */
-            fetchLeadsApi().catch(() => []),
             fetchUsersApi().catch(() => []),
             fetchManualCustomersApi().catch(() => []),
             fetchInvoicesApi().catch(() => []),
@@ -3248,27 +3266,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             fetchWorkspaceStateApi().catch(() => ({})),
             fetchAttendanceRecordsApi().catch(() => []),
           ]);
-          leadsList = tuple[0];
-          rawUsers = tuple[1];
-          customers = tuple[2];
-          invs = tuple[3];
-          exps = tuple[4];
-          quotes = tuple[5];
-          pol = tuple[6];
-          journals = tuple[7];
-          closedM = tuple[8];
-          targets = tuple[9];
-          custodyMap = tuple[10];
-          auditList = tuple[11];
-          custodyList = tuple[12];
-          shootList = tuple[13];
-          equipList = tuple[14];
-          meetList = tuple[15];
-          workspaceDoc = tuple[16] as Record<string, unknown>;
-          attendanceRec = tuple[17];
+          rawUsers = tuple[0];
+          customers = tuple[1];
+          invs = tuple[2];
+          exps = tuple[3];
+          quotes = tuple[4];
+          pol = tuple[5];
+          journals = tuple[6];
+          closedM = tuple[7];
+          targets = tuple[8];
+          custodyMap = tuple[9];
+          auditList = tuple[10];
+          custodyList = tuple[11];
+          shootList = tuple[12];
+          equipList = tuple[13];
+          meetList = tuple[14];
+          workspaceDoc = tuple[15] as Record<string, unknown>;
+          attendanceRec = tuple[16];
         }
         if (epoch !== workspaceApplyEpochRef.current) return false;
-        setLeads((prev) => mergeLeadsFromServer(prev, leadsList));
+        setLeads((prev) => applyServerLeadsSnapshot(prev, leadsList, leadsFetchOk));
         setUsers(rawUsers.map((u) => normalizeUser({ ...u, authSource: 'database' })));
         setManualCustomers(customers);
         setInvoices(invs.map(normalizeInvoice));
@@ -3586,10 +3603,35 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return true;
       } catch {
         return false;
+      } finally {
+        workspaceLoadInFlightRef.current = false;
+        if (workspaceLoadQueuedRef.current) {
+          workspaceLoadQueuedRef.current = false;
+          void loadServerWorkspaceImplRef.current();
+        }
       }
   };
 
-  /** جلب الحجوزات فوراً — بعد دخول SPA لازم يتشغّل تاني (مش deps فاضية)، وإلا أوّل تشغيل بس يحصل ومفيش JWT. */
+  /** لقطة REST كاملة — الخادم يحدّ الصلاحيات حسب JWT؛ الواجهة تعرض ما يعيده الـ API فقط. */
+  const refreshServerWorkspace = useCallback(async (): Promise<boolean> => {
+    if (!isServerDataMode()) return true;
+    if (!hasServerAuthToken()) return false;
+    return loadServerWorkspaceImplRef.current();
+  }, []);
+
+  /** جلب الليدز فقط — خفيف على Supabase (للمندوبين) ولا يمسح القائمة عند فشل الشبكة */
+  const refreshLeadsOnly = useCallback(async (): Promise<boolean> => {
+    if (!isServerDataMode()) return true;
+    if (!hasServerAuthToken()) return false;
+    try {
+      const fresh = isSupabaseDirectMode() ? await fetchLeadsSb() : await fetchLeadsApi();
+      setLeads((prev) => applyServerLeadsSnapshot(prev, fresh, true));
+      return true;
+    } catch (e) {
+      console.warn('[leads] lightweight refresh failed', e);
+      return false;
+    }
+  }, []);
   useEffect(() => {
     if (!isServerDataMode()) return;
     if (isSupabaseDirectMode()) return;
@@ -3717,13 +3759,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [currentUser?.id]);
 
-  /** لقطة REST كاملة — الخادم يحدّ الصلاحيات حسب JWT؛ الواجهة تعرض ما يعيده الـ API فقط. */
-  const refreshServerWorkspace = useCallback(async (): Promise<boolean> => {
-    if (!isServerDataMode()) return true;
-    if (!hasServerAuthToken()) return false;
-    return loadServerWorkspaceImplRef.current();
-  }, []);
-
   /** toast فوري عند وصول ليد من n8n / القنوات — للمالك ومدير المبيعات */
   useEffect(() => {
     if (!currentUser?.id) {
@@ -3733,26 +3768,30 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     notifyNewInboundLeads(leads, currentUser.role);
   }, [leads, currentUser?.id, currentUser?.role]);
 
-  /** مزامنة دورية — fallback لو Realtime غير مفعّل (كل 90 ثانية لتقليل الحمل مع آلاف الليدز) */
+  /** مزامنة دورية — fallback لو Realtime غير مفعّل؛ المندوبون: ليدز فقط (خفيف)، الباقي: workspace كامل */
   useEffect(() => {
     if (!isServerDataMode()) return;
     if (!hasServerAuthToken()) return;
     if (!currentUser?.id) return;
 
+    const isRep = currentUser.role === 'مندوب';
+    const intervalMs = isRep ? 45_000 : 120_000;
     let cancelled = false;
-    const pollWorkspace = () => {
+
+    const poll = () => {
       if (cancelled || typeof document === 'undefined') return;
       if (document.visibilityState === 'hidden') return;
-      void refreshServerWorkspace();
+      if (isRep) void refreshLeadsOnly();
+      else void refreshServerWorkspace();
     };
 
-    void pollWorkspace();
-    const id = window.setInterval(pollWorkspace, 90_000);
+    void poll();
+    const id = window.setInterval(poll, intervalMs);
     return () => {
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [currentUser?.id, refreshServerWorkspace]);
+  }, [currentUser?.id, currentUser?.role, refreshServerWorkspace, refreshLeadsOnly]);
 
   /** تحديث فوري لكل جداول النظام عبر Supabase Realtime */
   useEffect(() => {
@@ -10292,7 +10331,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       desktopNotifyWhenVisible, setDesktopNotifyWhenVisible,
       closedFiscalYears, closeFiscalYear, reopenFiscalYear, getOpeningBalances, saveOpeningBalancesForYear, openingBalancesByYear,
       attendanceRecords, logAttendance,
-      payrollApprovals, payrollApprovalRequests, payrollSalesDiscounts, addPayrollSalesDiscount, removePayrollSalesDiscount, getPayrollSalesDiscountTotal, financialReopenRequests, approvePayroll, reopenPayroll, isPayrollApproved, requestPayrollApproval, ownerApprovePayrollRequest, ownerRejectPayrollRequest, requestMonthReopen, ownerApproveMonthReopenRequest, ownerRejectMonthReopenRequest, getSystemNotifications, refreshServerWorkspace,
+      payrollApprovals, payrollApprovalRequests, payrollSalesDiscounts, addPayrollSalesDiscount, removePayrollSalesDiscount, getPayrollSalesDiscountTotal, financialReopenRequests, approvePayroll, reopenPayroll, isPayrollApproved, requestPayrollApproval, ownerApprovePayrollRequest, ownerRejectPayrollRequest, requestMonthReopen, ownerApproveMonthReopenRequest, ownerRejectMonthReopenRequest, getSystemNotifications, refreshServerWorkspace, refreshLeadsOnly,
       auditEvents, addAuditEvent,
       shootBookings: shootBookings.filter((b) => !deletedShootIdsRef.current.has(b.id)),
       equipmentBookings: equipmentBookings.filter((b) => !deletedEquipIdsRef.current.has(b.id)),

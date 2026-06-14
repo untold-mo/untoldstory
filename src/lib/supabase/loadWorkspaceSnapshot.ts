@@ -33,6 +33,8 @@ import {
 
 export type SupabaseWorkspaceSnapshot = {
   leadsList: Lead[];
+  /** false = فشل جلب الليدز — لا تستبدل القائمة المحلية بمصفوفة فارغة */
+  leadsFetchOk: boolean;
   rawUsers: User[];
   customers: ManualCustomer[];
   invsRaw: Record<string, unknown>[];
@@ -98,7 +100,7 @@ export async function fetchSupabaseWorkspaceSnapshot(): Promise<SupabaseWorkspac
   const sb = getSupabase();
 
   const [
-    leadsList,
+    leadsResult,
     rawUsers,
     customers,
     invsRaw,
@@ -117,12 +119,13 @@ export async function fetchSupabaseWorkspaceSnapshot(): Promise<SupabaseWorkspac
     wsRow,
     attendanceRec,
   ] = await Promise.all([
-    (async () => {
+    (async (): Promise<{ list: Lead[]; ok: boolean }> => {
       try {
-        return await fetchAllLeadsFromSupabase(sb);
+        const list = await fetchAllLeadsFromSupabase(sb);
+        return { list, ok: true };
       } catch (e) {
         console.warn('[supabase workspace] leads fetch failed', e);
-        return [];
+        return { list: [], ok: false };
       }
     })(),
     rows(
@@ -182,6 +185,9 @@ export async function fetchSupabaseWorkspaceSnapshot(): Promise<SupabaseWorkspac
     ),
   ]);
 
+  const leadsList = leadsResult.list;
+  const leadsFetchOk = leadsResult.ok;
+
   const closedMonthsClean = closedRows.filter((k) => {
     if (typeof k !== 'string' || !/^\d{4}-\d{2}$/.test(k)) return false;
     const m = Number(k.slice(5, 7));
@@ -190,6 +196,7 @@ export async function fetchSupabaseWorkspaceSnapshot(): Promise<SupabaseWorkspac
 
   return {
     leadsList,
+    leadsFetchOk,
     rawUsers,
     customers,
     invsRaw,
