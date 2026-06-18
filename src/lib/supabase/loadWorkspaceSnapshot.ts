@@ -16,7 +16,7 @@ import type {
 import { fetchAllLeadsFromSupabase } from '@/lib/supabase/fetchAllLeads';
 import {
   mapLeadFromRow,
-  mapUserFromRow,
+  mapUserListFromRow,
   mapManualCustomerFromRow,
   mapExpenseFromRow,
   mapPriceQuoteFromRow,
@@ -101,6 +101,15 @@ export type WorkspaceViewer = { id: string; role: User['role'] };
 const INVOICES_LIST_SELECT =
   'id,customer_code,lead_id,customer_name,amount,vat_rate,vat_amount,total_amount,cost_center,status,date,record_origin,price_quote_id,paid_amount,remaining_amount,next_due_date,collections_json';
 
+const USERS_LIST_SELECT =
+  'id,email,name,role,base_salary,skills_json,stats_json,created_at,updated_at';
+
+const EXPENSES_LIST_SELECT =
+  'id,title,category,amount,vat_rate,vat_amount,total_amount,cost_center,status,approval_status,approved_by,vendor,note,date,submitted_by_id,submitted_by_name,payment_method';
+
+const QUOTES_LIST_SELECT =
+  'id,lead_id,customer_name,title,amount,vat_rate,vat_amount,total_amount,cost_center,note,created_by_id,created_by_name,created_at,status,production_assigned_id,production_assigned_name,priced_by_id,priced_by_name,priced_at,pricing_note,approved_by,approved_at,invoice_id,payment_schedule_json,initial_payment,client_payments_json,client_accepted_at,client_rejected_at,client_rejection_note,company_margin_percent,production_cost_amount,line_items_json';
+
 function isFullCrmRole(role?: User['role']): boolean {
   return !role || role === 'مالك' || role === 'مدير مبيعات';
 }
@@ -132,6 +141,7 @@ export async function fetchSupabaseWorkspaceSnapshot(
   const needCustodyFunds = !isRepRole(role);
   const needCustomers = isFullCrmRole(role) || isAccountantRole(role);
   const needCustodySettings = needFinance || isProductionRole(role);
+  const needQuotes = isFullCrmRole(role) || isAccountantRole(role) || isProductionRole(role);
 
   const [
     leadsResult,
@@ -168,11 +178,8 @@ export async function fetchSupabaseWorkspaceSnapshot(
         })()
       : Promise.resolve({ list: [] as Lead[], ok: true }),
     rows(
-      sb
-        .from('users')
-        .select('id,email,name,role,avatar,base_salary,skills_json,stats_json,created_at,updated_at')
-        .order('name', { ascending: true }),
-      mapUserFromRow,
+      sb.from('users').select(USERS_LIST_SELECT).order('name', { ascending: true }),
+      mapUserListFromRow,
     ),
     needCustomers
       ? rows(sb.from('manual_customers').select('*').order('created_at', { ascending: false }), mapManualCustomerFromRow)
@@ -191,9 +198,32 @@ export async function fetchSupabaseWorkspaceSnapshot(
         })()
       : Promise.resolve([] as Record<string, unknown>[]),
     needFinance
-      ? rows(sb.from('expenses').select('*').order('date', { ascending: false }), mapExpenseFromRow)
+      ? rows(
+          sb.from('expenses').select(EXPENSES_LIST_SELECT).order('date', { ascending: false }),
+          mapExpenseFromRow,
+        )
       : Promise.resolve([] as Expense[]),
-    rows(sb.from('price_quotes').select('*').order('created_at', { ascending: false }), mapPriceQuoteFromRow),
+    needQuotes
+      ? (async () => {
+          let q = sb
+            .from('price_quotes')
+            .select(QUOTES_LIST_SELECT)
+            .order('created_at', { ascending: false });
+          if (isProductionRole(role) && uid) {
+            q = q.or(
+              `production_assigned_id.eq.${uid},priced_by_id.eq.${uid},created_by_id.eq.${uid}`,
+            );
+          }
+          const { data, error } = await q;
+          if (error) {
+            console.warn('[supabase workspace] quotes', error.message);
+            return [] as PriceQuote[];
+          }
+          return Array.isArray(data)
+            ? data.map((r) => mapPriceQuoteFromRow(r as Record<string, unknown>))
+            : [];
+        })()
+      : Promise.resolve([] as PriceQuote[]),
     needFinance
       ? (async () => {
           const { data, error } = await sb.from('accounting_policy').select('*').eq('id', 'default').maybeSingle();

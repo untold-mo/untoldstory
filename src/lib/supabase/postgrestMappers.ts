@@ -219,6 +219,15 @@ export function mapUserFromRow(r: Record<string, unknown>): User {
   };
 }
 
+const DEFAULT_USER_AVATAR =
+  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop';
+
+/** قائمة الموظفين — بدون عمود avatar (قد يكون base64 ضخم). */
+export function mapUserListFromRow(r: Record<string, unknown>): User {
+  const u = mapUserFromRow(r);
+  return { ...u, avatar: DEFAULT_USER_AVATAR };
+}
+
 export function mapManualCustomerFromRow(r: Record<string, unknown>): ManualCustomer {
   return {
     id: String(r.id ?? ''),

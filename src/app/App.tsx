@@ -13279,7 +13279,7 @@ const Root = () => {
       const n = await submitAllCustodyDraftsToOwner();
       if (n > 0) {
         toast.success(t('approvals.toastLegacyCustodyPulled', { count: n }));
-        await refreshServerWorkspace();
+        await refreshServerWorkspace({ force: true });
       }
     })();
   }, [activeTab, currentUser?.role, custodyFunds, submitAllCustodyDraftsToOwner, refreshServerWorkspace, t]);
@@ -14011,22 +14011,7 @@ const Root = () => {
               )}
               <button
                 ref={notificationsAnchorRef}
-                onClick={() => {
-                  setIsNotificationsOpen((v) => {
-                    const opening = !v;
-                    if (opening) {
-                      void (async () => {
-                        setNotificationsPanelSyncing(true);
-                        try {
-                          await refreshServerWorkspace();
-                        } finally {
-                          setNotificationsPanelSyncing(false);
-                        }
-                      })();
-                    }
-                    return opening;
-                  });
-                }}
+                onClick={() => setIsNotificationsOpen((v) => !v)}
                 title={t('header.notifications')}
                 className="premium-top-action group relative h-12 w-12 flex items-center justify-center bg-gradient-to-b from-white/[0.08] to-white/[0.03] border border-white/15 rounded-xl hover:border-rose-300/40 hover:shadow-[0_10px_24px_rgba(244,63,94,0.15)] transition-all"
               >
@@ -14054,7 +14039,7 @@ const Root = () => {
                             void (async () => {
                               setNotificationsPanelSyncing(true);
                               try {
-                                const ok = await refreshServerWorkspace();
+                                const ok = await refreshServerWorkspace({ force: true });
                                 if (!ok) toast.error(t('notifications.syncFailed'));
                                 else toast.success(t('notifications.syncDone'));
                               } finally {

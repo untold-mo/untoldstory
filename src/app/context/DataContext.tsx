@@ -1379,7 +1379,7 @@ interface DataContextType {
    * استجابة REST مصفّاة بصلاحيات JWT على الخادم. لقطة خفيفة «للإشعارات فقط» غير متوفرة حالياً.
    * في الوضع المحلي ترجع true دون شبكة.
    */
-  refreshServerWorkspace: () => Promise<boolean>;
+  refreshServerWorkspace: (options?: { force?: boolean }) => Promise<boolean>;
   /** جلب الليدز فقط — خفيف للمندوبين (بدون تحميل الفواتير/المصروفات/…) */
   refreshLeadsOnly: () => Promise<boolean>;
   getRepSnapshots: () => RepSnapshot[];
@@ -3287,6 +3287,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const workspaceApplyEpochRef = useRef(0);
   const workspaceLoadInFlightRef = useRef(false);
   const workspaceLoadQueuedRef = useRef(false);
+  const lastWorkspaceFullLoadAtRef = useRef(0);
+  /** أقل فترة بين تحميلات Workspace كاملة (تقليل egress على Supabase). */
+  const WORKSPACE_FULL_RELOAD_MIN_MS = 3 * 60 * 1000;
   /** جلب الحجوزات مع أول تشغيل — لا ينتظر currentUser لتفادي بقاء القائمة [] بعد الرفريش. */
   const bookingBootstrapEpochRef = useRef(0);
 
@@ -3339,11 +3342,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ...(ws.printBranding as object),
         } as PrintBrandingSettings;
         const serverLogoUrl = (fromServer.logoUrl || '').trim();
-        const serverDataUrl = (fromServer.logoDataUrl || '').trim();
         return {
           ...fromServer,
           logoUrl: serverLogoUrl || prev.logoUrl,
-          logoDataUrl: serverLogoUrl ? '' : serverDataUrl || prev.logoDataUrl || '',
+          // لا نحمّل base64 من السيرفر — يزيد egress وحجم doc_json؛ الشعار عبر logoUrl في Storage
+          logoDataUrl: serverLogoUrl ? '' : prev.logoDataUrl || '',
         };
       });
     }
@@ -3582,7 +3585,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         if (
           currentUser &&
-          ['مالك', 'محاسب', 'مدير إنتاج'].includes(currentUser.role)
+          ['مالك', 'محاسب', 'مدير إنتاج'].includes(currentUser.role) &&
+          (!Array.isArray(custodyList) || custodyList.length === 0)
         ) {
           try {
             const freshCustody = await fetchCustodyFundsApi();
@@ -3746,6 +3750,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           expenses: exps,
           monthlyTargets: mtForCache.length > 0 ? mtForCache : DEFAULT_TARGETS,
         });
+        lastWorkspaceFullLoadAtRef.current = Date.now();
         return true;
       } catch {
         return false;
@@ -3759,9 +3764,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   /** لقطة REST كاملة — الخادم يحدّ الصلاحيات حسب JWT؛ الواجهة تعرض ما يعيده الـ API فقط. */
-  const refreshServerWorkspace = useCallback(async (): Promise<boolean> => {
+  const refreshServerWorkspace = useCallback(async (options?: { force?: boolean }): Promise<boolean> => {
     if (!isServerDataMode()) return true;
     if (!hasServerAuthToken()) return false;
+    const now = Date.now();
+    if (
+      !options?.force &&
+      lastWorkspaceFullLoadAtRef.current > 0 &&
+      now - lastWorkspaceFullLoadAtRef.current < WORKSPACE_FULL_RELOAD_MIN_MS
+    ) {
+      return true;
+    }
     return loadServerWorkspaceImplRef.current();
   }, []);
 

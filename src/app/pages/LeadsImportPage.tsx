@@ -8,7 +8,7 @@ import { parseLinkedInLeadsCsv } from '@/lib/linkedinLeadsCsv';
 const NAV_INTENT_KEY = 'prod_system_nav_intent';
 
 export default function LeadsImportPage() {
-  const { currentUser, refreshServerWorkspace } = useData();
+  const { currentUser, refreshLeadsOnly } = useData();
   const inputRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState('');
   const [previewCount, setPreviewCount] = useState(0);
@@ -94,7 +94,7 @@ export default function LeadsImportPage() {
           `تم استيراد ${totalCreated} ليد إلى Supabase (مصدر: linkedin)${totalSkipped ? ` — تخطي ${totalSkipped} مكرر` : ''}`,
         );
         try {
-          await refreshServerWorkspace();
+          await refreshLeadsOnly();
         } catch {
           /* ignore refresh errors */
         }

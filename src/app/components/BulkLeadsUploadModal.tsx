@@ -87,7 +87,7 @@ function notifyImportFinished(result: ImportResult, t: TFunction, lang: 'ar' | '
 }
 
 export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
-  const { bulkAddLeads, currentUser, refreshServerWorkspace } = useData();
+  const { bulkAddLeads, currentUser, refreshLeadsOnly } = useData();
   const { t } = useTranslation();
   const { dir, dateLocale, lang } = useAppDirection();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -244,7 +244,7 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
 
         if (totalCreated > 0) {
           try {
-            await refreshServerWorkspace();
+            await refreshLeadsOnly();
           } catch {
             /* ignore */
           }
@@ -272,7 +272,7 @@ export function BulkLeadsUploadModal({ isOpen, onClose, onImported }: Props) {
         result = { created: totalCreated, skippedDuplicates: 0, failed: totalFailed };
         if (totalCreated > 0) {
           try {
-            await refreshServerWorkspace();
+            await refreshLeadsOnly();
           } catch {
             /* ignore */
           }

@@ -11,7 +11,7 @@ import type {
 } from '@/app/context/DataContext';
 import { getSupabase } from '@/lib/supabase/client';
 import {
-  mapLeadFromRow,
+  mapLeadListFromRow,
   mapUserFromRow,
   mapManualCustomerFromRow,
   mapExpenseFromRow,
@@ -76,7 +76,7 @@ export function subscribeWorkspaceRealtime(handlers: WorkspaceRealtimeHandlers):
   const channel = sb.channel('workspace-live-sync');
 
   bindRowEvents(channel, 'leads', {
-    onUpsert: (row) => handlers.onLeadUpsert(mapLeadFromRow(row)),
+    onUpsert: (row) => handlers.onLeadUpsert(mapLeadListFromRow(row)),
     onDelete: handlers.onLeadDelete,
   });
 
