@@ -98,6 +98,11 @@ async function singleDocRows<T>(
 
 export type WorkspaceViewer = { id: string; role: User['role'] };
 
+export type WorkspaceFetchOptions = {
+  /** للمالك/مدير المبيعات — يُحمَّل باقي الـ Workspace أولاً ثم الليدز في الخلفية */
+  skipLeads?: boolean;
+};
+
 const INVOICES_LIST_SELECT =
   'id,customer_code,lead_id,customer_name,amount,vat_rate,vat_amount,total_amount,cost_center,status,date,record_origin,price_quote_id,paid_amount,remaining_amount,next_due_date,collections_json';
 
@@ -128,6 +133,7 @@ function isAccountantRole(role?: User['role']): boolean {
 
 export async function fetchSupabaseWorkspaceSnapshot(
   viewer?: WorkspaceViewer,
+  options?: WorkspaceFetchOptions,
 ): Promise<SupabaseWorkspaceSnapshot> {
   const sb = getSupabase();
   const role = viewer?.role;
@@ -142,6 +148,7 @@ export async function fetchSupabaseWorkspaceSnapshot(
   const needCustomers = isFullCrmRole(role) || isAccountantRole(role);
   const needCustodySettings = needFinance || isProductionRole(role);
   const needQuotes = isFullCrmRole(role) || isAccountantRole(role) || isProductionRole(role);
+  const skipLeads = Boolean(options?.skipLeads);
 
   const [
     leadsResult,
@@ -163,7 +170,7 @@ export async function fetchSupabaseWorkspaceSnapshot(
     wsRow,
     attendanceRec,
   ] = await Promise.all([
-    needLeads
+    needLeads && !skipLeads
       ? (async (): Promise<{ list: Lead[]; ok: boolean }> => {
           try {
             const list = await fetchAllLeadsFromSupabase(

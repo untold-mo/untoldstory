@@ -12920,6 +12920,7 @@ const Root = () => {
     logout,
     getSystemNotifications,
     refreshServerWorkspace,
+    refreshNotificationsSlice,
     ownerReturnPriceQuoteToProduction,
     leads,
     invoices,
@@ -13714,6 +13715,20 @@ const Root = () => {
   }, [isNotificationsOpen]);
 
   useEffect(() => {
+    if (!isNotificationsOpen) return;
+    if (!isServerDataMode() || currentUser?.authSource !== 'database') return;
+    setNotificationsPanelSyncing(true);
+    void (async () => {
+      try {
+        const ok = await refreshNotificationsSlice();
+        if (!ok) toast.error(t('notifications.syncFailed'));
+      } finally {
+        setNotificationsPanelSyncing(false);
+      }
+    })();
+  }, [isNotificationsOpen, currentUser?.authSource, refreshNotificationsSlice, t]);
+
+  useEffect(() => {
     return () => cancelNotificationsClose();
   }, []);
 
@@ -14040,7 +14055,7 @@ const Root = () => {
                             void (async () => {
                               setNotificationsPanelSyncing(true);
                               try {
-                                const ok = await refreshServerWorkspace({ force: true });
+                                const ok = await refreshNotificationsSlice();
                                 if (!ok) toast.error(t('notifications.syncFailed'));
                                 else toast.success(t('notifications.syncDone'));
                               } finally {

@@ -7,6 +7,7 @@ import {
   fetchSupabaseWorkspaceSnapshot,
   filterWorkspaceSnapshotForViewer,
 } from '@/lib/supabase/loadWorkspaceSnapshot';
+import { fetchAllLeadsFromSupabase, fetchLeadsNotificationSubset, fetchUnassignedOpenLeadsCount } from '@/lib/supabase/fetchAllLeads';
 import { supabaseCreateLead, supabaseDeleteLead, supabasePatchLead } from '@/lib/supabase/leadsRepo';
 import type { Session } from '@supabase/supabase-js';
 import { getSupabase } from '@/lib/supabase/client';
@@ -107,6 +108,7 @@ import {
   initialLeadsFromServerCache,
   initialMonthlyTargetsFromServerCache,
   initialUsersFromServerCache,
+  readServerWorkspaceCache,
   writeServerWorkspaceCache,
 } from '@/lib/supabase/serverWorkspaceCache';
 
@@ -1376,11 +1378,11 @@ interface DataContextType {
   ownerRejectMonthReopenRequest: (requestId: string, reason?: string) => Promise<boolean>;
   getSystemNotifications: () => SystemNotification[];
   /**
-   * إعادة جلب لقطة كاملة من السيرفر (مستخدمة عند فتح التنبيهات وغيرها). لا يوجد WebSocket؛ الاعتماد على
-   * استجابة REST مصفّاة بصلاحيات JWT على الخادم. لقطة خفيفة «للإشعارات فقط» غير متوفرة حالياً.
-   * في الوضع المحلي ترجع true دون شبكة.
+   * إعادة جلب لقطة كاملة من السيرفر. للتنبيهات استخدم refreshNotificationsSlice (أخف).
    */
   refreshServerWorkspace: (options?: { force?: boolean }) => Promise<boolean>;
+  /** جلب خفيف لبيانات التنبيهات (بدون تحميل كل الليدز) */
+  refreshNotificationsSlice: () => Promise<boolean>;
   /** جلب الليدز فقط — خفيف للمندوبين (بدون تحميل الفواتير/المصروفات/…) */
   refreshLeadsOnly: () => Promise<boolean>;
   getRepSnapshots: () => RepSnapshot[];
@@ -2363,6 +2365,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [payrollApprovalRequests, setPayrollApprovalRequests] = useState<PayrollApprovalRequest[]>([]);
   const [payrollSalesDiscounts, setPayrollSalesDiscounts] = useState<PayrollSalesDiscount[]>([]);
   const [financialReopenRequests, setFinancialReopenRequests] = useState<FinancialPeriodReopenRequest[]>([]);
+  const [leadNotificationMetrics, setLeadNotificationMetrics] = useState<{
+    unassignedOpenCount?: number;
+  }>({});
   const [shootBookings, setShootBookings] = useState<ShootBooking[]>([]);
   const [equipmentBookings, setEquipmentBookings] = useState<EquipmentBooking[]>([]);
   const [meetingBookings, setMeetingBookings] = useState<MeetingBooking[]>([]);
@@ -3473,19 +3478,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         let meetList: MeetingBooking[] | undefined;
         let workspaceDoc: Record<string, unknown>;
         let attendanceRec: AttendanceRecord[];
+        let deferOwnerLeads = false;
+        let snapRawForDefer: Awaited<ReturnType<typeof fetchSupabaseWorkspaceSnapshot>> | null = null;
 
         if (isSupabaseDirectMode()) {
-          const snapRaw = await fetchSupabaseWorkspaceSnapshot(
+          deferOwnerLeads =
+            Boolean(currentUser) &&
+            (currentUser!.role === 'مالك' || currentUser!.role === 'مدير مبيعات');
+          snapRawForDefer = await fetchSupabaseWorkspaceSnapshot(
             currentUser ? { id: currentUser.id, role: currentUser.role } : undefined,
+            { skipLeads: deferOwnerLeads },
           );
           const snap = currentUser
-            ? filterWorkspaceSnapshotForViewer(snapRaw, {
+            ? filterWorkspaceSnapshotForViewer(snapRawForDefer, {
                 id: currentUser.id,
                 role: currentUser.role,
               })
-            : snapRaw;
-          leadsList = snap.leadsList;
-          leadsFetchOk = snap.leadsFetchOk;
+            : snapRawForDefer;
+          leadsList = deferOwnerLeads ? [] : snap.leadsList;
+          leadsFetchOk = deferOwnerLeads ? false : snap.leadsFetchOk;
           rawUsers = snap.rawUsers;
           customers = snap.customers;
           invs = snap.invsRaw.map((raw) => normalizeInvoice(raw));
@@ -3742,13 +3753,40 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
         const mtForCache = Array.isArray(targets) ? targets : [];
+        const leadsForCache = deferOwnerLeads
+          ? (readServerWorkspaceCache()?.leads ?? leadsList)
+          : leadsList;
         writeServerWorkspaceCache({
-          leads: leadsList,
+          leads: leadsForCache,
           users: rawUsers.map((u) => normalizeUser({ ...u, authSource: 'database' })),
           invoices: invs.map(normalizeInvoice),
           expenses: exps,
           monthlyTargets: mtForCache.length > 0 ? mtForCache : DEFAULT_TARGETS,
         });
+        if (deferOwnerLeads && currentUser && snapRawForDefer) {
+          const viewer = { id: currentUser.id, role: currentUser.role };
+          const deferEpoch = epoch;
+          void (async () => {
+            try {
+              const list = await fetchAllLeadsFromSupabase(getSupabase());
+              if (deferEpoch !== workspaceApplyEpochRef.current) return;
+              const filtered = filterWorkspaceSnapshotForViewer(
+                { ...snapRawForDefer!, leadsList: list, leadsFetchOk: true },
+                viewer,
+              ).leadsList;
+              setLeads((prev) => applyServerLeadsSnapshot(prev, filtered, true));
+              writeServerWorkspaceCache({
+                leads: filtered,
+                users: rawUsers.map((u) => normalizeUser({ ...u, authSource: 'database' })),
+                invoices: invs.map(normalizeInvoice),
+                expenses: exps,
+                monthlyTargets: mtForCache.length > 0 ? mtForCache : DEFAULT_TARGETS,
+              });
+            } catch (e) {
+              console.warn('[leads] deferred owner load failed', e);
+            }
+          })();
+        }
         lastWorkspaceFullLoadAtRef.current = Date.now();
         return true;
       } catch {
@@ -3790,6 +3828,74 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return false;
     }
   }, []);
+
+  /** تحديث خفيف لمركز الإشعارات — بدون جلب آلاف الليدز */
+  const refreshNotificationsSlice = useCallback(async (): Promise<boolean> => {
+    if (!isServerDataMode()) return true;
+    if (!hasServerAuthToken()) return false;
+    const viewer = currentUser
+      ? { id: currentUser.id, role: currentUser.role }
+      : undefined;
+    if (!viewer) return false;
+    try {
+      if (isSupabaseDirectMode()) {
+        const snapRaw = await fetchSupabaseWorkspaceSnapshot(viewer, { skipLeads: true });
+        const snap = filterWorkspaceSnapshotForViewer(snapRaw, viewer);
+        setExpenses(snap.exps);
+        setPriceQuotes(snap.quotes);
+        setInvoices(snap.invsRaw.map((raw) => normalizeInvoice(raw)));
+        if (Array.isArray(snap.auditList)) setAuditEvents(snap.auditList);
+        if (Array.isArray(snap.custodyList)) {
+          setCustodyFunds(snap.custodyList.map(migrateCustodyFund));
+        }
+        if (snap.shootList.length > 0) setShootBookings(snap.shootList);
+        if (snap.equipList.length > 0) setEquipmentBookings(snap.equipList);
+        if (snap.meetList.length > 0) {
+          setMeetingBookings(snap.meetList.map(normalizeMeetingBooking));
+        }
+        if (Array.isArray(snap.attendanceRec) && snap.attendanceRec.length > 0) {
+          setAttendanceRecords(snap.attendanceRec);
+        }
+        applyWorkspaceDocRef.current(snap.workspaceDoc);
+        const sb = getSupabase();
+        const isOwnerOrSales = viewer.role === 'مالك' || viewer.role === 'مدير مبيعات';
+        const [subset, unassignedCount] = await Promise.all([
+          fetchLeadsNotificationSubset(
+            sb,
+            viewer.role === 'مندوب' ? { assignedToId: viewer.id } : undefined,
+          ),
+          isOwnerOrSales ? fetchUnassignedOpenLeadsCount(sb) : Promise.resolve(0),
+        ]);
+        if (isOwnerOrSales) {
+          setLeadNotificationMetrics({ unassignedOpenCount: unassignedCount });
+        }
+        setLeads((prev) => {
+          if (prev.length >= 500) return prev;
+          const merged = new Map(prev.map((l) => [l.id, l]));
+          for (const l of subset) merged.set(l.id, l);
+          return [...merged.values()].sort(
+            (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+          );
+        });
+        return true;
+      }
+      const [exps, quotes, invs, custody] = await Promise.all([
+        fetchExpensesApi().catch(() => [] as Expense[]),
+        fetchPriceQuotesApi().catch(() => [] as PriceQuote[]),
+        fetchInvoicesApi().catch(() => [] as Invoice[]),
+        fetchCustodyFundsApi().catch(() => [] as CustodyFund[]),
+      ]);
+      setExpenses(exps);
+      setPriceQuotes(quotes);
+      setInvoices(invs);
+      setCustodyFunds(custody.map(migrateCustodyFund));
+      await refreshLeadsOnly();
+      return true;
+    } catch (e) {
+      console.warn('[notifications] slice refresh failed', e);
+      return false;
+    }
+  }, [currentUser, refreshLeadsOnly]);
   useEffect(() => {
     if (!isServerDataMode()) return;
     if (isSupabaseDirectMode()) return;
@@ -3855,6 +3961,32 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       workspaceApplyEpochRef.current += 1;
     };
   }, [currentUser?.id, currentUser?.authSource]);
+
+  /** إن فشلت مزامنة الليدز بعد الدخول — أعد المحاولة (خصوصاً للمالك مع آلاف الليدز) */
+  useEffect(() => {
+    if (!isServerDataMode()) return;
+    if (!hasServerAuthToken()) return;
+    if (currentUser?.authSource !== 'database') return;
+    if (leads.length > 0) return;
+    const role = currentUser.role;
+    const needsLeads =
+      role === 'مالك' || role === 'مدير مبيعات' || role === 'مندوب' || role === 'محاسب';
+    if (!needsLeads) return;
+    let alive = true;
+    const t = window.setTimeout(() => {
+      if (!alive || leads.length > 0) return;
+      void refreshLeadsOnly();
+    }, 4000);
+    const t2 = window.setTimeout(() => {
+      if (!alive || leads.length > 0) return;
+      void refreshLeadsOnly();
+    }, 12000);
+    return () => {
+      alive = false;
+      window.clearTimeout(t);
+      window.clearTimeout(t2);
+    };
+  }, [currentUser?.id, currentUser?.authSource, currentUser?.role, leads.length, refreshLeadsOnly]);
 
   /** إن فشلت المزامنة الأولى بعد ريفريش — أعد المحاولة بدل بقاء لوحة المالك فارغة */
   useEffect(() => {
@@ -7055,6 +7187,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       attendanceRecordsCount: attendanceRecords.length,
       personalTodosByUserId,
       financialReopenRequests,
+      leadNotificationMetrics,
     });
   }, [
     leads,
@@ -7074,6 +7207,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     attendanceRecords,
     personalTodosByUserId,
     financialReopenRequests,
+    leadNotificationMetrics,
   ]);
 
   const requestPayrollApproval = async (
@@ -10641,7 +10775,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       desktopNotifyWhenVisible, setDesktopNotifyWhenVisible,
       closedFiscalYears, closeFiscalYear, reopenFiscalYear, getOpeningBalances, saveOpeningBalancesForYear, openingBalancesByYear,
       attendanceRecords, logAttendance,
-      payrollApprovals, payrollApprovalRequests, payrollSalesDiscounts, addPayrollSalesDiscount, removePayrollSalesDiscount, getPayrollSalesDiscountTotal, financialReopenRequests, approvePayroll, reopenPayroll, isPayrollApproved, requestPayrollApproval, ownerApprovePayrollRequest, ownerRejectPayrollRequest, requestMonthReopen, ownerApproveMonthReopenRequest, ownerRejectMonthReopenRequest, getSystemNotifications, refreshServerWorkspace, refreshLeadsOnly,
+      payrollApprovals, payrollApprovalRequests, payrollSalesDiscounts, addPayrollSalesDiscount, removePayrollSalesDiscount, getPayrollSalesDiscountTotal, financialReopenRequests, approvePayroll, reopenPayroll, isPayrollApproved, requestPayrollApproval, ownerApprovePayrollRequest, ownerRejectPayrollRequest, requestMonthReopen, ownerApproveMonthReopenRequest, ownerRejectMonthReopenRequest, getSystemNotifications, refreshServerWorkspace, refreshNotificationsSlice, refreshLeadsOnly,
       auditEvents, addAuditEvent,
       shootBookings: shootBookings.filter((b) => !deletedShootIdsRef.current.has(b.id)),
       equipmentBookings: equipmentBookings.filter((b) => !deletedEquipIdsRef.current.has(b.id)),

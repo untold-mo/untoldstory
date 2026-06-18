@@ -41,6 +41,8 @@ export type BuildSystemNotificationsInput = {
   attendanceRecordsCount: number;
   /** مهام شخصية لكل مستخدم (تظهر للمعني مباشرة في الجرس) */
   personalTodosByUserId?: Record<string, PersonalTodo[]>;
+  /** أعداد ليدز من استعلامات خفيفة (عندما القائمة الكاملة لم تُحمَّل بعد) */
+  leadNotificationMetrics?: { unassignedOpenCount?: number };
 };
 
 /** تجميع تنبيهات النظام من حالة الـ CRM (وحدة منفصلة عن DataContext لتقليل حجم الملف). */
@@ -63,6 +65,7 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
     slaEscalationSettings,
     attendanceRecordsCount,
     personalTodosByUserId = {},
+    leadNotificationMetrics,
   } = input;
 
   const isPayrollApproved = (monthKey: string) => payrollApprovals.some((p) => p.monthKey === monthKey);
@@ -222,13 +225,18 @@ export function buildSystemNotifications(input: BuildSystemNotificationsInput): 
       });
     }
 
-    const unassigned = leads.filter(l => !l.assignedTo && l.status !== 'مغلق - فوز' && l.status !== 'مغلق - خسارة');
-    if (unassigned.length > 0) {
+    const unassignedCount =
+      typeof leadNotificationMetrics?.unassignedOpenCount === 'number'
+        ? leadNotificationMetrics.unassignedOpenCount
+        : leads.filter(
+            (l) => !l.assignedTo && l.status !== 'مغلق - فوز' && l.status !== 'مغلق - خسارة',
+          ).length;
+    if (unassignedCount > 0) {
       out.push({
-        id: `n-unassigned-${unassigned.length}`,
+        id: `n-unassigned-${unassignedCount}`,
         level: 'medium',
         title: st('unassignedLeads.title'),
-        message: st('unassignedLeads.message', { count: unassigned.length }),
+        message: st('unassignedLeads.message', { count: unassignedCount }),
         createdAt: nowIso,
         targetRoles: ['مالك', 'مدير مبيعات'],
         entityType: 'lead',
