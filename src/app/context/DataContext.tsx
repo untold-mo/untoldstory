@@ -10,6 +10,7 @@ import {
 import { supabaseCreateLead, supabaseDeleteLead, supabasePatchLead } from '@/lib/supabase/leadsRepo';
 import type { Session } from '@supabase/supabase-js';
 import { getSupabase } from '@/lib/supabase/client';
+import { fetchAuthUserProfile } from '@/lib/supabase/fetchAuthUserProfile';
 import { mapUserFromRow, mapMonthlyTargetFromRow, mapClosedMonthFromRow, mapCustodySettingsMap } from '@/lib/supabase/postgrestMappers';
 import {
   fetchLeadsApi,
@@ -2275,20 +2276,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const em = session.user.email.trim().toLowerCase();
       try {
         const sb = getSupabase();
-        const { data: profile, error } = await sb
-          .from('users')
-          .select('id,email,name,role,avatar,base_salary,skills_json,stats_json,created_at,updated_at')
-          .eq('email', em)
-          .maybeSingle();
+        const profileResult = await fetchAuthUserProfile(sb, em);
         if (cancelled) return;
-        if (error || !profile) {
-          await sb.auth.signOut();
-          try {
-            localStorage.removeItem('prod_system_supabase');
-          } catch {
-            /* ignore */
+        if (!profileResult.ok) {
+          if (profileResult.reason === 'missing') {
+            await sb.auth.signOut();
+            try {
+              localStorage.removeItem('prod_system_supabase');
+            } catch {
+              /* ignore */
+            }
+            rehydrateUser(null);
           }
-          rehydrateUser(null);
           return;
         }
         try {
@@ -2301,7 +2300,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch {
           /* ignore */
         }
-        rehydrateUser(mapUserFromRow(profile as Record<string, unknown>));
+        rehydrateUser(profileResult.user);
       } catch {
         try {
           localStorage.removeItem('prod_system_supabase');

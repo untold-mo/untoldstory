@@ -67,6 +67,7 @@ import {
   getSupabaseDashboardSqlUrl,
 } from '@/config/supabaseMode';
 import { getSupabase } from '@/lib/supabase/client';
+import { fetchAuthUserProfile } from '@/lib/supabase/fetchAuthUserProfile';
 import { mapUserFromRow } from '@/lib/supabase/postgrestMappers';
 import { isServerDataMode } from '@/config/dataSource';
 import { fetchLeadByIdApi } from '@/lib/api/leadsApi';
@@ -12741,20 +12742,20 @@ const LoginPage = () => {
           return;
         }
         const em = authData.user.email.trim().toLowerCase();
-        const { data: profile, error: profErr } = await sb
-          .from('users')
-          .select('id,email,name,role,avatar,base_salary,skills_json,stats_json,created_at,updated_at')
-          .eq('email', em)
-          .maybeSingle();
-        if (profErr || !profile) {
-          await sb.auth.signOut();
+        const profileResult = await fetchAuthUserProfile(sb, em);
+        if (!profileResult.ok) {
+          if (profileResult.reason === 'missing') {
+            await sb.auth.signOut();
+          }
           const editor = getSupabaseDashboardEditorUrl();
           setError(
-            `الدخول لـ Supabase نجح، لكن مفيش صف في جدول «الموظفين» (public.users) بنفس البريد، أو الـ RLS رفض القراءة.\n\n` +
-              `اعمل واحدة من دول:\n` +
-              `• من Table Editor: جدول users → تأكد إن فيه صف بالإيميل ده.\n` +
-              `• أو نفّذ سكربت الإعداد لو ما عملتش (ملف supabase/sql/SUPABASE_SETUP_COPYPASTE.sql).` +
-              (editor ? `\n\nرابط الجداول: ${editor}` : ''),
+            profileResult.message +
+              (profileResult.reason === 'missing'
+                ? `\n\nاعمل واحدة من دول:\n` +
+                  `• من Table Editor: جدول users → تأكد إن فيه صف بالإيميل ده.\n` +
+                  `• أو نفّذ سكربت الإعداد (supabase/sql/SUPABASE_SETUP_COPYPASTE.sql).` +
+                  (editor ? `\n\nرابط الجداول: ${editor}` : '')
+                : ''),
           );
           return;
         }
@@ -12764,7 +12765,7 @@ const LoginPage = () => {
         } catch {
           /* ignore */
         }
-        const user = mapUserFromRow(profile as Record<string, unknown>);
+        const user = profileResult.user;
         setCurrentUser(user);
         addAuditEvent({
           action: 'تسجيل دخول',
