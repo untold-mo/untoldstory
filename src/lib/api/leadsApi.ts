@@ -1,6 +1,6 @@
 import { getApiBaseUrl } from '@/config/api';
 import { isSupabaseDirectMode } from '@/config/supabaseMode';
-import { fetchLeadsSb } from '@/lib/supabase/directApiSb';
+import { fetchLeadsSb, fetchLeadByIdSb } from '@/lib/supabase/directApiSb';
 import { supabaseCreateLead, supabaseDeleteLead, supabasePatchLead } from '@/lib/supabase/leadsRepo';
 
 function authHeaders(): HeadersInit {
@@ -16,6 +16,20 @@ export async function fetchLeadsApi(): Promise<import('@/app/context/DataContext
   if (!r.ok) throw new Error('fetch leads');
   const data = await r.json();
   return Array.isArray(data.leads) ? data.leads : [];
+}
+
+export async function fetchLeadByIdApi(id: string): Promise<import('@/app/context/DataContext').Lead> {
+  const leadId = String(id || '').trim();
+  if (!leadId) throw new Error('معرّف الليد مطلوب');
+  if (isSupabaseDirectMode()) return fetchLeadByIdSb(leadId);
+  const r = await fetch(`${getApiBaseUrl()}/api/leads/${encodeURIComponent(leadId)}`, {
+    headers: authHeaders(),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    throw new Error(typeof data.error === 'string' ? data.error : 'fetch lead');
+  }
+  return data.lead as import('@/app/context/DataContext').Lead;
 }
 
 export async function createLeadApi(payload: {

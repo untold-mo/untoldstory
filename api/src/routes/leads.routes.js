@@ -157,6 +157,24 @@ router.get('/', requireAuth(), async (req, res) => {
   }
 });
 
+/** لقطة كاملة لليد واحد — للتفاصيل في الواجهة */
+router.get('/:id', requireAuth(), async (req, res) => {
+  try {
+    const leadId = String(req.params.id || '').trim();
+    if (!leadId) return res.status(400).json({ error: 'معرّف الليد مطلوب' });
+    const { role, id: userId } = req.authUser;
+    const row = await prisma.lead.findUnique({ where: { id: leadId } });
+    if (!row) return res.status(404).json({ error: 'الليد غير موجود' });
+    if (role === 'مندوب' && row.assignedToId !== userId) {
+      return res.status(403).json({ error: 'غير مصرح' });
+    }
+    return res.json({ lead: leadToJson(row) });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
 /** إنشاء ليد */
 router.post('/', requireAuth(), async (req, res) => {
   try {

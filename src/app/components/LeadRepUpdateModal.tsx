@@ -1,10 +1,12 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useData, type Lead } from '../context/DataContext';
 import { useAppDirection } from '../hooks/useAppDirection';
 import { REP_INTERACTION_PLAYBOOKS, REP_LEAD_UPDATE_ACTIONS } from '../../lib/repInteractionPlaybooks';
+import { isServerDataMode } from '@/config/dataSource';
+import { fetchLeadByIdApi } from '@/lib/api/leadsApi';
 
 type ChannelType = 'call' | 'chat' | 'other';
 type EvidenceType = 'recording' | 'chat_export' | 'link' | 'note_only';
@@ -219,6 +221,7 @@ export function LeadRepUpdateProvider({ children }: { children: React.ReactNode 
   const { currentUser } = useData();
   const { t } = useTranslation();
   const [modal, setModal] = useState<ModalState>(emptyModal);
+  const leadHydrateSeqRef = useRef(0);
 
   const canUpdateLead = useCallback(
     (lead: Lead) =>
@@ -251,6 +254,15 @@ export function LeadRepUpdateProvider({ children }: { children: React.ReactNode 
         durationSeconds: '',
         toastType,
       });
+      if (isServerDataMode()) {
+        const seq = ++leadHydrateSeqRef.current;
+        void fetchLeadByIdApi(lead.id)
+          .then((full) => {
+            if (seq !== leadHydrateSeqRef.current) return;
+            setModal((prev) => (prev.lead?.id === full.id ? { ...prev, lead: full } : prev));
+          })
+          .catch(() => {});
+      }
     },
     [canUpdateLead, t],
   );

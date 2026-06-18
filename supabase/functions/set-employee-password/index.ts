@@ -1,6 +1,9 @@
 /**
- * المالك يعيّن كلمة مرور دخول Supabase Auth لموظف (بريد حقيقي في public.users).
- * يتطلّب نشر الدالة: supabase functions deploy set-employee-password
+ * المالك يدير حسابات دخول الموظفين في Supabase Auth:
+ * - تعيين/تحديث كلمة المرور
+ * - تحديث البريد (مزامنة Auth + public.users)
+ *
+ * انشر: supabase functions deploy set-employee-password
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 
@@ -14,6 +17,10 @@ function json(body: Record<string, unknown>, status = 200) {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
+}
+
+function isRealEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && !email.endsWith('@staff.internal');
 }
 
 Deno.serve(async (req) => {
@@ -52,21 +59,30 @@ Deno.serve(async (req) => {
       .eq('email', actorEmail)
       .maybeSingle();
     if (actorErr || !actorRow || actorRow.role !== 'مالك') {
-      return json({ error: 'تعيين كلمة مرور الموظف متاح للمالك فقط' }, 403);
+      return json({ error: 'إدارة حسابات الدخول متاحة للمالك فقط' }, 403);
     }
 
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const targetUserId = String(body.targetUserId || '').trim();
     const email = String(body.email || '').trim().toLowerCase();
+    const newEmail = String(body.newEmail || '').trim().toLowerCase();
     const password = String(body.password || '').trim();
+    const isSelf = targetUserId === String(actorRow.id);
+
     if (!targetUserId || !email) {
-      return json({ error: 'معرّف الموظف والبريد مطلوبان' }, 400);
+      return json({ error: 'معرّف الموظف والبريد الحالي مطلوبان' }, 400);
     }
-    if (password.length < 8) {
+    if (password && password.length < 8) {
       return json({ error: 'كلمة المرور ٨ أحرف أو أكثر' }, 400);
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.endsWith('@staff.internal')) {
-      return json({ error: 'يجب أن يكون للموظف بريد حقيقي (ليس @staff.internal)' }, 400);
+    if (newEmail && !isRealEmail(newEmail)) {
+      return json({ error: 'البريد الجديد غير صالح (يجب أن يكون بريداً حقيقياً)' }, 400);
+    }
+    if (!password && !newEmail) {
+      return json({ error: 'أرسل كلمة مرور جديدة أو بريداً جديداً' }, 400);
+    }
+    if (!isRealEmail(email) && !newEmail) {
+      return json({ error: 'عيّن بريداً حقيقياً للموظف أولاً ثم كلمة المرور' }, 400);
     }
 
     const admin = createClient(supabaseUrl, serviceKey, {
@@ -81,41 +97,70 @@ Deno.serve(async (req) => {
     if (targetErr || !targetRow) {
       return json({ error: 'الموظف غير موجود' }, 404);
     }
-    if (String(targetRow.role) === 'مالك') {
-      return json({ error: 'لا يمكن تغيير كلمة مرور حساب مالك آخر من هنا' }, 400);
+    if (!isSelf && String(targetRow.role) === 'مالك') {
+      return json({ error: 'لا يمكن تعديل حساب مالك آخر من هنا' }, 400);
     }
     if (String(targetRow.email || '').trim().toLowerCase() !== email) {
-      return json({ error: 'البريد لا يطابق سجل الموظف' }, 400);
+      return json({ error: 'البريد الحالي لا يطابق سجل الموظف — حدّث الصفحة وأعد المحاولة' }, 400);
     }
 
-    const { data: listData, error: listErr } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
+    const loginEmail = newEmail || email;
+    const { data: clash } = await admin
+      .from('users')
+      .select('id')
+      .eq('email', loginEmail)
+      .neq('id', targetUserId)
+      .maybeSingle();
+    if (clash) {
+      return json({ error: 'البريد الجديد مستخدم لموظف آخر' }, 400);
+    }
+
+    const { data: listData, error: listErr } = await admin.auth.admin.listUsers({ page: 1, perPage: 500 });
     if (listErr) {
       return json({ error: listErr.message || 'تعذر البحث في حسابات الدخول' }, 500);
     }
     const users = listData?.users ?? [];
     let authUser = users.find((u) => String(u.email || '').toLowerCase() === email);
+    if (!authUser && newEmail) {
+      authUser = users.find((u) => String(u.email || '').toLowerCase() === loginEmail);
+    }
 
-    if (!authUser) {
+    if (!authUser && (password || newEmail)) {
+      if (!isRealEmail(loginEmail)) {
+        return json({ error: 'لا يمكن إنشاء حساب دخول لبريد داخلي — عيّن بريداً حقيقياً أولاً' }, 400);
+      }
       const { data: created, error: createErr } = await admin.auth.admin.createUser({
-        email,
-        password,
+        email: loginEmail,
+        password: password || undefined,
         email_confirm: true,
       });
       if (createErr) {
         return json({ error: createErr.message || 'تعذر إنشاء حساب الدخول' }, 400);
       }
       authUser = created.user;
-    } else {
-      const { error: updateErr } = await admin.auth.admin.updateUserById(authUser.id, {
-        password,
+    } else if (authUser) {
+      const authPatch: { password?: string; email?: string; email_confirm?: boolean } = {
         email_confirm: true,
-      });
+      };
+      if (password) authPatch.password = password;
+      if (newEmail && newEmail !== email) authPatch.email = newEmail;
+      const { error: updateErr } = await admin.auth.admin.updateUserById(authUser.id, authPatch);
       if (updateErr) {
-        return json({ error: updateErr.message || 'تعذر تحديث كلمة المرور' }, 400);
+        return json({ error: updateErr.message || 'تعذر تحديث حساب الدخول' }, 400);
       }
     }
 
-    return json({ ok: true, authUserId: authUser?.id ?? null });
+    if (newEmail && newEmail !== email) {
+      const { error: rowErr } = await admin
+        .from('users')
+        .update({ email: newEmail, updated_at: new Date().toISOString() })
+        .eq('id', targetUserId);
+      if (rowErr) {
+        return json({ error: rowErr.message || 'تعذر تحديث بريد الموظف في قاعدة البيانات' }, 400);
+      }
+    }
+
+    return json({ ok: true, authUserId: authUser?.id ?? null, email: loginEmail });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'خطأ غير متوقع';
     return json({ error: msg }, 500);

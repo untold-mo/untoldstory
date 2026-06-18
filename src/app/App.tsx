@@ -38,6 +38,8 @@ import {
   canonicalTodoUserId,
   PersonalTodo,
   BookingSpendLine,
+  IntegrationProvider,
+  ExternalLeadChannel,
   custodyFundBelongsToProductionManager,
   custodyFundAmountInEgp,
   custodyLineAmountInEgp,
@@ -66,6 +68,7 @@ import {
 import { getSupabase } from '@/lib/supabase/client';
 import { mapUserFromRow } from '@/lib/supabase/postgrestMappers';
 import { isServerDataMode } from '@/config/dataSource';
+import { fetchLeadByIdApi } from '@/lib/api/leadsApi';
 import { expenseSubmitterDisplay } from '@/lib/expenseSubmitterDisplay';
 import {
   INBOUND_CHANNEL_SOURCES,
@@ -4797,6 +4800,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
   const [quoteLead, setQuoteLead] = useState<Lead | null>(null);
   const [client360Lead, setClient360Lead] = useState<Lead | null>(null);
   const [client360AnchorY, setClient360AnchorY] = useState<number | null>(null);
+  const client360HydrateSeqRef = useRef(0);
   const mainScrollPreserveRef = useRef<number | null>(null);
   const [statementCustomer, setStatementCustomer] = useState<{ name: string; customerCode: string; sourceLabel?: string; sourceType: 'lead_auto' | 'manual' } | null>(null);
   const [entityMode, setEntityMode] = useState<'leads' | 'customers'>('leads');
@@ -4873,6 +4877,38 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
     setSourceFilter('all');
   }, [isLeadsDistributionHub, currentUser?.id]);
 
+  const hydrateClient360Lead = useCallback((lead: Lead) => {
+    if (!isServerDataMode()) return;
+    const seq = ++client360HydrateSeqRef.current;
+    void fetchLeadByIdApi(lead.id)
+      .then((full) => {
+        if (seq !== client360HydrateSeqRef.current) return;
+        setClient360Lead(full);
+      })
+      .catch(() => {
+        /* الإبقاء على لقطة القائمة */
+      });
+  }, []);
+
+  const openClient360 = useCallback((lead: Lead, event?: React.MouseEvent<HTMLElement>) => {
+    const main = document.querySelector('main.premium-main-layer') as HTMLElement | null;
+    mainScrollPreserveRef.current = main?.scrollTop ?? null;
+    if (event?.currentTarget) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      setClient360AnchorY(rect.top + rect.height / 2);
+    } else {
+      setClient360AnchorY(typeof window !== 'undefined' ? window.innerHeight / 2 : 400);
+    }
+    setClient360Lead(lead);
+    hydrateClient360Lead(lead);
+  }, [hydrateClient360Lead]);
+
+  const closeClient360 = useCallback(() => {
+    client360HydrateSeqRef.current += 1;
+    setClient360Lead(null);
+    setClient360AnchorY(null);
+  }, []);
+
   useEffect(() => {
     const applyIntent = () => {
       try {
@@ -4901,7 +4937,18 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
         const openId = intent.leadsClient360Id || (focusIds.length === 1 ? focusIds[0] : '');
         if (openId) {
           const target = leads.find((l) => l.id === openId);
-          if (target) openClient360(target);
+          if (target) {
+            openClient360(target);
+          } else if (isServerDataMode()) {
+            setClient360AnchorY(typeof window !== 'undefined' ? window.innerHeight / 2 : 400);
+            const seq = ++client360HydrateSeqRef.current;
+            void fetchLeadByIdApi(openId)
+              .then((full) => {
+                if (seq !== client360HydrateSeqRef.current) return;
+                setClient360Lead(full);
+              })
+              .catch(() => {});
+          }
         }
         localStorage.removeItem(NAV_INTENT_KEY);
       } catch {
@@ -4917,7 +4964,7 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
       window.removeEventListener('focus', applyIntent);
       window.removeEventListener('prod-system-nav-intent', applyIntent);
     };
-  }, [leads]);
+  }, [leads, openClient360]);
 
   const visibleLeads = useMemo(() => {
     if (!currentUser) return [];
@@ -5334,7 +5381,14 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
 
   const activeClient360Lead = useMemo(() => {
     if (!client360Lead) return null;
-    return leads.find((l) => l.id === client360Lead.id) ?? client360Lead;
+    const fromList = leads.find((l) => l.id === client360Lead.id);
+    if (!fromList) return client360Lead;
+    const listTl = fromList.timeline?.length ?? 0;
+    const detailTl = client360Lead.timeline?.length ?? 0;
+    if (listTl > detailTl) {
+      return { ...client360Lead, ...fromList, timeline: fromList.timeline };
+    }
+    return { ...fromList, ...client360Lead };
   }, [client360Lead, leads]);
 
   const client360Data = useMemo(() => {
@@ -5374,23 +5428,6 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
       totalRemaining,
     };
   }, [activeClient360Lead, invoices, expenses, meetingBookings, shootBookings, equipmentBookings]);
-
-  const openClient360 = (lead: Lead, event?: React.MouseEvent<HTMLElement>) => {
-    const main = document.querySelector('main.premium-main-layer') as HTMLElement | null;
-    mainScrollPreserveRef.current = main?.scrollTop ?? null;
-    if (event?.currentTarget) {
-      const rect = event.currentTarget.getBoundingClientRect();
-      setClient360AnchorY(rect.top + rect.height / 2);
-    } else {
-      setClient360AnchorY(typeof window !== 'undefined' ? window.innerHeight / 2 : 400);
-    }
-    setClient360Lead(lead);
-  };
-
-  const closeClient360 = () => {
-    setClient360Lead(null);
-    setClient360AnchorY(null);
-  };
 
   const client360PanelStyle = useMemo((): React.CSSProperties => {
     if (typeof window === 'undefined') {
@@ -6421,6 +6458,10 @@ const SalesManagerSettings = ({
     updateLeadDataQualitySettings,
     workflowRulesSettings,
     updateWorkflowRulesSettings,
+    integrations,
+    startIntegrationConnect,
+    disconnectIntegration,
+    syncExternalLeads,
   } = useData();
   const { t } = useTranslation();
   const { dateLocale } = useAppDirection();
@@ -6478,6 +6519,54 @@ const SalesManagerSettings = ({
   const [ownerPwdNew, setOwnerPwdNew] = useState('');
   const [ownerPwdConfirm, setOwnerPwdConfirm] = useState('');
   const [ownerPwdSaving, setOwnerPwdSaving] = useState(false);
+  const integrationRows: { provider: IntegrationProvider; title: string; hint: string }[] = [
+    { provider: 'facebook', title: 'Facebook', hint: 'Meta Pages + Lead Ads' },
+    { provider: 'instagram', title: 'Instagram', hint: 'Instagram Business via Meta' },
+    { provider: 'google_ads', title: 'Google Ads', hint: 'Google Ads API lead sources' },
+    { provider: 'whatsapp', title: 'WhatsApp Business', hint: 'Cloud API templates + inbox sync' },
+    { provider: 'linkedin', title: 'LinkedIn', hint: 'Lead Gen Forms + organization pages' },
+  ];
+  const providerToPullChannel: Partial<Record<IntegrationProvider, ExternalLeadChannel>> = {
+    facebook: 'facebook',
+    instagram: 'facebook',
+    google_ads: 'google',
+    linkedin: 'linkedin',
+  };
+  const handleSyncChannel = async (channel: ExternalLeadChannel) => {
+    try {
+      const imported = await syncExternalLeads(channel, 5);
+      if (!imported) {
+        if (isSupabaseDirectMode()) return;
+        toast.error(t('settingsToasts.channelPullFailed'));
+        return;
+      }
+      toast.success(t('settingsToasts.channelPulled', { count: imported }));
+    } catch {
+      toast.error(t('settingsToasts.channelSyncFailed'));
+    }
+  };
+  const handleConnectIntegration = (provider: IntegrationProvider) => {
+    const result = startIntegrationConnect(provider);
+    if (!result.ok || !result.authUrl) {
+      toast.error(t('settingsToasts.connectStartFailed'));
+      return;
+    }
+    window.open(result.authUrl, '_blank', 'noopener,noreferrer');
+    toast.info(t('settingsToasts.connectOAuthHint'));
+  };
+  const handleDisconnectIntegration = (provider: IntegrationProvider) => {
+    const ok = disconnectIntegration(provider);
+    if (!ok) toast.error(t('settingsToasts.disconnectFailed'));
+    else toast.success(t('settingsToasts.disconnectOk'));
+  };
+  const handlePullFromIntegration = (provider: IntegrationProvider) => {
+    const ch = providerToPullChannel[provider];
+    if (!ch) {
+      toast.message(t('settingsToasts.pullNeedsServer'));
+      return;
+    }
+    void handleSyncChannel(ch);
+  };
   const backupSystemData = async () => {
     if (isServerDataMode()) {
       if (isSupabaseDirectMode()) {
@@ -6710,22 +6799,37 @@ const SalesManagerSettings = ({
     const employee = users.find((u) => u.id === userId);
     if (!employee) return;
     const draft = employeeEdits[userId] ?? buildEmployeeRowDraft(employee);
+    const isSelf = userId === currentUser?.id;
+    const nameTrim = (draft.name || '').trim();
+    if (!nameTrim) {
+      toast.error(t('finance.toastEmployeeName'));
+      return;
+    }
     const emailTrim = (draft.email || '').trim().toLowerCase();
     if (canEditBranding && emailTrim && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) {
       toast.error(t('settingsToasts.emailInvalid'));
       return;
     }
+    if (canEditBranding && !emailTrim) {
+      toast.error(t('settingsToasts.emailRequired'));
+      return;
+    }
     const salaryParsed = Math.max(0, Math.round(Number(String(draft.baseSalary).replace(/,/g, '')) || 0));
     const ok = await updateEmployeeProfile(userId, {
-      name: draft.name,
-      role: draft.role,
+      name: nameTrim,
+      ...(isSelf ? {} : { role: draft.role }),
       avatar: draft.avatar,
       ...(canEditBranding ? { email: draft.email } : {}),
-      ...(canEditBranding ? { baseSalary: salaryParsed } : {}),
+      ...(canEditBranding && !isSelf ? { baseSalary: salaryParsed } : {}),
     });
     if (!ok) {
       return;
     }
+    setEmployeeEdits((prev) => {
+      const next = { ...prev };
+      delete next[userId];
+      return next;
+    });
     toast.success(t('settingsToasts.employeeUpdated'));
   };
 
@@ -6916,6 +7020,131 @@ const SalesManagerSettings = ({
               placeholder="https://n8n.example.com/webhook/client-notify"
               className="w-full bg-[#0F1528] border border-white/10 rounded-xl px-3 py-2 text-sm"
             />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {integrationRows.map((row) => {
+              const state = integrations.find((x) => x.provider === row.provider);
+              const connected = !!state?.connected;
+              const pullCh = providerToPullChannel[row.provider];
+              return (
+                <div key={row.provider} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 flex flex-col gap-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-black">{row.title}</p>
+                      <p className="text-[11px] text-zinc-400">{row.hint}</p>
+                      <p className="text-[11px] mt-1 text-zinc-500">
+                        {t('settingsWork.integrationStatus')}{' '}
+                        <span
+                          className={
+                            connected ? 'text-emerald-300' : state?.status === 'error' ? 'text-rose-300' : 'text-zinc-400'
+                          }
+                        >
+                          {connected
+                            ? t('settingsWork.integrationConnected')
+                            : state?.status === 'error'
+                              ? t('settingsWork.integrationError')
+                              : t('settingsWork.integrationDisconnected')}
+                        </span>
+                        {!connected && state?.status && state.status !== 'error' ? (
+                          <span className="text-zinc-500"> ({state.status})</span>
+                        ) : null}
+                      </p>
+                      {state?.accountLabel && (
+                        <p className="text-[11px] text-zinc-400">
+                          {t('settingsWork.integrationAccount')}: {state.accountLabel}
+                        </p>
+                      )}
+                      {state?.lastError && <p className="text-[11px] text-rose-300 mt-1">{state.lastError}</p>}
+                    </div>
+                    <div className="flex flex-col gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleConnectIntegration(row.provider)}
+                        className="px-3 py-2 rounded-xl text-xs font-black border border-indigo-400/35 bg-indigo-500/20 text-indigo-200 hover:border-indigo-300/60 transition-all"
+                      >
+                        {connected ? t('settingsWork.integrationReconnect') : t('settingsWork.integrationConnect')}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!connected}
+                        onClick={() => handleDisconnectIntegration(row.provider)}
+                        className="px-3 py-2 rounded-xl text-xs font-black border border-rose-400/35 bg-rose-500/15 text-rose-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                      >
+                        {t('settingsWork.integrationDisconnect')}
+                      </button>
+                    </div>
+                  </div>
+                  {pullCh ? (
+                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/10">
+                      <button
+                        type="button"
+                        disabled={!connected || isSupabaseDirectMode()}
+                        onClick={() => handlePullFromIntegration(row.provider)}
+                        className="px-3 py-2 rounded-xl text-xs font-black border border-white/15 bg-white/5 hover:border-white/30 transition-all disabled:opacity-45 disabled:cursor-not-allowed"
+                      >
+                        {t('settingsWork.pullLeadsNow')}
+                      </button>
+                      {isSupabaseDirectMode() ? (
+                        <span className="text-[10px] text-zinc-500">{t('settingsWork.pullUnavailableSupabase')}</span>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-zinc-500 pt-2 border-t border-white/10">
+                      {t('settingsWork.pullNeedsServerDev')}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.02] p-4 space-y-3">
+            <div>
+              <p className="font-black text-sm">{t('settingsWork.inboundEmailTitle')}</p>
+              <p className="text-[11px] text-zinc-500">{t('settingsWork.inboundEmailHint')}</p>
+            </div>
+            {(() => {
+              const cfg = leadIngestionSettings.email;
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 items-start">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateLeadIngestionSettings({
+                          email: { ...cfg, connected: !cfg.connected },
+                        })
+                      }
+                      className={`px-3 py-2 rounded-xl text-xs font-black border transition-all ${cfg.connected ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-200' : 'bg-rose-500/15 border-rose-400/35 text-rose-200'}`}
+                    >
+                      {cfg.connected ? t('settingsWork.inboundEmailConnected') : t('settingsWork.inboundEmailDisconnected')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleSyncChannel('email')}
+                      className="px-3 py-2 rounded-xl text-xs font-black border border-white/15 bg-white/5 hover:border-white/30 transition-all"
+                    >
+                      {t('settingsWork.pullLeadsNow')}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    <input
+                      value={cfg.accountRef || ''}
+                      onChange={(e) => updateLeadIngestionSettings({ email: { ...cfg, accountRef: e.target.value } })}
+                      placeholder={t('settingsWork.inboundEmailAccountPh')}
+                      className="bg-[#0F1528] border border-white/10 rounded-xl px-3 py-2 text-xs"
+                    />
+                    <input
+                      value={cfg.label || ''}
+                      onChange={(e) => updateLeadIngestionSettings({ email: { ...cfg, label: e.target.value } })}
+                      placeholder={t('settingsWork.inboundEmailInboxPh')}
+                      className="bg-[#0F1528] border border-white/10 rounded-xl px-3 py-2 text-xs"
+                    />
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -7127,6 +7356,9 @@ const SalesManagerSettings = ({
                     </td>
                     <td className="p-3">
                       {canOwnerEditEmployeeRow(employee) ? (
+                        employee.id === currentUser?.id ? (
+                          <span className="text-xs font-bold text-zinc-200">{employee.role}</span>
+                        ) : (
                         <select
                           value={draft.role}
                           onFocus={() => ensureEdit(employee)}
@@ -7149,6 +7381,7 @@ const SalesManagerSettings = ({
                             </option>
                           ))}
                         </select>
+                        )
                       ) : (
                         employee.role
                       )}
@@ -7253,13 +7486,19 @@ const SalesManagerSettings = ({
                     )}
                     {canEditBranding && (
                       <td className="p-3">
-                        {employee.role === 'مالك' || employee.id === currentUser?.id ? (
-                          <span className="text-[11px] text-zinc-500">
-                            {employee.id === currentUser?.id ? t('settingsWork.ownerRowNote') : t('settingsWork.ownerAccountNote')}
-                          </span>
+                        {employee.role === 'مالك' && employee.id !== currentUser?.id ? (
+                          <span className="text-[11px] text-zinc-500">{t('settingsWork.ownerAccountNote')}</span>
+                        ) : employee.id === currentUser?.id ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleSaveEmployee(employee.id)}
+                            className="px-2 py-1 rounded-lg text-[11px] border border-emerald-400/30 text-emerald-200 bg-emerald-500/10"
+                          >
+                            {t('settingsWork.saveRow')}
+                          </button>
                         ) : (
                           <div className="flex items-center gap-2">
-                            <button type="button" onClick={() => handleSaveEmployee(employee.id)} className="px-2 py-1 rounded-lg text-[11px] border border-emerald-400/30 text-emerald-200 bg-emerald-500/10">{t('settingsWork.saveRow')}</button>
+                            <button type="button" onClick={() => void handleSaveEmployee(employee.id)} className="px-2 py-1 rounded-lg text-[11px] border border-emerald-400/30 text-emerald-200 bg-emerald-500/10">{t('settingsWork.saveRow')}</button>
                             <button type="button" onClick={() => handleDeleteEmployee(employee.id, employee.name)} className="px-2 py-1 rounded-lg text-[11px] border border-rose-400/30 text-rose-200 bg-rose-500/10">{t('settingsWork.deleteRow')}</button>
                           </div>
                         )}
@@ -12059,9 +12298,9 @@ const NavItems = ({ role, active, onChange, allowedTabs }: any) => {
     { id: 'team-performance', icon: BarChart3 },
     { id: 'leads', icon: Users },
     { id: 'accountant', icon: Receipt },
-    { id: 'settings', icon: Settings },
     { id: 'linked-views', icon: Layers },
     { id: 'seo', icon: TrendingUp },
+    { id: 'settings', icon: Settings },
   ];
 
   const manager = [
@@ -12399,7 +12638,6 @@ const Root = () => {
     logout,
     getSystemNotifications,
     refreshServerWorkspace,
-    refreshLeadsOnly,
     ownerReturnPriceQuoteToProduction,
     leads,
     invoices,
@@ -12431,6 +12669,9 @@ const Root = () => {
     setUiVisualMode,
     desktopNotifyWhenVisible,
     setDesktopNotifyWhenVisible,
+    completeIntegrationConnect,
+    markIntegrationError,
+    syncExternalLeads,
   } = useData();
   const { t, i18n } = useTranslation();
   const { dir, isRtl, dateLocale } = useAppDirection();
@@ -12441,7 +12682,6 @@ const Root = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notificationsPanelSyncing, setNotificationsPanelSyncing] = useState(false);
-  const notificationsBackgroundSyncAt = useRef(0);
   /** مرة واحدة لكل جلسة: إظهار عهود قديمة كانت محفوظة كمسودة */
   const legacyCustodyReconcileDoneRef = useRef(false);
   const [isCommandOpen, setIsCommandOpen] = useState(false);
@@ -12534,6 +12774,41 @@ const Root = () => {
       setActiveTab(allowedTabs[0] || 'dashboard');
     }
   }, [currentUser, activeTab]);
+
+  useEffect(() => {
+    if (!currentUser || currentUser.role !== 'مالك') return;
+    const params = new URLSearchParams(window.location.search);
+    const provider = params.get('integration_provider') as IntegrationProvider | null;
+    const status = params.get('integration_status');
+    if (!provider || !status) return;
+    const providers: IntegrationProvider[] = ['facebook', 'instagram', 'google_ads', 'whatsapp', 'linkedin'];
+    if (!providers.includes(provider)) return;
+    if (status === 'success') {
+      const account = params.get('integration_account') || undefined;
+      const expiresAt = params.get('integration_expires_at') || undefined;
+      completeIntegrationConnect(provider, { accountLabel: account, tokenExpiresAt: expiresAt });
+      toast.success(t('settingsToasts.integrationConnected', { provider }));
+      const pullChannel: Partial<Record<IntegrationProvider, ExternalLeadChannel>> = {
+        facebook: 'facebook',
+        instagram: 'facebook',
+        google_ads: 'google',
+        linkedin: 'linkedin',
+      };
+      const ch = pullChannel[provider];
+      if (ch && !isSupabaseDirectMode()) {
+        void (async () => {
+          const n = await syncExternalLeads(ch, 15);
+          if (n > 0) toast.success(t('settingsToasts.integrationLeadsImported', { count: n }));
+        })();
+      }
+    } else {
+      const error = params.get('integration_error') || 'OAuth failed';
+      markIntegrationError(provider, error);
+      toast.error(t('settingsToasts.integrationConnectFailed', { provider }));
+    }
+    const cleanUrl = `${window.location.pathname}${window.location.hash || ''}`;
+    window.history.replaceState({}, document.title, cleanUrl);
+  }, [currentUser, completeIntegrationConnect, markIntegrationError, syncExternalLeads, t]);
 
   const currentRole: User['role'] = currentUser?.role || 'مندوب';
   const currentUserId = currentUser?.id || '';
@@ -12711,34 +12986,6 @@ const Root = () => {
     [notifications]
   );
 
-  useEffect(() => {
-    if (!isServerDataMode()) return;
-    if (!currentUser || currentUser.authSource !== 'database') return;
-    const isRep = currentUser.role === 'مندوب';
-    const sync = () => {
-      if (document.visibilityState !== 'visible') return;
-      const t = Date.now();
-      if (t - notificationsBackgroundSyncAt.current < 60_000) return;
-      notificationsBackgroundSyncAt.current = t;
-      if (isRep) void refreshLeadsOnly();
-      else void refreshServerWorkspace();
-    };
-    document.addEventListener('visibilitychange', sync);
-    window.addEventListener('focus', sync);
-    return () => {
-      document.removeEventListener('visibilitychange', sync);
-      window.removeEventListener('focus', sync);
-    };
-  }, [currentUser?.id, currentUser?.authSource, currentUser?.role, refreshServerWorkspace, refreshLeadsOnly]);
-
-  useEffect(() => {
-    if (activeTab !== 'approvals') return;
-    if (currentUser?.role !== 'مالك') return;
-    if (!isServerDataMode()) return;
-    void refreshServerWorkspace();
-  }, [activeTab, currentUser?.role, refreshServerWorkspace]);
-
-  /** عهود قديمة: كانت تُحفظ «مسودة» ولا تظهر في مركز الاعتمادات — نقلها تلقائياً لقائمة الاعتماد */
   useEffect(() => {
     if (activeTab !== 'approvals') return;
     if (currentUser?.role !== 'مالك') return;
@@ -13311,17 +13558,17 @@ const Root = () => {
         : null}
 
       {/* Sidebar */}
-      <aside className="premium-sidebar-shell w-72 shrink-0 self-start border-e border-white/10 bg-[#0C1120] sticky top-0 h-screen max-h-screen hidden lg:flex flex-col p-8 z-[100]">
-        <div className="flex items-center gap-4 mb-12 px-2">
+      <aside className="premium-sidebar-shell w-72 shrink-0 self-start border-e border-white/10 bg-[#0C1120] sticky top-0 h-screen max-h-screen hidden lg:flex flex-col p-8 z-[100] min-h-0">
+        <div className="flex shrink-0 items-center gap-4 mb-8 px-2">
           <div className="w-12 h-12 bg-black rounded-2xl flex items-center justify-center shadow-xl shadow-black/40 overflow-hidden border border-white/10">
             <img src={SYSTEM_LOGO} alt={SYSTEM_NAME} className="w-full h-full object-cover" />
           </div>
           <span className="text-2xl font-black text-[#A99FFF]">The Untold Story</span>
         </div>
-        <nav className="space-y-2 flex-1 overflow-y-auto custom-scrollbar">
+        <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden custom-scrollbar pb-2">
           <NavItems role={currentUser.role} active={activeTab} onChange={handleTabChange} allowedTabs={allowedTabs} />
         </nav>
-        <div className="pt-8 border-t border-white/10">
+        <div className="shrink-0 pt-6 border-t border-white/10">
            <div className="flex items-center gap-3 mb-6 px-2">
              <img src={currentUser.avatar} className="w-10 h-10 rounded-xl border-2 border-white/20" alt="" />
              <div className="min-w-0">
@@ -13353,8 +13600,8 @@ const Root = () => {
               aria-label={t('nav.closeMenu')}
               onClick={() => setIsSidebarOpen(false)}
             />
-            <aside className="fixed top-0 bottom-0 end-0 z-[70] flex w-[min(20rem,92vw)] max-w-full flex-col border-e border-white/10 bg-[#0C1120] p-6 shadow-2xl lg:hidden">
-              <div className="mb-6 flex shrink-0 items-center justify-between gap-3">
+            <aside className="fixed top-0 bottom-0 end-0 z-[70] flex min-h-0 w-[min(20rem,92vw)] max-w-full flex-col border-e border-white/10 bg-[#0C1120] p-6 shadow-2xl lg:hidden">
+              <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
                 <div className="flex min-w-0 flex-1 items-center gap-3">
                   <img src={currentUser.avatar} className="h-10 w-10 shrink-0 rounded-xl border border-white/15" alt="" />
                   <div className="min-w-0">
@@ -13371,10 +13618,10 @@ const Root = () => {
                   <X className="h-6 w-6" />
                 </button>
               </div>
-              <nav className="custom-scrollbar flex-1 space-y-2 overflow-y-auto pr-1">
+              <nav className="custom-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden pr-1 pb-2">
                 <NavItems role={currentUser.role} active={activeTab} onChange={handleTabChange} allowedTabs={allowedTabs} />
               </nav>
-              <div className="mt-6 shrink-0 border-t border-white/10 pt-6">
+              <div className="mt-4 shrink-0 border-t border-white/10 pt-4">
                 <button
                   type="button"
                   onClick={() => {

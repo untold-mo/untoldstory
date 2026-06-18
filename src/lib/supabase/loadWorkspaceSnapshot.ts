@@ -96,8 +96,42 @@ async function singleDocRows<T>(
   }
 }
 
-export async function fetchSupabaseWorkspaceSnapshot(): Promise<SupabaseWorkspaceSnapshot> {
+export type WorkspaceViewer = { id: string; role: User['role'] };
+
+const INVOICES_LIST_SELECT =
+  'id,customer_code,lead_id,customer_name,amount,vat_rate,vat_amount,total_amount,cost_center,status,date,record_origin,price_quote_id,paid_amount,remaining_amount,next_due_date,collections_json';
+
+function isFullCrmRole(role?: User['role']): boolean {
+  return !role || role === 'مالك' || role === 'مدير مبيعات';
+}
+
+function isRepRole(role?: User['role']): boolean {
+  return role === 'مندوب';
+}
+
+function isProductionRole(role?: User['role']): boolean {
+  return role === 'مدير إنتاج';
+}
+
+function isAccountantRole(role?: User['role']): boolean {
+  return role === 'محاسب';
+}
+
+export async function fetchSupabaseWorkspaceSnapshot(
+  viewer?: WorkspaceViewer,
+): Promise<SupabaseWorkspaceSnapshot> {
   const sb = getSupabase();
+  const role = viewer?.role;
+  const uid = viewer?.id?.trim() || '';
+
+  const needLeads = isFullCrmRole(role) || isRepRole(role) || isAccountantRole(role);
+  const needFinance = isFullCrmRole(role) || isAccountantRole(role);
+  const needBookings = !isAccountantRole(role);
+  const needAttendance = isFullCrmRole(role) || isAccountantRole(role);
+  const needAudit = isFullCrmRole(role) || isAccountantRole(role);
+  const needCustodyFunds = !isRepRole(role);
+  const needCustomers = isFullCrmRole(role) || isAccountantRole(role);
+  const needCustodySettings = needFinance || isProductionRole(role);
 
   const [
     leadsResult,
@@ -119,15 +153,20 @@ export async function fetchSupabaseWorkspaceSnapshot(): Promise<SupabaseWorkspac
     wsRow,
     attendanceRec,
   ] = await Promise.all([
-    (async (): Promise<{ list: Lead[]; ok: boolean }> => {
-      try {
-        const list = await fetchAllLeadsFromSupabase(sb);
-        return { list, ok: true };
-      } catch (e) {
-        console.warn('[supabase workspace] leads fetch failed', e);
-        return { list: [], ok: false };
-      }
-    })(),
+    needLeads
+      ? (async (): Promise<{ list: Lead[]; ok: boolean }> => {
+          try {
+            const list = await fetchAllLeadsFromSupabase(
+              sb,
+              isRepRole(role) && uid ? { assignedToId: uid } : undefined,
+            );
+            return { list, ok: true };
+          } catch (e) {
+            console.warn('[supabase workspace] leads fetch failed', e);
+            return { list: [], ok: false };
+          }
+        })()
+      : Promise.resolve({ list: [] as Lead[], ok: true }),
     rows(
       sb
         .from('users')
@@ -135,43 +174,83 @@ export async function fetchSupabaseWorkspaceSnapshot(): Promise<SupabaseWorkspac
         .order('name', { ascending: true }),
       mapUserFromRow,
     ),
-    rows(sb.from('manual_customers').select('*').order('created_at', { ascending: false }), mapManualCustomerFromRow),
-    (async () => {
-      const { data, error } = await sb.from('invoices').select('*').order('date', { ascending: false });
-      if (error) {
-        console.warn('[supabase workspace]', error.message);
-        return [];
-      }
-      return Array.isArray(data) ? (data as Record<string, unknown>[]) : [];
-    })(),
-    rows(sb.from('expenses').select('*').order('date', { ascending: false }), mapExpenseFromRow),
+    needCustomers
+      ? rows(sb.from('manual_customers').select('*').order('created_at', { ascending: false }), mapManualCustomerFromRow)
+      : Promise.resolve([] as ManualCustomer[]),
+    needFinance
+      ? (async () => {
+          const { data, error } = await sb
+            .from('invoices')
+            .select(INVOICES_LIST_SELECT)
+            .order('date', { ascending: false });
+          if (error) {
+            console.warn('[supabase workspace]', error.message);
+            return [];
+          }
+          return Array.isArray(data) ? (data as Record<string, unknown>[]) : [];
+        })()
+      : Promise.resolve([] as Record<string, unknown>[]),
+    needFinance
+      ? rows(sb.from('expenses').select('*').order('date', { ascending: false }), mapExpenseFromRow)
+      : Promise.resolve([] as Expense[]),
     rows(sb.from('price_quotes').select('*').order('created_at', { ascending: false }), mapPriceQuoteFromRow),
+    needFinance
+      ? (async () => {
+          const { data, error } = await sb.from('accounting_policy').select('*').eq('id', 'default').maybeSingle();
+          if (error) {
+            console.warn('[supabase workspace]', error.message);
+            return null;
+          }
+          return data ? mapAccountingPolicyFromRow(data as Record<string, unknown>) : null;
+        })()
+      : Promise.resolve(null),
+    needFinance
+      ? rows(
+          sb.from('manual_journal_entries').select('*').order('date', { ascending: false }).limit(500),
+          mapManualJournalFromRow,
+        )
+      : Promise.resolve([] as ManualJournalEntry[]),
+    needFinance
+      ? rows(sb.from('closed_months').select('*'), mapClosedMonthFromRow)
+      : Promise.resolve([] as string[]),
+    needFinance
+      ? rows(sb.from('monthly_targets').select('*'), mapMonthlyTargetFromRow)
+      : Promise.resolve([] as MonthlyTarget[]),
+    needCustodySettings
+      ? (async () => {
+          const { data, error } = await sb.from('custody_settings').select('*').limit(1).maybeSingle();
+          if (error) {
+            console.warn('[supabase workspace]', error.message);
+            return null;
+          }
+          return data ? mapCustodySettingsMap(data as Record<string, unknown>) : null;
+        })()
+      : Promise.resolve(null),
+    needAudit
+      ? rows(sb.from('audit_events').select('*').order('created_at', { ascending: false }).limit(500), mapAuditFromRow)
+      : Promise.resolve([] as AuditEvent[]),
+    needCustodyFunds
+      ? singleDocRows<Record<string, unknown>>(
+          sb.from('custody_funds').select('id,doc_json,updated_at').order('updated_at', { ascending: false }),
+        )
+      : Promise.resolve([] as Record<string, unknown>[]),
+    needBookings
+      ? singleDocRows<ShootBooking>(
+          sb.from('shoot_bookings').select('id,doc_json,updated_at').order('updated_at', { ascending: false }),
+        )
+      : Promise.resolve([] as ShootBooking[]),
+    needBookings
+      ? singleDocRows<EquipmentBooking>(
+          sb.from('equipment_bookings').select('id,doc_json,updated_at').order('updated_at', { ascending: false }),
+        )
+      : Promise.resolve([] as EquipmentBooking[]),
+    needBookings
+      ? singleDocRows<MeetingBooking>(
+          sb.from('meeting_bookings').select('id,doc_json,updated_at').order('updated_at', { ascending: false }),
+        )
+      : Promise.resolve([] as MeetingBooking[]),
     (async () => {
-      const { data, error } = await sb.from('accounting_policy').select('*').eq('id', 'default').maybeSingle();
-      if (error) {
-        console.warn('[supabase workspace]', error.message);
-        return null;
-      }
-      return data ? mapAccountingPolicyFromRow(data as Record<string, unknown>) : null;
-    })(),
-    rows(sb.from('manual_journal_entries').select('*').order('date', { ascending: false }).limit(500), mapManualJournalFromRow),
-    rows(sb.from('closed_months').select('*'), mapClosedMonthFromRow),
-    rows(sb.from('monthly_targets').select('*'), mapMonthlyTargetFromRow),
-    (async () => {
-      const { data, error } = await sb.from('custody_settings').select('*').limit(1).maybeSingle();
-      if (error) {
-        console.warn('[supabase workspace]', error.message);
-        return null;
-      }
-      return data ? mapCustodySettingsMap(data as Record<string, unknown>) : null;
-    })(),
-    rows(sb.from('audit_events').select('*').order('created_at', { ascending: false }).limit(500), mapAuditFromRow),
-    singleDocRows<Record<string, unknown>>(sb.from('custody_funds').select('id,doc_json,updated_at').order('updated_at', { ascending: false })),
-    singleDocRows<ShootBooking>(sb.from('shoot_bookings').select('id,doc_json,updated_at').order('updated_at', { ascending: false })),
-    singleDocRows<EquipmentBooking>(sb.from('equipment_bookings').select('id,doc_json,updated_at').order('updated_at', { ascending: false })),
-    singleDocRows<MeetingBooking>(sb.from('meeting_bookings').select('id,doc_json,updated_at').order('updated_at', { ascending: false })),
-    (async () => {
-      const { data, error } = await sb.from('workspace_state').select('*').eq('id', 'default').maybeSingle();
+      const { data, error } = await sb.from('workspace_state').select('doc_json').eq('id', 'default').maybeSingle();
       if (error) {
         console.warn('[supabase workspace]', error.message);
         return {};
@@ -179,10 +258,12 @@ export async function fetchSupabaseWorkspaceSnapshot(): Promise<SupabaseWorkspac
       const doc = (data as { doc_json?: unknown } | null)?.doc_json;
       return doc && typeof doc === 'object' ? (doc as Record<string, unknown>) : {};
     })(),
-    rows(
-      sb.from('attendance_records').select('*').order('created_at', { ascending: false }).limit(2000),
-      mapAttendanceFromRow,
-    ),
+    needAttendance
+      ? rows(
+          sb.from('attendance_records').select('*').order('created_at', { ascending: false }).limit(2000),
+          mapAttendanceFromRow,
+        )
+      : Promise.resolve([] as AttendanceRecord[]),
   ]);
 
   const leadsList = leadsResult.list;

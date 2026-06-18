@@ -54,6 +54,18 @@ export async function fetchLeadsSb(): Promise<Lead[]> {
   );
 }
 
+/** لقطة كاملة لليد واحد — للتفاصيل / Client 360 (select('*')) */
+export async function fetchLeadByIdSb(id: string): Promise<Lead> {
+  const leadId = String(id || '').trim();
+  if (!leadId) throw new Error('معرّف الليد مطلوب');
+  await getSupabaseActor();
+  const sb = getSupabase();
+  const { data, error } = await sb.from('leads').select('*').eq('id', leadId).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('الليد غير موجود');
+  return mapLeadFromRow(data as Record<string, unknown>);
+}
+
 /* ---------- users ---------- */
 export async function fetchUsersSb(): Promise<User[]> {
   const actor = await getSupabaseActor();
@@ -91,12 +103,19 @@ function makePlaceholderEmailSb(name: string): string {
   return `${base}-${rand}@staff.internal`.toLowerCase();
 }
 
-/** تعيين/تحديث كلمة مرور Supabase Auth لموظف — عبر Edge Function (service_role على الخادم فقط) */
-async function setEmployeeAuthPasswordSb(
-  targetUserId: string,
-  email: string,
-  password: string,
-): Promise<void> {
+function isRealEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && !email.endsWith('@staff.internal');
+}
+
+type EmployeeAuthManagePayload = {
+  targetUserId: string;
+  email: string;
+  password?: string;
+  newEmail?: string;
+};
+
+/** إدارة حساب دخول الموظف (باسورد / بريد) — Edge Function + service_role */
+async function manageEmployeeAuthSb(payload: EmployeeAuthManagePayload): Promise<void> {
   const sb = getSupabase();
   const { data: sessionData } = await sb.auth.getSession();
   const token = sessionData.session?.access_token;
@@ -113,7 +132,7 @@ async function setEmployeeAuthPasswordSb(
       apikey: anon,
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ targetUserId, email, password }),
+    body: JSON.stringify(payload),
   });
   const j = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
@@ -123,11 +142,19 @@ async function setEmployeeAuthPasswordSb(
       `HTTP ${res.status}`;
     if (res.status === 404) {
       throw new Error(
-        'دالة تعيين كلمة المرور غير منشورة على Supabase. انشرها بـ: supabase functions deploy set-employee-password — أو عيّن الباسورد من لوحة Supabase → Authentication → Users.',
+        'دالة إدارة حسابات الموظفين غير منشورة على Supabase. انشرها بـ: supabase functions deploy set-employee-password',
       );
     }
     throw new Error(desc);
   }
+}
+
+async function setEmployeeAuthPasswordSb(
+  targetUserId: string,
+  email: string,
+  password: string,
+): Promise<void> {
+  await manageEmployeeAuthSb({ targetUserId, email, password });
 }
 
 /** تسجيل مستخدم Auth عبر REST حتى لا تتبدّل جلسة المالك في عميل supabase-js */
@@ -300,12 +327,15 @@ export async function patchUserSb(
     (actor.role === 'محاسب' || actor.role === 'مالك') && payrollRolesForSalary.includes(existing.role);
 
   const data: Record<string, unknown> = {};
+  const oldEmail = String(existing.email || '').trim().toLowerCase();
+  let emailSyncedViaEdge = false;
+
   if (patch.name != null && String(patch.name).trim()) {
     if (!canOwner && !isSelf) throw new Error('غير مصرح');
     data.name = String(patch.name).trim();
   }
   if (patch.email !== undefined && patch.email !== null) {
-    if (!canOwner) throw new Error('غير مصرح بتعديل البريد');
+    if (!canOwner && !isSelf) throw new Error('غير مصرح بتعديل البريد');
     if (existing.role === 'مالك' && existing.id !== actor.id) {
       throw new Error('لا يمكن تغيير بريد حساب مالك آخر');
     }
@@ -318,7 +348,18 @@ export async function patchUserSb(
     const { data: clash, error: clashErr } = await sb.from('users').select('id').eq('email', email).neq('id', id).maybeSingle();
     if (clashErr) throw new Error(clashErr.message);
     if (clash) throw new Error('البريد مستخدم لمستخدم آخر');
-    data.email = email;
+    if (email !== oldEmail) {
+      if (canOwner && isRealEmail(email)) {
+        await manageEmployeeAuthSb({
+          targetUserId: id,
+          email: oldEmail || email,
+          newEmail: email,
+        });
+        emailSyncedViaEdge = true;
+      } else {
+        data.email = email;
+      }
+    }
   }
   if (patch.role != null) {
     if (!canOwner) throw new Error('غير مصرح');
@@ -373,7 +414,14 @@ export async function patchUserSb(
     }
     await setEmployeeAuthPasswordSb(id, loginEmail, np);
   }
-  if (Object.keys(data).length === 0) return existing;
+  if (Object.keys(data).length === 0) {
+    if (emailSyncedViaEdge) {
+      const { data: row, error: refErr } = await sb.from('users').select('*').eq('id', id).single();
+      if (refErr || !row) throw new Error(refErr?.message || 'تعذر قراءة الموظف بعد تحديث البريد');
+      return mapUserFromRow(row as Record<string, unknown>);
+    }
+    return existing;
+  }
 
   const { data: row, error } = await sb.from('users').update(data).eq('id', id).select('*').single();
   if (error || !row) throw new Error(error?.message || 'فشل التحديث');

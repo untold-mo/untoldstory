@@ -10,7 +10,7 @@ import {
 import { supabaseCreateLead, supabaseDeleteLead, supabasePatchLead } from '@/lib/supabase/leadsRepo';
 import type { Session } from '@supabase/supabase-js';
 import { getSupabase } from '@/lib/supabase/client';
-import { mapUserFromRow } from '@/lib/supabase/postgrestMappers';
+import { mapUserFromRow, mapMonthlyTargetFromRow, mapClosedMonthFromRow, mapCustodySettingsMap } from '@/lib/supabase/postgrestMappers';
 import {
   fetchLeadsApi,
   createLeadApi,
@@ -99,6 +99,15 @@ import {
   writeAccountingCache,
 } from '@/lib/accounting/accountingWorkspacePersistence';
 import { normalizeLeadPhone, leadPhoneDigitsKey, isValidLeadPhone } from '@/lib/leadPhone';
+import {
+  clearServerWorkspaceCache,
+  initialExpensesFromServerCache,
+  initialInvoicesFromServerCache,
+  initialLeadsFromServerCache,
+  initialMonthlyTargetsFromServerCache,
+  initialUsersFromServerCache,
+  writeServerWorkspaceCache,
+} from '@/lib/supabase/serverWorkspaceCache';
 
 /** حذف قيد يومية أثناء التراجع — لا يرمي للأعلى */
 async function tryDeleteManualJournal(journalId: string): Promise<void> {
@@ -2142,11 +2151,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       },
     };
   };
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
+  const [leads, setLeads] = useState<Lead[]>(() =>
+    isServerDataMode() ? initialLeadsFromServerCache() : [],
+  );
+  const [users, setUsers] = useState<User[]>(() => {
+    if (isServerDataMode()) return initialUsersFromServerCache() ?? [];
+    return INITIAL_USERS;
+  });
   const [manualCustomers, setManualCustomers] = useState<ManualCustomer[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>(() =>
+    isServerDataMode() ? initialInvoicesFromServerCache() : [],
+  );
+  const [expenses, setExpenses] = useState<Expense[]>(() =>
+    isServerDataMode() ? initialExpensesFromServerCache() : [],
+  );
   const [currentUser, setCurrentUserState] = useState<User | null>(null);
   /** يزداد عند كل تسجيل خروج لمنع استجابة /auth/me المتأخرة من إعادة تسجيل الدخول ضمنياً. */
   const authBootstrapEpochRef = useRef(0);
@@ -2289,7 +2307,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [rehydrateUser]);
 
-  const [monthlyTargets, setMonthlyTargets] = useState<MonthlyTarget[]>(DEFAULT_TARGETS);
+  const [monthlyTargets, setMonthlyTargets] = useState<MonthlyTarget[]>(() => {
+    if (isServerDataMode()) return initialMonthlyTargetsFromServerCache() ?? DEFAULT_TARGETS;
+    return DEFAULT_TARGETS;
+  });
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [closedMonths, setClosedMonths] = useState<string[]>([]);
   const [chartOfAccounts, setChartOfAccounts] = useState<ChartOfAccount[]>(() => {
@@ -2491,14 +2512,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (!mergedLeads.some(l => l.id === lead.id)) mergedLeads.push(lead);
         });
       }
-      setLeads(
-        isServerDataMode()
-          ? []
-          : mergedLeads.map((l) => ({
-              ...l,
-              customerCode: l.customerCode || buildCustomerCodeFromSeed(l.id || l.name),
-            }))
-      );
+      if (!isServerDataMode()) {
+        setLeads(
+          mergedLeads.map((l) => ({
+            ...l,
+            customerCode: l.customerCode || buildCustomerCodeFromSeed(l.id || l.name),
+          })),
+        );
+      }
 
       /** لا تحمّل prod_system_users في وضع السيرفر — يخلط مستخدمين تجريبيين (أرقام u-…) غير موجودة في Postgres فيفشل الحذف بـ«المستخدم غير موجود». */
       if (!isServerDataMode()) {
@@ -2518,11 +2539,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           setUsers(parsedUsers);
         }
-      } else {
-        setUsers([]);
       }
 
-      if (savedInvoices) {
+      if (!isServerDataMode() && savedInvoices) {
         const rawInvoices = parseSafe<any[]>(savedInvoices);
         const parsedInvoices = Array.isArray(rawInvoices) ? rawInvoices.map((inv: Invoice) => normalizeInvoice({
           ...inv,
@@ -2535,9 +2554,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (!mergedInvoices.some((i: Invoice) => i.id === inv.id)) mergedInvoices.push(inv);
           });
         }
-        setInvoices(isServerDataMode() ? [] : mergedInvoices);
+        setInvoices(mergedInvoices);
       }
-      if (savedExpenses) {
+      if (!isServerDataMode() && savedExpenses) {
         const rawExpenses = parseSafe<any[]>(savedExpenses);
         const parsedExpenses = Array.isArray(rawExpenses) ? rawExpenses.map((exp: Expense) => {
           const baseAmount = Number(exp.amount) || 0;
@@ -2573,13 +2592,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
           });
         }
-        setExpenses(isServerDataMode() ? [] : mergedExpenses);
+        setExpenses(mergedExpenses);
       }
-      if (!isServerDataMode() && savedClosedMonths) {
+      if (savedClosedMonths) {
         const rawClosedMonths = parseSafe<any[]>(savedClosedMonths);
         if (Array.isArray(rawClosedMonths)) setClosedMonths(rawClosedMonths);
       }
-      if (!isServerDataMode() && savedTargets) {
+      if (savedTargets) {
         const rawTargets = parseSafe<any[]>(savedTargets);
         const parsedTargets: MonthlyTarget[] = (Array.isArray(rawTargets) ? rawTargets : []).map((t: MonthlyTarget) => ({
           ...t,
@@ -2589,8 +2608,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           commissionPercent: typeof (t as any).commissionPercent === 'number' ? (t as any).commissionPercent : 0,
         }));
         setMonthlyTargets(parsedTargets);
-      }
-      else if (!isServerDataMode()) setMonthlyTargets(DEFAULT_TARGETS);
+      } else if (!isServerDataMode()) setMonthlyTargets(DEFAULT_TARGETS);
       if (!isServerDataMode() && savedAudit) {
         const rawAudit = parseSafe<any[]>(savedAudit);
         const parsedAudit: AuditEvent[] = Array.isArray(rawAudit) ? rawAudit : [];
@@ -2604,14 +2622,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else if (!isServerDataMode()) {
         setAuditEvents(DEMO_AUDIT_EVENTS);
       }
-      if (!isServerDataMode() && savedChart) {
+      if (savedChart) {
         const rawChart = parseSafe<unknown>(savedChart);
         const normalized = normalizeChartOfAccounts(rawChart);
         if (normalized.length > 0) {
           setChartOfAccounts(ensureCustodyAccountInChart(normalized));
         }
-      }
-      else if (!isServerDataMode()) setChartOfAccounts(DEFAULT_CHART_OF_ACCOUNTS);
+      } else if (!isServerDataMode()) setChartOfAccounts(DEFAULT_CHART_OF_ACCOUNTS);
       if (!isServerDataMode() && savedJournals) {
         const rawJournals = parseSafe<any[]>(savedJournals);
         const parsedJournals: ManualJournalEntry[] = Array.isArray(rawJournals) ? rawJournals : [];
@@ -2737,7 +2754,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setEquipmentItems(DEFAULT_EQUIPMENT_ITEMS);
         }
       }
-      if (!isServerDataMode() && savedPrintBranding) {
+      if (savedPrintBranding) {
         try {
           const parsedBranding = parseSafe<any>(savedPrintBranding);
           setPrintBrandingSettings({
@@ -2752,10 +2769,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             signatureTitle: parsedBranding?.signatureTitle || '',
           });
         } catch {
-          setPrintBrandingSettings(DEFAULT_PRINT_BRANDING);
+          if (!isServerDataMode()) setPrintBrandingSettings(DEFAULT_PRINT_BRANDING);
         }
+      } else if (!isServerDataMode()) {
+        setPrintBrandingSettings(DEFAULT_PRINT_BRANDING);
       }
-      if (!isServerDataMode() && savedLeadIngestion) {
+      if (savedLeadIngestion) {
         const rawIngestion = parseSafe<Partial<LeadIngestionSettings>>(savedLeadIngestion);
         if (rawIngestion && typeof rawIngestion === 'object') {
           setLeadIngestionSettings({
@@ -2774,13 +2793,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             google: { ...DEFAULT_LEAD_INGESTION_SETTINGS.google, ...(rawIngestion.google || {}) },
             email: { ...DEFAULT_LEAD_INGESTION_SETTINGS.email, ...(rawIngestion.email || {}) },
           });
-        } else {
+        } else if (!isServerDataMode()) {
           setLeadIngestionSettings(DEFAULT_LEAD_INGESTION_SETTINGS);
         }
       } else if (!isServerDataMode()) {
         setLeadIngestionSettings(DEFAULT_LEAD_INGESTION_SETTINGS);
       }
-      if (!isServerDataMode() && savedSlaEscalation) {
+      if (savedSlaEscalation) {
         const rawSla = parseSafe<Partial<SlaEscalationSettings>>(savedSlaEscalation);
         if (rawSla && typeof rawSla === 'object') {
           setSlaEscalationSettings({
@@ -2788,39 +2807,39 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             criticalAfterMinutes: Math.max(10, Number(rawSla.criticalAfterMinutes) || DEFAULT_SLA_ESCALATION_SETTINGS.criticalAfterMinutes),
             autoReassignAfterHours: Math.max(0, Number(rawSla.autoReassignAfterHours) || DEFAULT_SLA_ESCALATION_SETTINGS.autoReassignAfterHours),
           });
-        } else {
+        } else if (!isServerDataMode()) {
           setSlaEscalationSettings(DEFAULT_SLA_ESCALATION_SETTINGS);
         }
       } else if (!isServerDataMode()) {
         setSlaEscalationSettings(DEFAULT_SLA_ESCALATION_SETTINGS);
       }
-      if (!isServerDataMode() && savedLeadDataQuality) {
+      if (savedLeadDataQuality) {
         const rawQuality = parseSafe<Partial<LeadDataQualitySettings>>(savedLeadDataQuality);
         if (rawQuality && typeof rawQuality === 'object') {
           setLeadDataQualitySettings({
             ...DEFAULT_LEAD_DATA_QUALITY_SETTINGS,
             ...rawQuality,
           });
-        } else {
+        } else if (!isServerDataMode()) {
           setLeadDataQualitySettings(DEFAULT_LEAD_DATA_QUALITY_SETTINGS);
         }
       } else if (!isServerDataMode()) {
         setLeadDataQualitySettings(DEFAULT_LEAD_DATA_QUALITY_SETTINGS);
       }
-      if (!isServerDataMode() && savedWorkflowRules) {
+      if (savedWorkflowRules) {
         const rawRules = parseSafe<Partial<WorkflowRulesSettings>>(savedWorkflowRules);
         if (rawRules && typeof rawRules === 'object') {
           setWorkflowRulesSettings({
             ...DEFAULT_WORKFLOW_RULES_SETTINGS,
             ...rawRules,
           });
-        } else {
+        } else if (!isServerDataMode()) {
           setWorkflowRulesSettings(DEFAULT_WORKFLOW_RULES_SETTINGS);
         }
       } else if (!isServerDataMode()) {
         setWorkflowRulesSettings(DEFAULT_WORKFLOW_RULES_SETTINGS);
       }
-      if (!isServerDataMode() && savedIntegrations) {
+      if (savedIntegrations) {
         const rawIntegrations = parseSafe<ExternalIntegrationConnection[]>(savedIntegrations);
         if (Array.isArray(rawIntegrations)) {
           const normalized = DEFAULT_INTEGRATIONS.map((base) => {
@@ -2828,7 +2847,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return hit ? { ...base, ...hit } : base;
           });
           setIntegrations(normalized);
-        } else {
+        } else if (!isServerDataMode()) {
           setIntegrations(DEFAULT_INTEGRATIONS);
         }
       } else if (!isServerDataMode()) {
@@ -2918,37 +2937,103 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else if (!shouldPreserveUserForPendingSupabaseSession()) rehydrateUser(null);
       } else if (!shouldPreserveUserForPendingSupabaseSession()) rehydrateUser(null);
     } else if (isServerDataMode()) {
-      setLeads([]);
-      setUsers([]);
-      setManualCustomers([]);
-      setInvoices([]);
-      setExpenses([]);
-      setPriceQuotes([]);
-      setMonthlyTargets(DEFAULT_TARGETS);
-      setAuditEvents([]);
-      setClosedMonths([]);
-      setChartOfAccounts(DEFAULT_CHART_OF_ACCOUNTS);
-      setManualJournalEntries([]);
-      setClosedFiscalYears([]);
-      setOpeningBalancesByYear({});
-      setPayrollApprovals([]);
-      setPayrollApprovalRequests([]);
-      setFinancialReopenRequests([]);
-      setShootBookings([]);
-      setEquipmentBookings([]);
-      setMeetingBookings([]);
-      setOtherBookings([]);
-      setEquipmentItems(DEFAULT_EQUIPMENT_ITEMS);
-      setPrintBrandingSettings(DEFAULT_PRINT_BRANDING);
-      setLeadIngestionSettings(DEFAULT_LEAD_INGESTION_SETTINGS);
-      setSlaEscalationSettings(DEFAULT_SLA_ESCALATION_SETTINGS);
-      setLeadDataQualitySettings(DEFAULT_LEAD_DATA_QUALITY_SETTINGS);
-      setWorkflowRulesSettings(DEFAULT_WORKFLOW_RULES_SETTINGS);
-      setIntegrations(DEFAULT_INTEGRATIONS);
+      if (savedClosedMonths) {
+        const rawClosedMonths = parseSafe<any[]>(savedClosedMonths);
+        if (Array.isArray(rawClosedMonths)) setClosedMonths(rawClosedMonths);
+      }
+      if (savedTargets) {
+        const rawTargets = parseSafe<any[]>(savedTargets);
+        const parsedTargets: MonthlyTarget[] = (Array.isArray(rawTargets) ? rawTargets : []).map((t: MonthlyTarget) => ({
+          ...t,
+          callsTarget: typeof t.callsTarget === 'number' ? t.callsTarget : 80,
+          dailyCallsTarget: typeof (t as any).dailyCallsTarget === 'number' ? (t as any).dailyCallsTarget : 8,
+          weeklyCallsTarget: typeof (t as any).weeklyCallsTarget === 'number' ? (t as any).weeklyCallsTarget : 40,
+          commissionPercent: typeof (t as any).commissionPercent === 'number' ? (t as any).commissionPercent : 0,
+        }));
+        if (parsedTargets.length > 0) setMonthlyTargets(parsedTargets);
+      }
+      if (savedChart) {
+        const rawChart = parseSafe<unknown>(savedChart);
+        const normalized = normalizeChartOfAccounts(rawChart);
+        if (normalized.length > 0) {
+          setChartOfAccounts(ensureCustodyAccountInChart(normalized));
+        }
+      }
+      if (savedPrintBranding) {
+        try {
+          const parsedBranding = parseSafe<any>(savedPrintBranding);
+          if (parsedBranding && typeof parsedBranding === 'object') {
+            setPrintBrandingSettings({
+              companyName: parsedBranding?.companyName || DEFAULT_PRINT_BRANDING.companyName,
+              logoDataUrl: parsedBranding?.logoDataUrl || '',
+              reportHeader: parsedBranding?.reportHeader || DEFAULT_PRINT_BRANDING.reportHeader,
+              reportFooter: parsedBranding?.reportFooter || DEFAULT_PRINT_BRANDING.reportFooter,
+              primaryColor: parsedBranding?.primaryColor || DEFAULT_PRINT_BRANDING.primaryColor,
+              showPrintDate: typeof parsedBranding?.showPrintDate === 'boolean' ? parsedBranding.showPrintDate : DEFAULT_PRINT_BRANDING.showPrintDate,
+              showPageNumbers: typeof parsedBranding?.showPageNumbers === 'boolean' ? parsedBranding.showPageNumbers : DEFAULT_PRINT_BRANDING.showPageNumbers,
+              signatureName: parsedBranding?.signatureName || '',
+              signatureTitle: parsedBranding?.signatureTitle || '',
+            });
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      if (savedLeadDataQuality) {
+        const rawQuality = parseSafe<Partial<LeadDataQualitySettings>>(savedLeadDataQuality);
+        if (rawQuality && typeof rawQuality === 'object') {
+          setLeadDataQualitySettings({ ...DEFAULT_LEAD_DATA_QUALITY_SETTINGS, ...rawQuality });
+        }
+      }
+      if (savedLeadIngestion) {
+        const rawIngestion = parseSafe<Partial<LeadIngestionSettings>>(savedLeadIngestion);
+        if (rawIngestion && typeof rawIngestion === 'object') {
+          setLeadIngestionSettings({
+            autoRouteToManager: typeof rawIngestion.autoRouteToManager === 'boolean'
+              ? rawIngestion.autoRouteToManager
+              : DEFAULT_LEAD_INGESTION_SETTINGS.autoRouteToManager,
+            managerUserId: typeof rawIngestion.managerUserId === 'string'
+              ? rawIngestion.managerUserId
+              : DEFAULT_LEAD_INGESTION_SETTINGS.managerUserId,
+            clientNotifyWebhookUrl:
+              typeof rawIngestion.clientNotifyWebhookUrl === 'string'
+                ? rawIngestion.clientNotifyWebhookUrl
+                : DEFAULT_LEAD_INGESTION_SETTINGS.clientNotifyWebhookUrl,
+            facebook: { ...DEFAULT_LEAD_INGESTION_SETTINGS.facebook, ...(rawIngestion.facebook || {}) },
+            linkedin: { ...DEFAULT_LEAD_INGESTION_SETTINGS.linkedin, ...(rawIngestion.linkedin || {}) },
+            google: { ...DEFAULT_LEAD_INGESTION_SETTINGS.google, ...(rawIngestion.google || {}) },
+            email: { ...DEFAULT_LEAD_INGESTION_SETTINGS.email, ...(rawIngestion.email || {}) },
+          });
+        }
+      }
+      if (savedSlaEscalation) {
+        const rawSla = parseSafe<Partial<SlaEscalationSettings>>(savedSlaEscalation);
+        if (rawSla && typeof rawSla === 'object') {
+          setSlaEscalationSettings({
+            warningAfterMinutes: Math.max(5, Number(rawSla.warningAfterMinutes) || DEFAULT_SLA_ESCALATION_SETTINGS.warningAfterMinutes),
+            criticalAfterMinutes: Math.max(10, Number(rawSla.criticalAfterMinutes) || DEFAULT_SLA_ESCALATION_SETTINGS.criticalAfterMinutes),
+            autoReassignAfterHours: Math.max(0, Number(rawSla.autoReassignAfterHours) || DEFAULT_SLA_ESCALATION_SETTINGS.autoReassignAfterHours),
+          });
+        }
+      }
+      if (savedWorkflowRules) {
+        const rawRules = parseSafe<Partial<WorkflowRulesSettings>>(savedWorkflowRules);
+        if (rawRules && typeof rawRules === 'object') {
+          setWorkflowRulesSettings({ ...DEFAULT_WORKFLOW_RULES_SETTINGS, ...rawRules });
+        }
+      }
+      if (savedIntegrations) {
+        const rawIntegrations = parseSafe<ExternalIntegrationConnection[]>(savedIntegrations);
+        if (Array.isArray(rawIntegrations)) {
+          setIntegrations(
+            DEFAULT_INTEGRATIONS.map((base) => {
+              const hit = rawIntegrations.find((x) => x?.provider === base.provider);
+              return hit ? { ...base, ...hit } : base;
+            }),
+          );
+        }
+      }
       setAccountingPolicy(DEFAULT_ACCOUNTING_POLICY);
-      setCustodyFunds([]);
-      setCustodyAccountByCategory(DEFAULT_CUSTODY_ACCOUNT_BY_CATEGORY);
-      setAttendanceRecords([]);
       if (!shouldPreserveUserForPendingSupabaseSession()) rehydrateUser(null);
     } else {
       const initialLeads: Lead[] = [
@@ -3180,6 +3265,145 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   /** جلب الحجوزات مع أول تشغيل — لا ينتظر currentUser لتفادي بقاء القائمة [] بعد الرفريش. */
   const bookingBootstrapEpochRef = useRef(0);
 
+  /** تقليل حجم state عند تحديث ليد واحد عبر Realtime */
+  const trimLeadTimelineForState = (lead: Lead): Lead => {
+    const tl = lead.timeline;
+    if (!Array.isArray(tl) || tl.length <= 3) return lead;
+    return { ...lead, timeline: tl.slice(-3) };
+  };
+
+  const applyWorkspaceDocRef = useRef<(ws: Record<string, unknown>) => void>(() => {});
+
+  applyWorkspaceDocRef.current = (workspaceDoc: Record<string, unknown>) => {
+    const ws = workspaceDoc && typeof workspaceDoc === 'object' ? workspaceDoc : {};
+    if (Array.isArray(ws.otherBookings)) {
+      setOtherBookings(normalizeOtherBookings(ws.otherBookings));
+    } else {
+      setOtherBookings([]);
+    }
+    if (Object.keys(ws).length === 0) return;
+    if (ws.chartOfAccounts !== undefined) {
+      const fromServer = normalizeChartOfAccounts(ws.chartOfAccounts);
+      const cached = readCachedChartOfAccounts();
+      setChartOfAccounts((prev) => {
+        const merged = mergeChartOfAccountsLists(fromServer, prev, cached);
+        const base = merged.length > 0 ? merged : DEFAULT_CHART_OF_ACCOUNTS;
+        return ensureCustodyAccountInChart(base);
+      });
+    }
+    if (Array.isArray(ws.closedFiscalYears)) setClosedFiscalYears(ws.closedFiscalYears as string[]);
+    if (ws.openingBalancesByYear && typeof ws.openingBalancesByYear === 'object') {
+      setOpeningBalancesByYear(ws.openingBalancesByYear as Record<string, { accountCode: string; balance: number }[]>);
+    }
+    if (Array.isArray(ws.payrollApprovals)) setPayrollApprovals(ws.payrollApprovals as PayrollApproval[]);
+    if (Array.isArray(ws.payrollApprovalRequests)) {
+      setPayrollApprovalRequests(ws.payrollApprovalRequests as PayrollApprovalRequest[]);
+    }
+    if (Array.isArray(ws.payrollSalesDiscounts)) {
+      setPayrollSalesDiscounts((ws.payrollSalesDiscounts as PayrollSalesDiscount[]).slice(0, 500));
+    }
+    if (Array.isArray(ws.financialReopenRequests)) {
+      setFinancialReopenRequests(ws.financialReopenRequests as FinancialPeriodReopenRequest[]);
+    }
+    const eq = ws.equipmentItems;
+    if (Array.isArray(eq) && eq.length > 0) setEquipmentItems(eq as EquipmentItem[]);
+    if (ws.printBranding && typeof ws.printBranding === 'object') {
+      setPrintBrandingSettings({ ...DEFAULT_PRINT_BRANDING, ...(ws.printBranding as object) } as PrintBrandingSettings);
+    }
+    if (ws.leadIngestion && typeof ws.leadIngestion === 'object') {
+      const rawIngestion = ws.leadIngestion as Partial<LeadIngestionSettings>;
+      setLeadIngestionSettings({
+        autoRouteToManager: typeof rawIngestion.autoRouteToManager === 'boolean'
+          ? rawIngestion.autoRouteToManager
+          : DEFAULT_LEAD_INGESTION_SETTINGS.autoRouteToManager,
+        managerUserId: typeof rawIngestion.managerUserId === 'string'
+          ? rawIngestion.managerUserId
+          : DEFAULT_LEAD_INGESTION_SETTINGS.managerUserId,
+        clientNotifyWebhookUrl:
+          typeof rawIngestion.clientNotifyWebhookUrl === 'string'
+            ? rawIngestion.clientNotifyWebhookUrl
+            : DEFAULT_LEAD_INGESTION_SETTINGS.clientNotifyWebhookUrl,
+        facebook: { ...DEFAULT_LEAD_INGESTION_SETTINGS.facebook, ...(rawIngestion.facebook || {}) },
+        linkedin: { ...DEFAULT_LEAD_INGESTION_SETTINGS.linkedin, ...(rawIngestion.linkedin || {}) },
+        google: { ...DEFAULT_LEAD_INGESTION_SETTINGS.google, ...(rawIngestion.google || {}) },
+        email: { ...DEFAULT_LEAD_INGESTION_SETTINGS.email, ...(rawIngestion.email || {}) },
+      });
+    }
+    if (ws.slaEscalation && typeof ws.slaEscalation === 'object') {
+      const rawSla = ws.slaEscalation as Partial<SlaEscalationSettings>;
+      setSlaEscalationSettings({
+        warningAfterMinutes: Math.max(5, Number(rawSla.warningAfterMinutes) || DEFAULT_SLA_ESCALATION_SETTINGS.warningAfterMinutes),
+        criticalAfterMinutes: Math.max(10, Number(rawSla.criticalAfterMinutes) || DEFAULT_SLA_ESCALATION_SETTINGS.criticalAfterMinutes),
+        autoReassignAfterHours: Math.max(0, Number(rawSla.autoReassignAfterHours) || DEFAULT_SLA_ESCALATION_SETTINGS.autoReassignAfterHours),
+      });
+    }
+    if (ws.leadDataQuality && typeof ws.leadDataQuality === 'object') {
+      setLeadDataQualitySettings({
+        ...DEFAULT_LEAD_DATA_QUALITY_SETTINGS,
+        ...(ws.leadDataQuality as object),
+      });
+    }
+    if (ws.workflowRules && typeof ws.workflowRules === 'object') {
+      setWorkflowRulesSettings({
+        ...DEFAULT_WORKFLOW_RULES_SETTINGS,
+        ...(ws.workflowRules as object),
+      });
+    }
+    if (Array.isArray(ws.integrations)) {
+      const rawIntegrations = ws.integrations as ExternalIntegrationConnection[];
+      const normalized = DEFAULT_INTEGRATIONS.map((base) => {
+        const hit = rawIntegrations.find((x) => x?.provider === base.provider);
+        return hit ? { ...base, ...hit } : base;
+      });
+      setIntegrations(normalized);
+    }
+    if (ws.journalCodebook !== undefined) {
+      const fromServer = normalizeJournalCodingRulesFromArray(ws.journalCodebook);
+      const cached = readCachedJournalCodebook();
+      setJournalCodingRulesState((prev) => mergeJournalCodingRulesLists(fromServer, prev, cached));
+    }
+    if (ws.expenseCodebook !== undefined) {
+      setExpenseCodingRulesState(mergeExpenseCodingRulesFromArray(ws.expenseCodebook));
+    }
+    if (typeof ws.customerCodePrefix === 'string' && ws.customerCodePrefix.trim()) {
+      const p = ws.customerCodePrefix.trim().replace(/\s+/g, '') || 'CUS';
+      setCustomerCodePrefixState(p);
+      customerCodePrefixRef.current = p;
+    }
+    if (Array.isArray(ws.expenseSavedViews)) {
+      setExpenseSavedViewsState(normalizeExpenseSavedViews(ws.expenseSavedViews));
+    }
+    if (ws.payrollAutoSendDay !== undefined) {
+      if (ws.payrollAutoSendDay === null) setPayrollAutoSendDayState('');
+      else {
+        const d = Math.floor(Number(ws.payrollAutoSendDay));
+        if (Number.isFinite(d) && d >= 1 && d <= 28) setPayrollAutoSendDayState(d);
+        else setPayrollAutoSendDayState('');
+      }
+    }
+    if (ws.entityComments !== undefined && ws.entityComments !== null && typeof ws.entityComments === 'object') {
+      setEntityCommentsState(normalizeEntityComments(ws.entityComments));
+    }
+    if (ws.expenseEscalations !== undefined && ws.expenseEscalations !== null && typeof ws.expenseEscalations === 'object') {
+      setExpenseEscalationsState(normalizeExpenseEscalations(ws.expenseEscalations));
+    }
+    if (ws.uiVisualMode === 'classic' || ws.uiVisualMode === 'premium') {
+      setUiVisualModeState(ws.uiVisualMode);
+    }
+    if (ws.personalTodosByUserId !== undefined && ws.personalTodosByUserId !== null && typeof ws.personalTodosByUserId === 'object') {
+      setPersonalTodosByUserIdState((prevMap) =>
+        mergePersonalTodosByUserId(prevMap, ws.personalTodosByUserId),
+      );
+    }
+    if (
+      ws.notifyForegroundByUserId !== undefined &&
+      ws.notifyForegroundByUserId !== null &&
+      typeof ws.notifyForegroundByUserId === 'object'
+    ) {
+      setNotifyForegroundByUserIdState(normalizeNotifyForegroundByUserId(ws.notifyForegroundByUserId));
+    }
+  };
+
   const loadServerWorkspaceImplRef = useRef<() => Promise<boolean>>(async () => false);
 
   loadServerWorkspaceImplRef.current = async (): Promise<boolean> => {
@@ -3212,7 +3436,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         let attendanceRec: AttendanceRecord[];
 
         if (isSupabaseDirectMode()) {
-          const snapRaw = await fetchSupabaseWorkspaceSnapshot();
+          const snapRaw = await fetchSupabaseWorkspaceSnapshot(
+            currentUser ? { id: currentUser.id, role: currentUser.role } : undefined,
+          );
           const snap = currentUser
             ? filterWorkspaceSnapshotForViewer(snapRaw, {
                 id: currentUser.id,
@@ -3449,136 +3675,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
 
-        const ws = workspaceDoc && typeof workspaceDoc === 'object' ? (workspaceDoc as Record<string, unknown>) : {};
-        if (Array.isArray(ws.otherBookings)) {
-          setOtherBookings(normalizeOtherBookings(ws.otherBookings));
-        } else {
-          setOtherBookings([]);
-        }
-        if (Object.keys(ws).length > 0) {
-          if (ws.chartOfAccounts !== undefined) {
-            const fromServer = normalizeChartOfAccounts(ws.chartOfAccounts);
-            const cached = readCachedChartOfAccounts();
-            setChartOfAccounts((prev) => {
-              const merged = mergeChartOfAccountsLists(fromServer, prev, cached);
-              const base = merged.length > 0 ? merged : DEFAULT_CHART_OF_ACCOUNTS;
-              return ensureCustodyAccountInChart(base);
-            });
-          }
-          if (Array.isArray(ws.closedFiscalYears)) setClosedFiscalYears(ws.closedFiscalYears as string[]);
-          if (ws.openingBalancesByYear && typeof ws.openingBalancesByYear === 'object') {
-            setOpeningBalancesByYear(ws.openingBalancesByYear as Record<string, { accountCode: string; balance: number }[]>);
-          }
-          if (Array.isArray(ws.payrollApprovals)) setPayrollApprovals(ws.payrollApprovals as PayrollApproval[]);
-          if (Array.isArray(ws.payrollApprovalRequests)) {
-            setPayrollApprovalRequests(ws.payrollApprovalRequests as PayrollApprovalRequest[]);
-          }
-          if (Array.isArray(ws.payrollSalesDiscounts)) {
-            setPayrollSalesDiscounts(
-              (ws.payrollSalesDiscounts as PayrollSalesDiscount[]).slice(0, 500),
-            );
-          }
-          if (Array.isArray(ws.financialReopenRequests)) {
-            setFinancialReopenRequests(ws.financialReopenRequests as FinancialPeriodReopenRequest[]);
-          }
-          const eq = ws.equipmentItems;
-          if (Array.isArray(eq) && eq.length > 0) setEquipmentItems(eq as EquipmentItem[]);
-          if (ws.printBranding && typeof ws.printBranding === 'object') {
-            setPrintBrandingSettings({ ...DEFAULT_PRINT_BRANDING, ...(ws.printBranding as object) } as PrintBrandingSettings);
-          }
-          if (ws.leadIngestion && typeof ws.leadIngestion === 'object') {
-            const rawIngestion = ws.leadIngestion as Partial<LeadIngestionSettings>;
-            setLeadIngestionSettings({
-              autoRouteToManager: typeof rawIngestion.autoRouteToManager === 'boolean'
-                ? rawIngestion.autoRouteToManager
-                : DEFAULT_LEAD_INGESTION_SETTINGS.autoRouteToManager,
-              managerUserId: typeof rawIngestion.managerUserId === 'string'
-                ? rawIngestion.managerUserId
-                : DEFAULT_LEAD_INGESTION_SETTINGS.managerUserId,
-              clientNotifyWebhookUrl:
-                typeof rawIngestion.clientNotifyWebhookUrl === 'string'
-                  ? rawIngestion.clientNotifyWebhookUrl
-                  : DEFAULT_LEAD_INGESTION_SETTINGS.clientNotifyWebhookUrl,
-              facebook: { ...DEFAULT_LEAD_INGESTION_SETTINGS.facebook, ...(rawIngestion.facebook || {}) },
-              linkedin: { ...DEFAULT_LEAD_INGESTION_SETTINGS.linkedin, ...(rawIngestion.linkedin || {}) },
-              google: { ...DEFAULT_LEAD_INGESTION_SETTINGS.google, ...(rawIngestion.google || {}) },
-              email: { ...DEFAULT_LEAD_INGESTION_SETTINGS.email, ...(rawIngestion.email || {}) },
-            });
-          }
-          if (ws.slaEscalation && typeof ws.slaEscalation === 'object') {
-            const rawSla = ws.slaEscalation as Partial<SlaEscalationSettings>;
-            setSlaEscalationSettings({
-              warningAfterMinutes: Math.max(5, Number(rawSla.warningAfterMinutes) || DEFAULT_SLA_ESCALATION_SETTINGS.warningAfterMinutes),
-              criticalAfterMinutes: Math.max(10, Number(rawSla.criticalAfterMinutes) || DEFAULT_SLA_ESCALATION_SETTINGS.criticalAfterMinutes),
-              autoReassignAfterHours: Math.max(0, Number(rawSla.autoReassignAfterHours) || DEFAULT_SLA_ESCALATION_SETTINGS.autoReassignAfterHours),
-            });
-          }
-          if (ws.leadDataQuality && typeof ws.leadDataQuality === 'object') {
-            setLeadDataQualitySettings({
-              ...DEFAULT_LEAD_DATA_QUALITY_SETTINGS,
-              ...(ws.leadDataQuality as object),
-            });
-          }
-          if (ws.workflowRules && typeof ws.workflowRules === 'object') {
-            setWorkflowRulesSettings({
-              ...DEFAULT_WORKFLOW_RULES_SETTINGS,
-              ...(ws.workflowRules as object),
-            });
-          }
-          if (Array.isArray(ws.integrations)) {
-            const rawIntegrations = ws.integrations as ExternalIntegrationConnection[];
-            const normalized = DEFAULT_INTEGRATIONS.map((base) => {
-              const hit = rawIntegrations.find((x) => x?.provider === base.provider);
-              return hit ? { ...base, ...hit } : base;
-            });
-            setIntegrations(normalized);
-          }
-          if (ws.journalCodebook !== undefined) {
-            const fromServer = normalizeJournalCodingRulesFromArray(ws.journalCodebook);
-            const cached = readCachedJournalCodebook();
-            setJournalCodingRulesState((prev) => mergeJournalCodingRulesLists(fromServer, prev, cached));
-          }
-          if (ws.expenseCodebook !== undefined) {
-            setExpenseCodingRulesState(mergeExpenseCodingRulesFromArray(ws.expenseCodebook));
-          }
-          if (typeof ws.customerCodePrefix === 'string' && ws.customerCodePrefix.trim()) {
-            const p = ws.customerCodePrefix.trim().replace(/\s+/g, '') || 'CUS';
-            setCustomerCodePrefixState(p);
-            customerCodePrefixRef.current = p;
-          }
-          if (Array.isArray(ws.expenseSavedViews)) {
-            setExpenseSavedViewsState(normalizeExpenseSavedViews(ws.expenseSavedViews));
-          }
-          if (ws.payrollAutoSendDay !== undefined) {
-            if (ws.payrollAutoSendDay === null) setPayrollAutoSendDayState('');
-            else {
-              const d = Math.floor(Number(ws.payrollAutoSendDay));
-              if (Number.isFinite(d) && d >= 1 && d <= 28) setPayrollAutoSendDayState(d);
-              else setPayrollAutoSendDayState('');
-            }
-          }
-          if (ws.entityComments !== undefined && ws.entityComments !== null && typeof ws.entityComments === 'object') {
-            setEntityCommentsState(normalizeEntityComments(ws.entityComments));
-          }
-          if (ws.expenseEscalations !== undefined && ws.expenseEscalations !== null && typeof ws.expenseEscalations === 'object') {
-            setExpenseEscalationsState(normalizeExpenseEscalations(ws.expenseEscalations));
-          }
-          if (ws.uiVisualMode === 'classic' || ws.uiVisualMode === 'premium') {
-            setUiVisualModeState(ws.uiVisualMode);
-          }
-          if (ws.personalTodosByUserId !== undefined && ws.personalTodosByUserId !== null && typeof ws.personalTodosByUserId === 'object') {
-            setPersonalTodosByUserIdState((prevMap) =>
-              mergePersonalTodosByUserId(prevMap, ws.personalTodosByUserId),
-            );
-          }
-          if (
-            ws.notifyForegroundByUserId !== undefined &&
-            ws.notifyForegroundByUserId !== null &&
-            typeof ws.notifyForegroundByUserId === 'object'
-          ) {
-            setNotifyForegroundByUserIdState(normalizeNotifyForegroundByUserId(ws.notifyForegroundByUserId));
-          }
-        }
+        applyWorkspaceDocRef.current(
+          workspaceDoc && typeof workspaceDoc === 'object' ? (workspaceDoc as Record<string, unknown>) : {},
+        );
+        const ws =
+          workspaceDoc && typeof workspaceDoc === 'object' ? (workspaceDoc as Record<string, unknown>) : {};
         const att = Array.isArray(attendanceRec) ? attendanceRec : [];
         if (att.length > 0) setAttendanceRecords(att);
         if (
@@ -3600,6 +3701,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             void patchWorkspaceStateApi(patch).catch(() => {});
           }
         }
+        const mtForCache = Array.isArray(targets) ? targets : [];
+        writeServerWorkspaceCache({
+          leads: leadsList,
+          users: rawUsers.map((u) => normalizeUser({ ...u, authSource: 'database' })),
+          invoices: invs.map(normalizeInvoice),
+          expenses: exps,
+          monthlyTargets: mtForCache.length > 0 ? mtForCache : DEFAULT_TARGETS,
+        });
         return true;
       } catch {
         return false;
@@ -3698,6 +3807,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [currentUser?.id, currentUser?.authSource]);
 
+  /** إن فشلت المزامنة الأولى بعد ريفريش — أعد المحاولة بدل بقاء لوحة المالك فارغة */
+  useEffect(() => {
+    if (!isServerDataMode()) return;
+    if (!hasServerAuthToken()) return;
+    if (currentUser?.authSource !== 'database') return;
+    let alive = true;
+    const t = window.setTimeout(() => {
+      if (!alive) return;
+      if (users.length === 0 && leads.length === 0) {
+        void loadServerWorkspaceImplRef.current();
+      }
+    }, 2500);
+    return () => {
+      alive = false;
+      window.clearTimeout(t);
+    };
+  }, [currentUser?.id, currentUser?.authSource, users.length, leads.length]);
+
   useEffect(() => {
     writeAccountingCache(chartOfAccounts, journalCodingRules);
   }, [chartOfAccounts, journalCodingRules]);
@@ -3768,48 +3895,61 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     notifyNewInboundLeads(leads, currentUser.role);
   }, [leads, currentUser?.id, currentUser?.role]);
 
-  /** مزامنة دورية — fallback لو Realtime غير مفعّل؛ المندوبون: ليدز فقط (خفيف)، الباقي: workspace كامل */
-  useEffect(() => {
-    if (!isServerDataMode()) return;
-    if (!hasServerAuthToken()) return;
-    if (!currentUser?.id) return;
-
-    const isRep = currentUser.role === 'مندوب';
-    const intervalMs = isRep ? 45_000 : 120_000;
-    let cancelled = false;
-
-    const poll = () => {
-      if (cancelled || typeof document === 'undefined') return;
-      if (document.visibilityState === 'hidden') return;
-      if (isRep) void refreshLeadsOnly();
-      else void refreshServerWorkspace();
-    };
-
-    void poll();
-    const id = window.setInterval(poll, intervalMs);
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
-    };
-  }, [currentUser?.id, currentUser?.role, refreshServerWorkspace, refreshLeadsOnly]);
-
   /** تحديث فوري لكل جداول النظام عبر Supabase Realtime */
   useEffect(() => {
     if (!isSupabaseDirectMode()) return;
     if (!currentUser?.id) return;
 
-    let configRefreshTimer: ReturnType<typeof setTimeout> | null = null;
-    const scheduleConfigRefresh = () => {
-      if (configRefreshTimer) window.clearTimeout(configRefreshTimer);
-      configRefreshTimer = window.setTimeout(() => {
-        void refreshServerWorkspace();
-      }, 2500);
+    let configTablesTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleConfigTablesRefresh = () => {
+      if (configTablesTimer) window.clearTimeout(configTablesTimer);
+      configTablesTimer = window.setTimeout(() => {
+        void (async () => {
+          if (!isSupabaseDirectMode()) return;
+          try {
+            const sb = getSupabase();
+            const [targetsRes, closedRes, custodyRes] = await Promise.all([
+              sb.from('monthly_targets').select('*'),
+              sb.from('closed_months').select('*'),
+              sb.from('custody_settings').select('*').limit(1).maybeSingle(),
+            ]);
+            if (!targetsRes.error && Array.isArray(targetsRes.data) && targetsRes.data.length > 0) {
+              setMonthlyTargets(
+                targetsRes.data.map((r) => mapMonthlyTargetFromRow(r as Record<string, unknown>)),
+              );
+            }
+            if (!closedRes.error && Array.isArray(closedRes.data)) {
+              const closedMonthsClean = closedRes.data
+                .map((r) => mapClosedMonthFromRow(r as Record<string, unknown>))
+                .filter((k) => {
+                  if (typeof k !== 'string' || !/^\d{4}-\d{2}$/.test(k)) return false;
+                  const m = Number(k.slice(5, 7));
+                  return m >= 1 && m <= 12;
+                });
+              if (closedMonthsClean.length > 0) setClosedMonths(closedMonthsClean);
+            }
+            if (!custodyRes.error && custodyRes.data) {
+              const custodyMap = mapCustodySettingsMap(custodyRes.data as Record<string, unknown>);
+              if (custodyMap) {
+                setCustodyAccountByCategory((prev) => ({
+                  ...DEFAULT_CUSTODY_ACCOUNT_BY_CATEGORY,
+                  ...prev,
+                  ...custodyMap,
+                }));
+              }
+            }
+          } catch {
+            /* ignore */
+          }
+        })();
+      }, 800);
     };
 
     let channel: ReturnType<typeof subscribeWorkspaceRealtime> | null = null;
     try {
       channel = subscribeWorkspaceRealtime({
-        onLeadUpsert: (lead) => setLeads((prev) => upsertLeadInList(prev, lead)),
+        onLeadUpsert: (lead) =>
+          setLeads((prev) => upsertLeadInList(prev, trimLeadTimelineForState(lead))),
         onLeadDelete: (id) => setLeads((prev) => removeLeadFromList(prev, id)),
         onUserUpsert: (user) =>
           setUsers((prev) => upsertById(prev, normalizeUser({ ...user, authSource: 'database' }))),
@@ -3856,7 +3996,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           else if (table === 'equipment_bookings') setEquipmentBookings((prev) => removeById(prev, id));
           else if (table === 'meeting_bookings') setMeetingBookings((prev) => removeById(prev, id));
         },
-        onWorkspaceDocReplace: () => scheduleConfigRefresh(),
+        onWorkspaceDocReplace: (doc) => applyWorkspaceDocRef.current(doc),
         onAccountingPolicyReplace: (pol) => {
           if (!pol) return;
           setAccountingPolicy({
@@ -3868,16 +4008,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 : DEFAULT_ACCOUNTING_POLICY.allowedCostCentersForQuotes,
           });
         },
-        onConfigTablesChanged: scheduleConfigRefresh,
+        onConfigTablesChanged: scheduleConfigTablesRefresh,
       });
     } catch {
       /* Supabase غير مهيأ */
     }
     return () => {
-      if (configRefreshTimer) window.clearTimeout(configRefreshTimer);
+      if (configTablesTimer) window.clearTimeout(configTablesTimer);
       if (channel) void getSupabase().removeChannel(channel);
     };
-  }, [currentUser?.id, refreshServerWorkspace]);
+  }, [currentUser?.id]);
 
   // Save to localStorage
   useEffect(() => {
@@ -3933,13 +4073,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('prod_system_meeting_bookings', JSON.stringify(meetingBookings));
       localStorage.setItem('prod_system_other_bookings', JSON.stringify(otherBookings));
       localStorage.setItem('prod_system_equipment_items', JSON.stringify(equipmentItems));
-      localStorage.setItem('prod_system_print_branding', JSON.stringify(printBrandingSettings));
-      localStorage.setItem('prod_system_lead_ingestion_settings', JSON.stringify(leadIngestionSettings));
-      localStorage.setItem('prod_system_sla_escalation_settings', JSON.stringify(slaEscalationSettings));
-      localStorage.setItem('prod_system_lead_data_quality_settings', JSON.stringify(leadDataQualitySettings));
-      localStorage.setItem('prod_system_workflow_rules_settings', JSON.stringify(workflowRulesSettings));
-      localStorage.setItem('prod_system_external_integrations', JSON.stringify(integrations));
     }
+    localStorage.setItem('prod_system_print_branding', JSON.stringify(printBrandingSettings));
+    localStorage.setItem('prod_system_lead_ingestion_settings', JSON.stringify(leadIngestionSettings));
+    localStorage.setItem('prod_system_sla_escalation_settings', JSON.stringify(slaEscalationSettings));
+    localStorage.setItem('prod_system_lead_data_quality_settings', JSON.stringify(leadDataQualitySettings));
+    localStorage.setItem('prod_system_workflow_rules_settings', JSON.stringify(workflowRulesSettings));
+    localStorage.setItem('prod_system_external_integrations', JSON.stringify(integrations));
     if (!isServerDataMode()) {
       localStorage.setItem('prod_system_price_quotes', JSON.stringify(priceQuotes));
       localStorage.setItem('prod_system_accounting_policy', JSON.stringify(accountingPolicy));
@@ -3978,6 +4118,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         switch (event.key) {
           case 'prod_system_leads':
+            if (isServerDataMode()) break;
             if (event.newValue) setLeads(JSON.parse(event.newValue));
             break;
           case 'prod_system_users':
@@ -6042,7 +6183,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (isServerDataMode()) {
       const apiPatch = buildApiPatch();
-      if (!apiPatch || Object.keys(apiPatch).length === 0) return false;
+      if (!apiPatch || Object.keys(apiPatch).length === 0) {
+        toast.error('لا توجد تغييرات صالحة للحفظ — تأكد من الاسم والبريد');
+        return false;
+      }
       try {
         const updated = await patchUserApi(userId, apiPatch);
         const normalized = normalizeUser({ ...updated, authSource: 'database' });
@@ -6057,6 +6201,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           entityId: userId,
           details: auditDetails,
         });
+        if (
+          isSelf &&
+          typeof patch.email === 'string' &&
+          patch.email.trim().toLowerCase() !== String(target.email || '').trim().toLowerCase()
+        ) {
+          toast.info('تم تحديث البريد — سجّل الخروج ثم الدخول بالبريد الجديد إن لزم');
+        }
         return true;
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'تعذر حفظ التعديل على السيرفر';
@@ -10257,6 +10408,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         window.sessionStorage.setItem('prod_system_force_logout_next', '1');
         window.sessionStorage.setItem('prod_system_skip_welcome_next_load', '1');
         clearSessionBookingBackups();
+    clearServerWorkspaceCache();
       }
     } catch {
       /* private mode / blocked storage */

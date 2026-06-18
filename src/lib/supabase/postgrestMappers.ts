@@ -106,6 +106,46 @@ function iso(v: unknown): string {
   return new Date().toISOString();
 }
 
+/** لقائمة الليدز — بدون timeline_json لتقليل egress */
+export function mapLeadListFromRow(r: Record<string, unknown>): Lead {
+  return {
+    id: String(r.id ?? ''),
+    customerCode: r.customer_code ? String(r.customer_code) : undefined,
+    name: String(r.name ?? ''),
+    company: String(r.company ?? ''),
+    phone: String(r.phone ?? ''),
+    email: String(r.email ?? ''),
+    status: String(r.status ?? '') as Lead['status'],
+    assignedTo: r.assigned_to_id ? String(r.assigned_to_id) : undefined,
+    budget: Number(r.budget) || 0,
+    companySize: (() => {
+      const cs = String(r.company_size ?? 'صغير');
+      return cs === 'صغير' || cs === 'متوسط' || cs === 'كبير' ? (cs as Lead['companySize']) : 'صغير';
+    })(),
+    source: String(r.source ?? ''),
+    category: String(r.category ?? '') as Lead['category'],
+    score: Number(r.score) || 0,
+    createdAt: iso(r.created_at),
+    updatedAt: iso(r.updated_at),
+    followUpAt: r.follow_up_at ? iso(r.follow_up_at) : undefined,
+    lossReasonCode: (() => {
+      const lr = r.loss_reason_code != null ? String(r.loss_reason_code) : '';
+      const allowed: NonNullable<Lead['lossReasonCode']>[] = [
+        'budget',
+        'price',
+        'timing',
+        'competition',
+        'no_response',
+        'scope',
+        'other',
+      ];
+      return (allowed as string[]).includes(lr) ? (lr as Lead['lossReasonCode']) : undefined;
+    })(),
+    slaStatus: String(r.sla_status ?? 'مستقر') as Lead['slaStatus'],
+    timeline: [],
+  };
+}
+
 export function mapLeadFromRow(r: Record<string, unknown>): Lead {
   const timeline = parseJson<Lead['timeline']>(r.timeline_json, []);
   return {
