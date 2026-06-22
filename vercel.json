@@ -1,6 +1,6 @@
 {
-  "framework": "vite",
-  "buildCommand": "npm run pack:hostinger",
+  "framework": null,
+  "buildCommand": "node scripts/vercel-build.mjs",
   "outputDirectory": "hostinger-dist",
   "installCommand": "npm ci",
   "env": {
