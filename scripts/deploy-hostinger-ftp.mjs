@@ -6,17 +6,16 @@
  *
  * الاستخدام:
  *   npm run pack:hostinger
- *   node scripts/deploy-hostinger-ftp.mjs
+ *   npm run deploy:hostinger
  */
-import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { uploadHostingerBundle } from './ftp-upload-hostinger.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
 const localDir = path.join(root, 'hostinger-dist');
-const pyScript = path.join(__dirname, 'ftp-upload-hostinger.py');
 
 function loadEnvDeploy() {
   const f = path.join(root, '.env.deploy');
@@ -41,26 +40,15 @@ const pass = process.env.FTP_PASSWORD?.trim() || process.env.FTP_PASS?.trim();
 if (!server || !user || !pass) {
   console.error('[deploy-hostinger] Missing FTP_SERVER / FTP_USERNAME / FTP_PASSWORD');
   console.error('  Create .env.deploy from .env.deploy.example or set env vars, then:');
-  console.error('  npm run pack:hostinger && node scripts/deploy-hostinger-ftp.mjs');
+  console.error('  npm run pack:hostinger && npm run deploy:hostinger');
   process.exit(1);
 }
 
-if (!fs.existsSync(path.join(localDir, 'index.html'))) {
-  console.error('[deploy-hostinger] Run: npm run pack:hostinger');
-  process.exit(1);
-}
-
-const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
-
-execFileSync(pythonCmd, [pyScript], {
-  stdio: 'inherit',
-  env: {
-    ...process.env,
-    FTP_SERVER: server,
-    FTP_USER: user,
-    FTP_PASS: pass,
-    LOCAL_DIR: localDir,
-  },
+await uploadHostingerBundle({
+  server,
+  username: user,
+  password: pass,
+  localDir,
 });
 
 const bundle = fs.readFileSync(path.join(localDir, 'index.html'), 'utf8').match(/assets\/index-[^.]+\.js/)?.[0];
