@@ -1,9 +1,15 @@
 {
   "framework": "vite",
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
+  "buildCommand": "npm run pack:hostinger",
+  "outputDirectory": "hostinger-dist",
   "installCommand": "npm ci",
   "env": {
     "NODE_OPTIONS": "--max-old-space-size=4096"
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/((?!assets/).*)",
+      "destination": "/index.html"
+    }
+  ]
 }
