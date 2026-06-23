@@ -21,6 +21,11 @@ export function getSupabase(): SupabaseClient {
       global: {
         fetch: createGuardedFetch(),
       },
+      realtime: {
+        params: {
+          eventsPerSecond: 10,
+        },
+      },
     });
   }
   return client;

@@ -115,6 +115,21 @@ const EXPENSES_LIST_SELECT =
 const QUOTES_LIST_SELECT =
   'id,lead_id,customer_name,title,amount,vat_rate,vat_amount,total_amount,cost_center,note,created_by_id,created_by_name,created_at,status,production_assigned_id,production_assigned_name,priced_by_id,priced_by_name,priced_at,pricing_note,approved_by,approved_at,invoice_id,payment_schedule_json,initial_payment,client_payments_json,client_accepted_at,client_rejected_at,client_rejection_note,company_margin_percent,production_cost_amount,line_items_json';
 
+const MANUAL_CUSTOMERS_LIST_SELECT =
+  'id,customer_code,name,company,phone,email,source_label,created_at,created_by_id,created_by_name,created_by_role';
+
+const AUDIT_LIST_SELECT =
+  'id,action,entity_type,entity_id,actor_id,actor_name,details,created_at';
+
+const ATTENDANCE_LIST_SELECT = 'id,rep_id,type,source,created_at';
+
+const MONTHLY_TARGETS_LIST_SELECT =
+  'rep_id,leads_target,revenue_target,calls_target,daily_calls_target,weekly_calls_target,commission_percent';
+
+const CLOSED_MONTHS_LIST_SELECT = 'month_key';
+
+const CUSTODY_SETTINGS_LIST_SELECT = 'custody_account_map_json';
+
 function isFullCrmRole(role?: User['role']): boolean {
   return !role || role === 'مالك' || role === 'مدير مبيعات';
 }
@@ -189,7 +204,10 @@ export async function fetchSupabaseWorkspaceSnapshot(
       mapUserListFromRow,
     ),
     needCustomers
-      ? rows(sb.from('manual_customers').select('*').order('created_at', { ascending: false }), mapManualCustomerFromRow)
+      ? rows(
+          sb.from('manual_customers').select(MANUAL_CUSTOMERS_LIST_SELECT).order('created_at', { ascending: false }),
+          mapManualCustomerFromRow,
+        )
       : Promise.resolve([] as ManualCustomer[]),
     needFinance
       ? (async () => {
@@ -248,14 +266,18 @@ export async function fetchSupabaseWorkspaceSnapshot(
         )
       : Promise.resolve([] as ManualJournalEntry[]),
     needFinance
-      ? rows(sb.from('closed_months').select('*'), mapClosedMonthFromRow)
+      ? rows(sb.from('closed_months').select(CLOSED_MONTHS_LIST_SELECT), mapClosedMonthFromRow)
       : Promise.resolve([] as string[]),
     needFinance
-      ? rows(sb.from('monthly_targets').select('*'), mapMonthlyTargetFromRow)
+      ? rows(sb.from('monthly_targets').select(MONTHLY_TARGETS_LIST_SELECT), mapMonthlyTargetFromRow)
       : Promise.resolve([] as MonthlyTarget[]),
     needCustodySettings
       ? (async () => {
-          const { data, error } = await sb.from('custody_settings').select('*').limit(1).maybeSingle();
+          const { data, error } = await sb
+            .from('custody_settings')
+            .select(CUSTODY_SETTINGS_LIST_SELECT)
+            .limit(1)
+            .maybeSingle();
           if (error) {
             console.warn('[supabase workspace]', error.message);
             return null;
@@ -264,7 +286,10 @@ export async function fetchSupabaseWorkspaceSnapshot(
         })()
       : Promise.resolve(null),
     needAudit
-      ? rows(sb.from('audit_events').select('*').order('created_at', { ascending: false }).limit(500), mapAuditFromRow)
+      ? rows(
+          sb.from('audit_events').select(AUDIT_LIST_SELECT).order('created_at', { ascending: false }).limit(500),
+          mapAuditFromRow,
+        )
       : Promise.resolve([] as AuditEvent[]),
     needCustodyFunds
       ? singleDocRows<Record<string, unknown>>(
@@ -297,7 +322,7 @@ export async function fetchSupabaseWorkspaceSnapshot(
     })(),
     needAttendance
       ? rows(
-          sb.from('attendance_records').select('*').order('created_at', { ascending: false }).limit(2000),
+          sb.from('attendance_records').select(ATTENDANCE_LIST_SELECT).order('created_at', { ascending: false }).limit(2000),
           mapAttendanceFromRow,
         )
       : Promise.resolve([] as AttendanceRecord[]),

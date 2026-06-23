@@ -11,7 +11,7 @@ import { fetchAllLeadsFromSupabase, fetchLeadsNotificationSubset, fetchUnassigne
 import { supabaseCreateLead, supabaseDeleteLead, supabasePatchLead } from '@/lib/supabase/leadsRepo';
 import type { Session } from '@supabase/supabase-js';
 import { getSupabase } from '@/lib/supabase/client';
-import { isSupabaseQuotaError, shouldWarnSupabaseQuota } from '@/lib/supabase/supabaseGuard';
+import { isSupabaseQuotaError, isSupabaseQuotaCooldown, shouldWarnSupabaseQuota, assertSupabaseFetchAllowed } from '@/lib/supabase/supabaseGuard';
 import { fetchAuthUserProfile } from '@/lib/supabase/fetchAuthUserProfile';
 import { mapUserFromRow, mapMonthlyTargetFromRow, mapClosedMonthFromRow, mapCustodySettingsMap } from '@/lib/supabase/postgrestMappers';
 import {
@@ -80,6 +80,7 @@ import { buildSystemNotifications } from './buildSystemNotifications';
 import { clearLegacyOnboardingStorageKeys } from './legacyStorageCleanup';
 import { getMonthKey } from './dateMonthKey';
 import { notifyNewInboundLeads, resetInboundLeadToastState } from '@/lib/inboundLeadToasts';
+import { notifyLeadWonTransitions, resetLeadWonToastState } from '@/lib/leadWonToasts';
 import { notifyClientChannel } from '@/lib/clientChannelNotify';
 import { fetchLeadsSb } from '@/lib/supabase/directApiSb';
 import {
@@ -111,6 +112,7 @@ import {
   initialUsersFromServerCache,
   readServerWorkspaceCache,
   writeServerWorkspaceCache,
+  isServerWorkspaceCacheFresh,
 } from '@/lib/supabase/serverWorkspaceCache';
 
 function warnSupabaseQuotaOnce(err: unknown): void {
@@ -3301,9 +3303,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const workspaceApplyEpochRef = useRef(0);
   const workspaceLoadInFlightRef = useRef(false);
   const workspaceLoadQueuedRef = useRef(false);
+  const workspaceLoadForceRef = useRef(false);
   const lastWorkspaceFullLoadAtRef = useRef(0);
+  const lastLeadsFullLoadAtRef = useRef(0);
+  const lastNotificationsRefreshAtRef = useRef(0);
+  const lastConfigTablesRefreshAtRef = useRef(0);
   /** أقل فترة بين تحميلات Workspace كاملة (تقليل egress على Supabase). */
   const WORKSPACE_FULL_RELOAD_MIN_MS = 5 * 60 * 1000;
+  /** أقل فترة بين جلب كل الليدز (آلاف الصفوف) — Realtime يغطي التحديثات بينهما. */
+  const LEADS_FULL_RELOAD_MIN_MS = 10 * 60 * 1000;
+  const NOTIFICATIONS_REFRESH_MIN_MS = 2 * 60 * 1000;
+  const CONFIG_TABLES_REFRESH_MIN_MS = 60 * 1000;
   /** جلب الحجوزات مع أول تشغيل — لا ينتظر currentUser لتفادي بقاء القائمة [] بعد الرفريش. */
   const bookingBootstrapEpochRef = useRef(0);
 
@@ -3776,27 +3786,49 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (deferOwnerLeads && currentUser && snapRawForDefer) {
           const viewer = { id: currentUser.id, role: currentUser.role };
           const deferEpoch = epoch;
-          void (async () => {
-            try {
-              const list = await fetchAllLeadsFromSupabase(getSupabase());
-              if (deferEpoch !== workspaceApplyEpochRef.current) return;
-              const filtered = filterWorkspaceSnapshotForViewer(
-                { ...snapRawForDefer!, leadsList: list, leadsFetchOk: true },
-                viewer,
-              ).leadsList;
-              setLeads((prev) => applyServerLeadsSnapshot(prev, filtered, true));
-              writeServerWorkspaceCache({
-                leads: filtered,
-                users: rawUsers.map((u) => normalizeUser({ ...u, authSource: 'database' })),
-                invoices: invs.map(normalizeInvoice),
-                expenses: exps,
-                monthlyTargets: mtForCache.length > 0 ? mtForCache : DEFAULT_TARGETS,
-              });
-            } catch (e) {
-              console.warn('[leads] deferred owner load failed', e);
-              warnSupabaseQuotaOnce(e);
-            }
-          })();
+          const forceLoad = workspaceLoadForceRef.current;
+          workspaceLoadForceRef.current = false;
+          const cachedLeads = readServerWorkspaceCache()?.leads ?? [];
+          const cacheFresh = !forceLoad && isServerWorkspaceCacheFresh(LEADS_FULL_RELOAD_MIN_MS);
+          if (cacheFresh && cachedLeads.length > 0) {
+            lastLeadsFullLoadAtRef.current = readServerWorkspaceCache()?.savedAt ?? Date.now();
+            setLeads((prev) =>
+              applyServerLeadsSnapshot(prev, cachedLeads, true),
+            );
+          } else {
+            void (async () => {
+              if (isSupabaseQuotaCooldown()) return;
+              const sinceLast = Date.now() - lastLeadsFullLoadAtRef.current;
+              if (
+                !forceLoad &&
+                lastLeadsFullLoadAtRef.current > 0 &&
+                sinceLast < LEADS_FULL_RELOAD_MIN_MS
+              ) {
+                return;
+              }
+              try {
+                assertSupabaseFetchAllowed();
+                const list = await fetchAllLeadsFromSupabase(getSupabase());
+                if (deferEpoch !== workspaceApplyEpochRef.current) return;
+                const filtered = filterWorkspaceSnapshotForViewer(
+                  { ...snapRawForDefer!, leadsList: list, leadsFetchOk: true },
+                  viewer,
+                ).leadsList;
+                setLeads((prev) => applyServerLeadsSnapshot(prev, filtered, true));
+                lastLeadsFullLoadAtRef.current = Date.now();
+                writeServerWorkspaceCache({
+                  leads: filtered,
+                  users: rawUsers.map((u) => normalizeUser({ ...u, authSource: 'database' })),
+                  invoices: invs.map(normalizeInvoice),
+                  expenses: exps,
+                  monthlyTargets: mtForCache.length > 0 ? mtForCache : DEFAULT_TARGETS,
+                });
+              } catch (e) {
+                console.warn('[leads] deferred owner load failed', e);
+                warnSupabaseQuotaOnce(e);
+              }
+            })();
+          }
         }
         lastWorkspaceFullLoadAtRef.current = Date.now();
         return true;
@@ -3824,28 +3856,59 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ) {
       return true;
     }
+    if (options?.force) workspaceLoadForceRef.current = true;
     return loadServerWorkspaceImplRef.current();
   }, []);
 
   /** جلب الليدز فقط — خفيف على Supabase (للمندوبين) ولا يمسح القائمة عند فشل الشبكة */
-  const refreshLeadsOnly = useCallback(async (): Promise<boolean> => {
+  const refreshLeadsOnly = useCallback(async (options?: { force?: boolean }): Promise<boolean> => {
     if (!isServerDataMode()) return true;
     if (!hasServerAuthToken()) return false;
+    if (isSupabaseQuotaCooldown()) return false;
+    const now = Date.now();
+    const isOwnerLike =
+      currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات';
+    if (
+      isSupabaseDirectMode() &&
+      isOwnerLike &&
+      !options?.force &&
+      isServerWorkspaceCacheFresh(LEADS_FULL_RELOAD_MIN_MS)
+    ) {
+      return true;
+    }
+    if (
+      !options?.force &&
+      lastLeadsFullLoadAtRef.current > 0 &&
+      now - lastLeadsFullLoadAtRef.current < LEADS_FULL_RELOAD_MIN_MS
+    ) {
+      return true;
+    }
     try {
+      assertSupabaseFetchAllowed();
       const fresh = isSupabaseDirectMode() ? await fetchLeadsSb() : await fetchLeadsApi();
       setLeads((prev) => applyServerLeadsSnapshot(prev, fresh, true));
+      lastLeadsFullLoadAtRef.current = Date.now();
       return true;
     } catch (e) {
       console.warn('[leads] lightweight refresh failed', e);
       warnSupabaseQuotaOnce(e);
       return false;
     }
-  }, []);
+  }, [currentUser?.role]);
 
   /** تحديث خفيف لمركز الإشعارات — بدون جلب آلاف الليدز */
-  const refreshNotificationsSlice = useCallback(async (): Promise<boolean> => {
+  const refreshNotificationsSlice = useCallback(async (options?: { force?: boolean }): Promise<boolean> => {
     if (!isServerDataMode()) return true;
     if (!hasServerAuthToken()) return false;
+    if (isSupabaseQuotaCooldown()) return false;
+    const now = Date.now();
+    if (
+      !options?.force &&
+      lastNotificationsRefreshAtRef.current > 0 &&
+      now - lastNotificationsRefreshAtRef.current < NOTIFICATIONS_REFRESH_MIN_MS
+    ) {
+      return true;
+    }
     const viewer = currentUser
       ? { id: currentUser.id, role: currentUser.role }
       : undefined;
@@ -3890,6 +3953,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
           );
         });
+        lastNotificationsRefreshAtRef.current = Date.now();
         return true;
       }
       const [exps, quotes, invs, custody] = await Promise.all([
@@ -3902,7 +3966,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setPriceQuotes(quotes);
       setInvoices(invs);
       setCustodyFunds(custody.map(migrateCustodyFund));
-      await refreshLeadsOnly();
+      await refreshLeadsOnly({ force: options?.force });
+      lastNotificationsRefreshAtRef.current = Date.now();
       return true;
     } catch (e) {
       console.warn('[notifications] slice refresh failed', e);
@@ -4084,10 +4149,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (!currentUser?.id) {
       resetInboundLeadToastState();
+      resetLeadWonToastState();
       return;
     }
     notifyNewInboundLeads(leads, currentUser.role);
-  }, [leads, currentUser?.id, currentUser?.role]);
+    notifyLeadWonTransitions(leads, users, currentUser.role);
+  }, [leads, users, currentUser?.id, currentUser?.role]);
 
   /** تحديث فوري لكل جداول النظام عبر Supabase Realtime */
   useEffect(() => {
@@ -4098,14 +4165,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const scheduleConfigTablesRefresh = () => {
       if (configTablesTimer) window.clearTimeout(configTablesTimer);
       configTablesTimer = window.setTimeout(() => {
+        const now = Date.now();
+        if (
+          lastConfigTablesRefreshAtRef.current > 0 &&
+          now - lastConfigTablesRefreshAtRef.current < CONFIG_TABLES_REFRESH_MIN_MS
+        ) {
+          return;
+        }
+        if (isSupabaseQuotaCooldown()) return;
         void (async () => {
           if (!isSupabaseDirectMode()) return;
           try {
             const sb = getSupabase();
             const [targetsRes, closedRes, custodyRes] = await Promise.all([
-              sb.from('monthly_targets').select('*'),
-              sb.from('closed_months').select('*'),
-              sb.from('custody_settings').select('*').limit(1).maybeSingle(),
+              sb.from('monthly_targets').select(
+                'rep_id,leads_target,revenue_target,calls_target,daily_calls_target,weekly_calls_target,commission_percent',
+              ),
+              sb.from('closed_months').select('month_key'),
+              sb.from('custody_settings').select('custody_account_map_json').limit(1).maybeSingle(),
             ]);
             if (!targetsRes.error && Array.isArray(targetsRes.data) && targetsRes.data.length > 0) {
               setMonthlyTargets(
@@ -4132,18 +4209,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }));
               }
             }
+            lastConfigTablesRefreshAtRef.current = Date.now();
           } catch {
             /* ignore */
           }
         })();
-      }, 800);
+      }, 2500);
     };
 
     let channel: ReturnType<typeof subscribeWorkspaceRealtime> | null = null;
     try {
-      channel = subscribeWorkspaceRealtime({
+      channel = subscribeWorkspaceRealtime(
+        {
         onLeadUpsert: (lead) =>
-          setLeads((prev) => upsertLeadInList(prev, trimLeadTimelineForState(lead))),
+          setLeads((prev) => {
+            const trimmed = trimLeadTimelineForState(lead);
+            const existing = prev.find((l) => l.id === lead.id);
+            const merged =
+              existing?.timeline?.length
+                ? { ...trimmed, timeline: existing.timeline }
+                : trimmed;
+            return upsertLeadInList(prev, merged);
+          }),
         onLeadDelete: (id) => setLeads((prev) => removeLeadFromList(prev, id)),
         onUserUpsert: (user) =>
           setUsers((prev) => upsertById(prev, normalizeUser({ ...user, authSource: 'database' }))),
@@ -4203,7 +4290,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
         },
         onConfigTablesChanged: scheduleConfigTablesRefresh,
-      });
+      },
+        { userId: currentUser.id },
+      );
     } catch {
       /* Supabase غير مهيأ */
     }
@@ -10734,6 +10823,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       /* ignore */
     }
     resetInboundLeadToastState();
+    resetLeadWonToastState();
     setCurrentUserState(null);
     addAuditEvent({
       action: 'تسجيل خروج',

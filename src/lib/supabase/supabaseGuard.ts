@@ -49,10 +49,20 @@ export function shouldWarnSupabaseQuota(): boolean {
   return true;
 }
 
+const QUOTA_COOLDOWN_MSG =
+  'Supabase: تم تجاوز حد النقل — تم إيقاف الطلبات مؤقتاً لتجنب حظر الخدمة.';
+
+/** قبل جلب ثقيل (آلاف الصفوف) — يمنع تكرار الطلبات أثناء cooldown */
+export function assertSupabaseFetchAllowed(): void {
+  if (isSupabaseQuotaCooldown()) {
+    throw new Error(QUOTA_COOLDOWN_MSG);
+  }
+}
+
 export function createGuardedFetch(baseFetch: typeof fetch = fetch): typeof fetch {
   return async (input, init) => {
     if (isSupabaseQuotaCooldown()) {
-      throw new Error('Supabase: تم تجاوز حد النقل — تم إيقاف الطلبات مؤقتاً لتجنب حظر الخدمة.');
+      throw new Error(QUOTA_COOLDOWN_MSG);
     }
     const res = await baseFetch(input, init);
     if (isSupabaseQuotaError(res.status)) {

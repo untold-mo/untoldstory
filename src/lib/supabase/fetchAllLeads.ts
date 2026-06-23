@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Lead } from '@/app/context/DataContext';
 import { mapLeadListFromRow } from '@/lib/supabase/postgrestMappers';
-import { isSupabaseQuotaError } from '@/lib/supabase/supabaseGuard';
+import { assertSupabaseFetchAllowed, isSupabaseQuotaError } from '@/lib/supabase/supabaseGuard';
 
 const LEADS_PAGE_SIZE = 1000;
 
@@ -39,6 +39,7 @@ export async function fetchAllLeadsFromSupabase(
   sb: SupabaseClient,
   options?: { assignedToId?: string },
 ): Promise<Lead[]> {
+  assertSupabaseFetchAllowed();
   let countQ = sb.from('leads').select('id', { count: 'exact', head: true });
   if (options?.assignedToId) {
     countQ = countQ.eq('assigned_to_id', options.assignedToId);

@@ -9,6 +9,9 @@ import { isServerDataMode } from '@/config/dataSource';
 
 const CACHE_KEY = 'prod_system_server_workspace_cache_v1';
 
+/** أقصى عمر للكاش قبل إعادة جلب الليدز كاملة — يقلّل egress عند كل دخول/رفريش */
+export const SERVER_WORKSPACE_CACHE_MAX_AGE_MS = 12 * 60 * 1000;
+
 export type ServerWorkspaceCache = {
   savedAt: number;
   leads: Lead[];
@@ -23,6 +26,14 @@ function trimLeadsForCache(leads: Lead[]): Lead[] {
     ...l,
     timeline: Array.isArray(l.timeline) ? l.timeline.slice(0, 5) : [],
   }));
+}
+
+export function isServerWorkspaceCacheFresh(
+  maxAgeMs: number = SERVER_WORKSPACE_CACHE_MAX_AGE_MS,
+): boolean {
+  const cache = readServerWorkspaceCache();
+  if (!cache?.savedAt || !Array.isArray(cache.leads) || cache.leads.length === 0) return false;
+  return Date.now() - cache.savedAt < maxAgeMs;
 }
 
 export function readServerWorkspaceCache(): ServerWorkspaceCache | null {

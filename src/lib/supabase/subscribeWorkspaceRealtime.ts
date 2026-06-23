@@ -71,9 +71,14 @@ function bindRowEvents(
     });
 }
 
-export function subscribeWorkspaceRealtime(handlers: WorkspaceRealtimeHandlers): RealtimeChannel {
+export function subscribeWorkspaceRealtime(
+  handlers: WorkspaceRealtimeHandlers,
+  options?: { userId?: string },
+): RealtimeChannel {
   const sb = getSupabase();
-  const channel = sb.channel('workspace-live-sync');
+  const uid = String(options?.userId || '').trim();
+  const channelName = uid ? `workspace-live-${uid.slice(0, 12)}` : 'workspace-live-sync';
+  const channel = sb.channel(channelName);
 
   bindRowEvents(channel, 'leads', {
     onUpsert: (row) => handlers.onLeadUpsert(mapLeadListFromRow(row)),
