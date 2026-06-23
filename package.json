@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "vite build",
+    "build": "node --max-old-space-size=6144 ./node_modules/vite/bin/vite.js build",
     "pack:hostinger": "node scripts/pack-hostinger.mjs",
     "deploy:hostinger": "node scripts/deploy-hostinger-ftp.mjs",
     "build:vercel": "node scripts/vercel-build.mjs",

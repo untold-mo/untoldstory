@@ -2,8 +2,10 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "installCommand": "npm ci",
-  "env": {
-    "NODE_OPTIONS": "--max-old-space-size=4096"
+  "build": {
+    "env": {
+      "NODE_OPTIONS": "--max-old-space-size=6144"
+    }
   },
   "rewrites": [
     {

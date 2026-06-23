@@ -31,6 +31,20 @@ export default defineConfig(({ mode }) => {
       sourcemap: false,
       cssMinify: false,
       chunkSizeWarningLimit: 3000,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return;
+            if (id.includes('@mui')) return 'vendor-mui';
+            if (id.includes('recharts')) return 'vendor-recharts';
+            if (id.includes('@radix-ui')) return 'vendor-radix';
+            if (id.includes('@supabase')) return 'vendor-supabase';
+            if (id.includes('xlsx')) return 'vendor-xlsx';
+            if (id.includes('/react-dom/') || id.includes('/react/')) return 'vendor-react';
+            return 'vendor';
+          },
+        },
+      },
     },
 
     server: {
