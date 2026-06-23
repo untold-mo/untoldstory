@@ -1,9 +1,9 @@
 {
-  "buildCommand": "rm -rf public/globaluntoldstory && npm run build",
+  "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "installCommand": "npm ci",
   "env": {
-    "VERCEL_FORCE_NO_BUILD_CACHE": "1"
+    "NODE_OPTIONS": "--max-old-space-size=4096"
   },
   "rewrites": [
     {

@@ -9,3 +9,6 @@ supabase/
 
 # نسخة Hostinger المحلية قبل البناء
 hostinger-dist/
+
+# نسخة محلية من موقع الشركة — لا تُرفع لـ untoldstory.click على Vercel
+public/globaluntoldstory/
