@@ -51,6 +51,13 @@ jobs:
           fi
           if [ "$missing" -ne 0 ]; then exit 1; fi
 
+      - name: Verify Supabase production project
+        env:
+          VITE_USE_SUPABASE: ${{ secrets.VITE_USE_SUPABASE }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: node scripts/verify-supabase-production.mjs
+
       - name: Build
         env:
           VITE_USE_SUPABASE: ${{ secrets.VITE_USE_SUPABASE }}

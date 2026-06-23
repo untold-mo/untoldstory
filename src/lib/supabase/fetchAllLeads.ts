@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Lead } from '@/app/context/DataContext';
 import { mapLeadListFromRow } from '@/lib/supabase/postgrestMappers';
+import { isSupabaseQuotaError } from '@/lib/supabase/supabaseGuard';
 
 const LEADS_PAGE_SIZE = 1000;
 
@@ -25,7 +26,10 @@ async function fetchLeadPage(
     q = q.eq('assigned_to_id', options.assignedToId);
   }
   const { data, error } = await q;
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (isSupabaseQuotaError(0, error.message)) throw error;
+    throw new Error(error.message);
+  }
   if (!Array.isArray(data) || data.length === 0) return [];
   return data.map((r) => mapLeadListFromRow(r as Record<string, unknown>));
 }
@@ -52,13 +56,21 @@ export async function fetchAllLeadsFromSupabase(
     try {
       return await fetchLeadPage(sb, from, options);
     } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (isSupabaseQuotaError(0, msg)) throw e;
       console.warn(`[leads] page ${pageIdx} failed, retrying…`, e);
       await new Promise((r) => setTimeout(r, 600));
       return fetchLeadPage(sb, from, options);
     }
   };
 
-  const pages = await Promise.all(pageIndexes.map((i) => fetchPageSafe(i)));
+  const pages: Lead[][] = [];
+  const PAGE_CONCURRENCY = 2;
+  for (let i = 0; i < pageIndexes.length; i += PAGE_CONCURRENCY) {
+    const batch = pageIndexes.slice(i, i + PAGE_CONCURRENCY);
+    const batchResults = await Promise.all(batch.map((idx) => fetchPageSafe(idx)));
+    pages.push(...batchResults);
+  }
   const merged = pages.flat();
   merged.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   return merged;

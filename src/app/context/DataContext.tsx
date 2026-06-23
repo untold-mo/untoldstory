@@ -11,6 +11,7 @@ import { fetchAllLeadsFromSupabase, fetchLeadsNotificationSubset, fetchUnassigne
 import { supabaseCreateLead, supabaseDeleteLead, supabasePatchLead } from '@/lib/supabase/leadsRepo';
 import type { Session } from '@supabase/supabase-js';
 import { getSupabase } from '@/lib/supabase/client';
+import { isSupabaseQuotaError, shouldWarnSupabaseQuota } from '@/lib/supabase/supabaseGuard';
 import { fetchAuthUserProfile } from '@/lib/supabase/fetchAuthUserProfile';
 import { mapUserFromRow, mapMonthlyTargetFromRow, mapClosedMonthFromRow, mapCustodySettingsMap } from '@/lib/supabase/postgrestMappers';
 import {
@@ -111,6 +112,15 @@ import {
   readServerWorkspaceCache,
   writeServerWorkspaceCache,
 } from '@/lib/supabase/serverWorkspaceCache';
+
+function warnSupabaseQuotaOnce(err: unknown): void {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (isSupabaseQuotaError(0, msg) && shouldWarnSupabaseQuota()) {
+    toast.error(
+      'تجاوز حد نقل Supabase — تم إيقاف التحديثات المتكررة مؤقتاً. راجع لوحة Supabase أو الباقة.',
+    );
+  }
+}
 
 /** حذف قيد يومية أثناء التراجع — لا يرمي للأعلى */
 async function tryDeleteManualJournal(journalId: string): Promise<void> {
@@ -3293,7 +3303,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const workspaceLoadQueuedRef = useRef(false);
   const lastWorkspaceFullLoadAtRef = useRef(0);
   /** أقل فترة بين تحميلات Workspace كاملة (تقليل egress على Supabase). */
-  const WORKSPACE_FULL_RELOAD_MIN_MS = 3 * 60 * 1000;
+  const WORKSPACE_FULL_RELOAD_MIN_MS = 5 * 60 * 1000;
   /** جلب الحجوزات مع أول تشغيل — لا ينتظر currentUser لتفادي بقاء القائمة [] بعد الرفريش. */
   const bookingBootstrapEpochRef = useRef(0);
 
@@ -3784,12 +3794,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               });
             } catch (e) {
               console.warn('[leads] deferred owner load failed', e);
+              warnSupabaseQuotaOnce(e);
             }
           })();
         }
         lastWorkspaceFullLoadAtRef.current = Date.now();
         return true;
-      } catch {
+      } catch (e) {
+        warnSupabaseQuotaOnce(e);
         return false;
       } finally {
         workspaceLoadInFlightRef.current = false;
@@ -3825,6 +3837,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return true;
     } catch (e) {
       console.warn('[leads] lightweight refresh failed', e);
+      warnSupabaseQuotaOnce(e);
       return false;
     }
   }, []);
