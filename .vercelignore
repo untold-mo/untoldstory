@@ -4,9 +4,6 @@ server-api/
 # باكند محلي / OAuth — لا يُنشر على Vercel
 backend/
 
-# سكربتات تشخيص ورفع FTP
-scripts/
-
 # Edge functions تُنشر يدوياً على Supabase
 supabase/
 

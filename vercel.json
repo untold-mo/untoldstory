@@ -1,6 +1,6 @@
 {
   "framework": null,
-  "buildCommand": "node scripts/vercel-build.mjs",
+  "buildCommand": "npm run pack:hostinger",
   "outputDirectory": "hostinger-dist",
   "installCommand": "npm ci",
   "env": {
