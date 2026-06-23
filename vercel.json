@@ -2,7 +2,7 @@
   "framework": null,
   "buildCommand": "npm run pack:hostinger",
   "outputDirectory": "hostinger-dist",
-  "installCommand": "npm ci",
+  "installCommand": "npm ci --include=dev",
   "env": {
     "NODE_OPTIONS": "--max-old-space-size=4096"
   },
