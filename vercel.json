@@ -1,8 +1,8 @@
 {
-  "framework": null,
-  "buildCommand": "npm run pack:hostinger",
-  "outputDirectory": "hostinger-dist",
-  "installCommand": "npm ci --include=dev",
+  "framework": "vite",
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
   "env": {
     "NODE_OPTIONS": "--max-old-space-size=4096"
   },
