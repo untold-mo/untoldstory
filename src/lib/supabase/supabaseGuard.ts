@@ -1,5 +1,5 @@
 /** مشاريع Supabase القديمة/المُوقفة — لا تُستخدم في الإنتاج */
-export const BLOCKED_SUPABASE_PROJECT_REFS = new Set(['hfbnysvmrqglccxswqfm']);
+export const BLOCKED_SUPABASE_PROJECT_REFS = new Set(['hfbnysvmrqglccxswqfm', 'axkoidcmiqutdtcadfca']);
 
 let quotaCooldownUntil = 0;
 let quotaWarned = false;
@@ -36,7 +36,7 @@ export function isSupabaseQuotaError(status: number, message?: string): boolean 
 
 /** بعد خطأ حصة — أوقف طلبات متكررة لـ 30 دقيقة */
 export function markSupabaseQuotaExceeded(): void {
-  quotaCooldownUntil = Date.now() + 30 * 60 * 1000;
+  quotaCooldownUntil = Date.now() + 60 * 60 * 1000;
 }
 
 export function isSupabaseQuotaCooldown(): boolean {

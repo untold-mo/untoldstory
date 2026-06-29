@@ -10,7 +10,7 @@ import { isServerDataMode } from '@/config/dataSource';
 const CACHE_KEY = 'prod_system_server_workspace_cache_v1';
 
 /** أقصى عمر للكاش قبل إعادة جلب الليدز كاملة — يقلّل egress عند كل دخول/رفريش */
-export const SERVER_WORKSPACE_CACHE_MAX_AGE_MS = 12 * 60 * 1000;
+export const SERVER_WORKSPACE_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
 
 export type ServerWorkspaceCache = {
   savedAt: number;

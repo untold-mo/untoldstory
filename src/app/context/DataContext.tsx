@@ -3309,11 +3309,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const lastNotificationsRefreshAtRef = useRef(0);
   const lastConfigTablesRefreshAtRef = useRef(0);
   /** أقل فترة بين تحميلات Workspace كاملة (تقليل egress على Supabase). */
-  const WORKSPACE_FULL_RELOAD_MIN_MS = 5 * 60 * 1000;
+  const WORKSPACE_FULL_RELOAD_MIN_MS = 15 * 60 * 1000;
   /** أقل فترة بين جلب كل الليدز (آلاف الصفوف) — Realtime يغطي التحديثات بينهما. */
-  const LEADS_FULL_RELOAD_MIN_MS = 10 * 60 * 1000;
-  const NOTIFICATIONS_REFRESH_MIN_MS = 2 * 60 * 1000;
-  const CONFIG_TABLES_REFRESH_MIN_MS = 60 * 1000;
+  const LEADS_FULL_RELOAD_MIN_MS = 30 * 60 * 1000;
+  const NOTIFICATIONS_REFRESH_MIN_MS = 5 * 60 * 1000;
+  const CONFIG_TABLES_REFRESH_MIN_MS = 5 * 60 * 1000;
   /** جلب الحجوزات مع أول تشغيل — لا ينتظر currentUser لتفادي بقاء القائمة [] بعد الرفريش. */
   const bookingBootstrapEpochRef = useRef(0);
 

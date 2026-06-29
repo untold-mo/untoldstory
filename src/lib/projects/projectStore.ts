@@ -12,6 +12,24 @@ function useSb(): boolean {
   try { return isSupabaseDirectMode(); } catch { return false; }
 }
 
+// ============== In-memory cache to reduce Supabase requests ==============
+let cachedData: ProjectsData | null = null;
+let cacheTimestamp = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000;
+
+function getCachedOrNull(): ProjectsData | null {
+  if (cachedData && Date.now() - cacheTimestamp < CACHE_TTL_MS) return cachedData;
+  return null;
+}
+function setCache(data: ProjectsData) {
+  cachedData = data;
+  cacheTimestamp = Date.now();
+}
+function invalidateCache() {
+  cachedData = null;
+  cacheTimestamp = 0;
+}
+
 // ============== localStorage fallback ==============
 function loadLocal(): ProjectsData {
   try {
@@ -66,6 +84,8 @@ function mapCustody(r: Record<string, unknown>): ProjectCustody {
 
 export async function getProjectsDataAsync(): Promise<ProjectsData> {
   if (!useSb()) return loadLocal();
+  const cached = getCachedOrNull();
+  if (cached) return cached;
   const s = sb();
   const [pRes, rRes, eRes, cRes] = await Promise.all([
     s.from('projects').select('*').order('created_at', { ascending: false }),
@@ -81,7 +101,10 @@ export async function getProjectsDataAsync(): Promise<ProjectsData> {
     c.settlementItems = allExpenses.filter((e) => e.custodyId === c.id);
     return c;
   });
-  return { projects, revenues, expenses: allExpenses, custodies };
+  const result = { projects, revenues, expenses: allExpenses, custodies };
+  setCache(result);
+  saveLocal(result);
+  return result;
 }
 
 export function getProjectsData(): ProjectsData {
@@ -89,6 +112,7 @@ export function getProjectsData(): ProjectsData {
 }
 
 export async function addProject(p: Omit<Project, 'id' | 'createdAt'>): Promise<Project> {
+  invalidateCache();
   const id = newId('prj');
   const now = new Date().toISOString();
   if (useSb()) {
@@ -112,6 +136,7 @@ export async function addProject(p: Omit<Project, 'id' | 'createdAt'>): Promise<
 }
 
 export async function updateProject(id: string, patch: Partial<Project>): Promise<Project> {
+  invalidateCache();
   if (useSb()) {
     const dbPatch: Record<string, unknown> = {};
     if (patch.name != null) dbPatch.name = patch.name;
@@ -137,6 +162,7 @@ export async function updateProject(id: string, patch: Partial<Project>): Promis
 }
 
 export async function addRevenue(r: Omit<ProjectRevenue, 'id' | 'createdAt'>): Promise<ProjectRevenue> {
+  invalidateCache();
   const id = newId('rev');
   if (useSb()) {
     const { data, error } = await sb().from('project_revenues').insert({
@@ -158,6 +184,7 @@ export async function addRevenue(r: Omit<ProjectRevenue, 'id' | 'createdAt'>): P
 }
 
 export async function updateRevenue(id: string, patch: Partial<ProjectRevenue>): Promise<ProjectRevenue> {
+  invalidateCache();
   if (useSb()) {
     const dbPatch: Record<string, unknown> = {};
     if (patch.status != null) dbPatch.status = patch.status;
@@ -181,6 +208,7 @@ export async function updateRevenue(id: string, patch: Partial<ProjectRevenue>):
 }
 
 export async function addExpense(e: Omit<ProjectExpense, 'id' | 'createdAt'>): Promise<ProjectExpense> {
+  invalidateCache();
   const id = newId('exp');
   if (useSb()) {
     const { data, error } = await sb().from('project_expenses').insert({
@@ -203,6 +231,7 @@ export async function addExpense(e: Omit<ProjectExpense, 'id' | 'createdAt'>): P
 }
 
 export async function addCustody(c: Omit<ProjectCustody, 'id' | 'createdAt' | 'settlementItems'>): Promise<ProjectCustody> {
+  invalidateCache();
   const id = newId('cst');
   if (useSb()) {
     const { data, error } = await sb().from('project_custodies').insert({
@@ -228,6 +257,7 @@ export async function settleCustody(
   custodyId: string,
   items: Omit<ProjectExpense, 'id' | 'createdAt' | 'source' | 'custodyId'>[],
 ): Promise<{ custody: ProjectCustody; expenses: ProjectExpense[] }> {
+  invalidateCache();
   const newExpenses: ProjectExpense[] = [];
 
   for (const item of items) {
@@ -256,6 +286,7 @@ export async function settleCustody(
 }
 
 export async function updateCustodyStatus(custodyId: string, status: ProjectCustody['status']) {
+  invalidateCache();
   if (useSb()) {
     const { data, error } = await sb().from('project_custodies').update({ status }).eq('id', custodyId).select('*').single();
     if (error) throw new Error(error.message);
