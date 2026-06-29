@@ -214,14 +214,11 @@ router.get('/me', attachAuthUser(), async (req, res) => {
   });
 });
 
-/** PATCH /auth/me/password — المالك فقط؛ يتطلب كلمة المرور الحالية */
+/** PATCH /auth/me/password — أي مستخدم مسجّل دخول؛ يتطلب كلمة المرور الحالية */
 router.patch('/me/password', attachAuthUser(), async (req, res) => {
   try {
     if (!req.user) {
       return res.status(401).json({ error: 'غير مصرح' });
-    }
-    if (normalizeUserRole(req.user.role) !== 'مالك') {
-      return res.status(403).json({ error: 'يُقتصر تغيير كلمة المرور من هنا على حساب المالك' });
     }
     const currentPassword = String(req.body?.currentPassword || '');
     const newPassword = String(req.body?.newPassword || '');

@@ -178,10 +178,11 @@ router.patch('/:id', requireAuth(), async (req, res) => {
     }
 
     if (Object.prototype.hasOwnProperty.call(patch, 'newPassword')) {
-      if (!canOwner) return res.status(403).json({ error: 'غير مصرح' });
+      const canManagerResetRep = actor.role === 'مدير مبيعات' && existingRoleN === 'مندوب';
+      if (!canOwner && !canManagerResetRep) return res.status(403).json({ error: 'غير مصرح' });
       if (id === actor.id) {
         return res.status(400).json({
-          error: 'استخدم مسار «كلمة مرور حساب المالك» في الإعدادات لتغيير باسوردك الحالي',
+          error: 'استخدم مسار «تغيير كلمة المرور» في الإعدادات لتغيير باسوردك الحالي',
         });
       }
       if (existingRoleN === 'مالك') {

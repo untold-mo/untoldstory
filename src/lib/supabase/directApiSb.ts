@@ -256,8 +256,22 @@ export async function createUserSb(payload: {
   const { data: existing } = await sb.from('users').select('id').eq('email', email).maybeSingle();
   if (existing) throw new Error('البريد مستخدم مسبقاً في جدول الموظفين');
 
+  let authSignUpFailed = false;
+  let authSignUpNote = '';
   if (providedEmail && !isInternalEmail && password.length >= 8) {
-    await authSignUpViaRest(email, password);
+    try {
+      await authSignUpViaRest(email, password);
+    } catch (authErr: unknown) {
+      const errMsg = authErr instanceof Error ? authErr.message : String(authErr);
+      const isRateLimit = /rate limit|too many requests|over_email_send_rate/i.test(errMsg);
+      if (isRateLimit) {
+        authSignUpFailed = true;
+        authSignUpNote =
+          'تم إنشاء الموظف في النظام بنجاح، لكن تعذّر إنشاء حساب الدخول بسبب حد إرسال البريد في Supabase. يمكن إنشاء حساب الدخول لاحقاً من لوحة Supabase → Authentication → Users أو بتعطيل تأكيد البريد.';
+      } else {
+        throw authErr;
+      }
+    }
   }
 
   const skills = Array.isArray(payload.skills) ? payload.skills : [];
@@ -297,7 +311,13 @@ export async function createUserSb(payload: {
   }
   if (!data) throw new Error('فشل إنشاء الموظف');
 
-  return { user: mapUserFromRow(data as Record<string, unknown>) };
+  const result: { user: User; tempPassword?: string; authNote?: string } = {
+    user: mapUserFromRow(data as Record<string, unknown>),
+  };
+  if (authSignUpFailed && authSignUpNote) {
+    result.authNote = authSignUpNote;
+  }
+  return result;
 }
 
 export async function patchUserSb(
@@ -395,9 +415,10 @@ export async function patchUserSb(
     data.stats_json = patch.stats;
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'newPassword')) {
-    if (!canOwner) throw new Error('غير مصرح');
+    const canManagerResetRep = actor.role === 'مدير مبيعات' && existing.role === 'مندوب';
+    if (!canOwner && !canManagerResetRep) throw new Error('غير مصرح');
     if (isSelf) {
-      throw new Error('استخدم قسم «كلمة مرور حساب المالك» في الإعدادات لتغيير باسوردك');
+      throw new Error('استخدم قسم «تغيير كلمة المرور» في الإعدادات لتغيير باسوردك');
     }
     if (existing.role === 'مالك') {
       throw new Error('لا يمكن تغيير كلمة مرور حساب مالك آخر من هنا');

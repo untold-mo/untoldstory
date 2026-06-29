@@ -9,6 +9,10 @@ import {
   Wallet,
   Settings,
   UserCircle2,
+  TrendingDown,
+  TrendingUp,
+  Calculator,
+  Landmark,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useData, type User } from '../context/DataContext';
@@ -22,6 +26,11 @@ import InvoicesPage from './InvoicesPage';
 import ExpensesPage from './ExpensesPage';
 import SettingsPage from './SettingsPage';
 import LeadsPage from './LeadsPage';
+import ProjectsListPage from './ProjectsListPage';
+import GeneralExpensesPage from './GeneralExpensesPage';
+import GeneralRevenuesPage from './GeneralRevenuesPage';
+import FinancialPositionPage from './FinancialPositionPage';
+import EstimatedAssetsPage from './EstimatedAssetsPage';
 
 type LinkedViewId =
   | 'team'
@@ -31,11 +40,21 @@ type LinkedViewId =
   | 'calls'
   | 'invoices'
   | 'expenses'
+  | 'projects'
+  | 'proj_expenses'
+  | 'proj_revenues'
+  | 'financial_position'
+  | 'est_assets'
   | 'settings'
   | 'leads';
 
 const ALL_TABS: { id: LinkedViewId; labelKey: string; icon: typeof Users; roles: User['role'][] }[] = [
   { id: 'team', labelKey: 'pageViewsHub.team', icon: Users, roles: ['مالك', 'مدير مبيعات'] },
+  { id: 'projects', labelKey: 'الشغلانات', icon: Briefcase, roles: ['مالك', 'محاسب', 'مدير إنتاج'] },
+  { id: 'proj_revenues', labelKey: 'الإيرادات', icon: TrendingUp, roles: ['مالك', 'محاسب'] },
+  { id: 'proj_expenses', labelKey: 'المصروفات العامة', icon: TrendingDown, roles: ['مالك', 'محاسب', 'مدير إنتاج'] },
+  { id: 'financial_position', labelKey: 'المركز المالي', icon: Calculator, roles: ['مالك', 'محاسب'] },
+  { id: 'est_assets', labelKey: 'الأصول التقديرية', icon: Landmark, roles: ['مالك', 'محاسب'] },
   { id: 'production', labelKey: 'pageViewsHub.production', icon: Briefcase, roles: ['مالك', 'مدير إنتاج'] },
   { id: 'equipment', labelKey: 'pageViewsHub.equipment', icon: Wrench, roles: ['مالك', 'مدير إنتاج'] },
   { id: 'analytics', labelKey: 'pageViewsHub.analytics', icon: BarChart3, roles: ['مالك', 'مدير مبيعات'] },
@@ -94,6 +113,11 @@ export default function PageViewsHub() {
       </div>
       <div className="min-h-[60vh] rounded-2xl border border-white/10 bg-[#080B13] overflow-auto">
         {safeView === 'team' && <TeamPage />}
+        {safeView === 'projects' && <ProjectsListPage />}
+        {safeView === 'proj_revenues' && <GeneralRevenuesPage />}
+        {safeView === 'proj_expenses' && <GeneralExpensesPage />}
+        {safeView === 'financial_position' && <FinancialPositionPage />}
+        {safeView === 'est_assets' && <EstimatedAssetsPage />}
         {safeView === 'production' && <ProductionPage />}
         {safeView === 'equipment' && <EquipmentPage />}
         {safeView === 'analytics' && <AnalyticsPage />}

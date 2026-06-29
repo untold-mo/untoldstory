@@ -124,7 +124,7 @@ export default function LeadsPage({ isSalesRep = false }: { isSalesRep?: boolean
     toast.success(t('leadsLegacy.assignSuccess'));
   };
 
-  const salesReps = users.filter((u) => u.role === 'مندوب');
+  const salesReps = users.filter((u) => u.role === 'مندوب' || u.role === 'مدير مبيعات');
 
   return (
     <div className="space-y-8 pb-12" dir={dir}>

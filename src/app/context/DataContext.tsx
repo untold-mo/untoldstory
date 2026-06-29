@@ -6043,22 +6043,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const assignLead = (leadId: string, userId?: string) => {
     if (!(currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات')) return;
     const user = users.find(u => u.id === userId);
-    if (userId && (!user || user.role !== 'مندوب')) return;
+    if (userId && (!user || (user.role !== 'مندوب' && user.role !== 'مدير مبيعات'))) return;
+    const assigneeName = user?.name || '';
+    const assigneeLabel = user?.role === 'مدير مبيعات' ? `تعيين المدير: ${assigneeName}` : `تعيين المندوب: ${assigneeName}`;
     if (isServerDataMode()) {
       void (async () => {
         try {
           const updated = await serverPatchLead(leadId, {
             assignedTo: userId || null,
             appendActivity: {
-              action: userId ? `تعيين المندوب: ${user?.name || ''}` : 'إلغاء تعيين المندوب',
+              action: userId ? assigneeLabel : 'إلغاء تعيين المندوب',
             },
           });
           setLeads((prev) => prev.map((l) => (l.id === leadId ? updated : l)));
           addAuditEvent({
-            action: userId ? 'تعيين ليد لمندوب' : 'إلغاء تعيين ليد',
+            action: userId ? 'تعيين ليد' : 'إلغاء تعيين ليد',
             entityType: 'lead',
             entityId: leadId,
-            details: userId ? `المندوب: ${user?.name || userId}` : 'بدون مندوب',
+            details: userId ? `${assigneeLabel}` : 'بدون مندوب',
           });
         } catch {
           /* ignore */
@@ -6091,7 +6093,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const assignLeadsBulk = async (leadIds: string[], userId?: string): Promise<number> => {
     if (!(currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات')) return 0;
     const user = users.find((u) => u.id === userId);
-    if (userId && (!user || user.role !== 'مندوب')) return 0;
+    if (userId && (!user || (user.role !== 'مندوب' && user.role !== 'مدير مبيعات'))) return 0;
     const uniqueIds = [...new Set(leadIds.map((id) => String(id).trim()).filter(Boolean))];
     if (uniqueIds.length === 0) return 0;
 
@@ -6285,7 +6287,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const emailRaw = typeof employee.email === 'string' ? employee.email.trim().toLowerCase() : '';
       const pwdRaw = typeof employee.password === 'string' ? employee.password.trim() : '';
       try {
-        const { user: created, tempPassword } = await createUserApi({
+        const { user: created, tempPassword, authNote } = await createUserApi({
           name: cleanName,
           role: employee.role,
           avatar: employee.avatar,
@@ -6300,7 +6302,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isSupabaseDirectMode() && loginEmail.endsWith('@staff.internal')
             ? '\n(بريد داخلي — لتمكين الدخول أضف بريداً حقيقياً وكلمة مرور 8 أحرف من تعديل الموظف أو أنشئ حساباً جديداً.)'
             : '';
-        if (tempPassword) {
+        if (authNote) {
+          toast.warning(`تم إنشاء الموظف — الدور: ${created.role}`, {
+            description: authNote,
+            duration: 20_000,
+          });
+        } else if (tempPassword) {
           toast.success(`تم إنشاء حساب الدخول (${created.role})`, {
             description: `البريد: ${loginEmail}\nكلمة مرور مؤقتة (انسَخها وحفّظها للموظف): ${tempPassword}`,
             duration: 25_000,
@@ -6615,12 +6622,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const ownerSetEmployeePassword = async (userId: string, newPassword: string): Promise<boolean> => {
-    if (currentUser?.role !== 'مالك') {
-      toast.error('تعيين باسورد الموظف متاح للمالك فقط');
+    const canReset =
+      currentUser?.role === 'مالك' ||
+      (currentUser?.role === 'مدير مبيعات' &&
+        users.find((u) => u.id === userId)?.role === 'مندوب');
+    if (!canReset) {
+      toast.error('تعيين باسورد الموظف متاح للمالك أو مدير المبيعات (للمندوبين فقط)');
       return false;
     }
-    if (currentUser.id === userId) {
-      toast.info('استخدم قسم «كلمة مرور حساب المالك» أعلاه لتغيير باسوردك');
+    if (currentUser!.id === userId) {
+      toast.info('استخدم قسم «تغيير كلمة المرور» في الإعدادات لتغيير باسوردك');
       return false;
     }
     const target = users.find((u) => u.id === userId);
@@ -6644,7 +6655,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await patchUserApi(userId, { newPassword: pwd });
       addAuditEvent({
-        action: 'تعيين كلمة مرور موظف (مالك)',
+        action: `تعيين كلمة مرور موظف (${currentUser!.role})`,
         entityType: 'user',
         entityId: userId,
         details: target.name,

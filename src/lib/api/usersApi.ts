@@ -30,7 +30,7 @@ export async function createUserApi(payload: {
   avatar?: string;
   baseSalary?: number;
   skills?: string[];
-}): Promise<{ user: import('@/app/context/DataContext').User; tempPassword?: string }> {
+}): Promise<{ user: import('@/app/context/DataContext').User; tempPassword?: string; authNote?: string }> {
   if (isSupabaseDirectMode()) return createUserSb(payload);
   const r = await fetch(`${getApiBaseUrl()}/api/users`, {
     method: 'POST',

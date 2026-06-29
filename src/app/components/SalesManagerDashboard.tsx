@@ -1,18 +1,20 @@
-import { 
-  Users, 
-  Target, 
-  Timer, 
-  AlertCircle, 
-  PhoneCall, 
-  CheckCircle2, 
+import {
+  Users,
+  Target,
+  Timer,
+  AlertCircle,
+  PhoneCall,
+  CheckCircle2,
   XCircle,
   Clock,
   ChevronLeft,
   Filter,
   MoreVertical,
   ArrowRight,
-  UserPlus
+  UserPlus,
+  MessageSquare,
 } from "lucide-react";
+import { useMemo } from "react";
 import { motion as Motion } from "motion/react";
 import { useData } from "../context/DataContext";
 import { useNavigate } from "react-router";
@@ -20,6 +22,29 @@ import { useNavigate } from "react-router";
 export default function SalesManagerDashboard() {
   const { leads, users } = useData();
   const navigate = useNavigate();
+
+  const teamUpdates = useMemo(() => {
+    const repIds = new Set(users.filter((u) => u.role === 'مندوب').map((u) => u.id));
+    const entries: { leadId: string; leadName: string; company: string; repName: string; action: string; note?: string; createdAt: string }[] = [];
+    for (const lead of leads) {
+      if (!lead.assignedTo || !repIds.has(lead.assignedTo)) continue;
+      const rep = users.find((u) => u.id === lead.assignedTo);
+      if (!rep) continue;
+      for (const ev of (lead.timeline || [])) {
+        entries.push({
+          leadId: lead.id,
+          leadName: lead.name,
+          company: lead.company,
+          repName: rep.name,
+          action: ev.action,
+          note: ev.note,
+          createdAt: ev.createdAt,
+        });
+      }
+    }
+    entries.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return entries.slice(0, 15);
+  }, [leads, users]);
 
   const unassignedLeads = leads.filter(l => !l.assignedTo);
   
@@ -107,6 +132,50 @@ export default function SalesManagerDashboard() {
             </div>
           </Motion.div>
         ))}
+      </div>
+
+      {/* Team Timeline Updates */}
+      <div className="bg-[#18181B] border border-zinc-800 rounded-2xl shadow-xl overflow-hidden">
+        <div className="p-6 border-b border-zinc-800 flex items-center justify-between">
+          <h3 className="text-lg font-bold text-white flex items-center gap-2">
+            <MessageSquare className="h-5 w-5 text-[#10B981]" /> آخر تحديثات الفريق
+          </h3>
+          <span className="bg-zinc-800 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{teamUpdates.length}</span>
+        </div>
+        <div className="max-h-[320px] overflow-y-auto divide-y divide-zinc-800">
+          {teamUpdates.length > 0 ? teamUpdates.map((ev, i) => {
+            const timeAgo = (() => {
+              const diff = Date.now() - new Date(ev.createdAt).getTime();
+              const mins = Math.floor(diff / 60000);
+              if (mins < 1) return 'الآن';
+              if (mins < 60) return `منذ ${mins} د`;
+              const hrs = Math.floor(mins / 60);
+              if (hrs < 24) return `منذ ${hrs} س`;
+              return `منذ ${Math.floor(hrs / 24)} يوم`;
+            })();
+            return (
+              <div key={`${ev.leadId}-${i}`} className="px-6 py-3 hover:bg-zinc-800/30 transition-colors">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <span className="h-6 w-6 rounded-full bg-[#6366F1]/20 text-[#6366F1] flex items-center justify-center text-[10px] font-bold shrink-0">
+                      {ev.repName[0]}
+                    </span>
+                    <span className="text-xs font-bold text-white">{ev.repName}</span>
+                    <span className="text-[10px] text-zinc-600">•</span>
+                    <span className="text-[10px] text-zinc-500">{ev.company}</span>
+                  </div>
+                  <span className="text-[10px] text-zinc-600 shrink-0">{timeAgo}</span>
+                </div>
+                <p className="text-xs text-zinc-400 mr-8">{ev.action}</p>
+                {ev.note && <p className="text-[11px] text-zinc-500 mr-8 mt-0.5 line-clamp-1">{ev.note}</p>}
+              </div>
+            );
+          }) : (
+            <div className="p-8 text-center">
+              <p className="text-sm text-zinc-500">لا توجد تحديثات حتى الآن</p>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

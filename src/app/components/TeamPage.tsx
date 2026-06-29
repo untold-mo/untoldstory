@@ -7,10 +7,14 @@ import {
   Shield,
   Activity,
   Search,
+  KeyRound,
+  X,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { useData, User } from '../context/DataContext';
+import EmployeeProfilePage from './EmployeeProfilePage';
 
 function roleBadgeClass(role: User['role']) {
   if (role === 'مالك') return 'bg-purple-500/10 text-purple-500 border-purple-500/20';
@@ -27,8 +31,30 @@ function initials(name: string) {
 }
 
 export default function TeamPage() {
-  const { users, currentUser } = useData();
+  const { users, currentUser, ownerSetEmployeePassword } = useData();
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
+  const [pwdModalUser, setPwdModalUser] = useState<User | null>(null);
+  const [newPwd, setNewPwd] = useState('');
+  const [pwdSaving, setPwdSaving] = useState(false);
+
+  const canResetPassword = (target: User) => {
+    if (!currentUser) return false;
+    if (currentUser.role === 'مالك' && target.role !== 'مالك' && target.id !== currentUser.id) return true;
+    if (currentUser.role === 'مدير مبيعات' && target.role === 'مندوب') return true;
+    return false;
+  };
+
+  const handleResetPassword = async () => {
+    if (!pwdModalUser) return;
+    setPwdSaving(true);
+    const ok = await ownerSetEmployeePassword(pwdModalUser.id, newPwd);
+    setPwdSaving(false);
+    if (ok) {
+      setPwdModalUser(null);
+      setNewPwd('');
+    }
+  };
 
   const filtered = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -53,6 +79,10 @@ export default function TeamPage() {
       { label: 'حسابات وإنتاج', count: acct },
     ];
   }, [users]);
+
+  if (selectedEmployeeId) {
+    return <EmployeeProfilePage employeeId={selectedEmployeeId} onClose={() => setSelectedEmployeeId(null)} />;
+  }
 
   return (
     <div className="space-y-8 pb-12">
@@ -144,7 +174,13 @@ export default function TeamPage() {
                           )}
                         </div>
                         <div>
-                          <p className="text-sm font-bold text-white">{member.name}</p>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedEmployeeId(member.id)}
+                            className="text-sm font-bold text-white hover:text-[#6366F1] transition-colors text-right"
+                          >
+                            {member.name}
+                          </button>
                           <p className="text-xs text-zinc-500">{member.email || '—'}</p>
                         </div>
                       </div>
@@ -171,9 +207,21 @@ export default function TeamPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-left">
-                      <button type="button" className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-all">
-                        <MoreVertical className="h-4 w-4" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        {canResetPassword(member) && (
+                          <button
+                            type="button"
+                            title="تغيير كلمة المرور"
+                            onClick={() => { setPwdModalUser(member); setNewPwd(''); }}
+                            className="p-2 text-amber-400/70 hover:text-amber-300 hover:bg-amber-500/10 rounded-lg transition-all"
+                          >
+                            <KeyRound className="h-4 w-4" />
+                          </button>
+                        )}
+                        <button type="button" className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-all">
+                          <MoreVertical className="h-4 w-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -182,6 +230,59 @@ export default function TeamPage() {
           </table>
         </div>
       </div>
+
+      {pwdModalUser && createPortal(
+        <div
+          className="fixed inset-0 z-[400] bg-black/65 backdrop-blur-sm flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setPwdModalUser(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-zinc-700 bg-[#18181B] text-white shadow-2xl p-6 space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <KeyRound className="h-5 w-5 text-amber-400" />
+                تغيير كلمة مرور الموظف
+              </h3>
+              <button type="button" onClick={() => setPwdModalUser(null)} className="p-1 hover:bg-zinc-700 rounded-lg transition-all">
+                <X className="h-5 w-5 text-zinc-400" />
+              </button>
+            </div>
+            <p className="text-sm text-zinc-400">
+              تعيين كلمة مرور جديدة لـ <span className="text-white font-bold">{pwdModalUser.name}</span> ({pwdModalUser.role})
+            </p>
+            <input
+              type="password"
+              placeholder="كلمة المرور الجديدة (8 أحرف على الأقل)"
+              value={newPwd}
+              onChange={(e) => setNewPwd(e.target.value)}
+              className="w-full bg-[#09090B] border border-zinc-700 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
+              autoFocus
+            />
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setPwdModalUser(null)}
+                className="px-4 py-2 text-zinc-400 font-bold hover:text-white transition-all text-sm"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={handleResetPassword}
+                disabled={pwdSaving || newPwd.length < 8}
+                className="bg-amber-500 text-black px-5 py-2 rounded-xl font-bold hover:bg-amber-400 transition-all disabled:opacity-40 text-sm"
+              >
+                {pwdSaving ? 'جاري الحفظ…' : 'تعيين كلمة المرور'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

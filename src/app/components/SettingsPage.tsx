@@ -9,6 +9,7 @@ import {
   Database,
   Mail,
   Link2,
+  Lock,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -16,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { useData } from '../context/DataContext';
 import { getRoleLabel } from '@/lib/i18nLabels';
 import { useAppDirection } from '../hooks/useAppDirection';
+import { patchMyPasswordApi } from '@/lib/api/authPasswordApi';
 
 function browserNotificationsSupported(): boolean {
   return typeof window !== 'undefined' && 'Notification' in window && typeof Notification.requestPermission === 'function';
@@ -92,6 +94,39 @@ export default function SettingsPage() {
     toast.success(t('common.logoutDone'));
   };
 
+  const [currentPwd, setCurrentPwd] = useState('');
+  const [newPwd, setNewPwd] = useState('');
+  const [confirmPwd, setConfirmPwd] = useState('');
+  const [pwdSaving, setPwdSaving] = useState(false);
+
+  const handleChangePassword = async () => {
+    if (!currentPwd || !newPwd) {
+      toast.error('أدخل كلمة المرور الحالية والجديدة');
+      return;
+    }
+    if (newPwd.length < 8) {
+      toast.error('كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل');
+      return;
+    }
+    if (newPwd !== confirmPwd) {
+      toast.error('كلمة المرور الجديدة وتأكيدها غير متطابقين');
+      return;
+    }
+    setPwdSaving(true);
+    try {
+      await patchMyPasswordApi({ currentPassword: currentPwd, newPassword: newPwd });
+      toast.success('تم تغيير كلمة المرور بنجاح');
+      setCurrentPwd('');
+      setNewPwd('');
+      setConfirmPwd('');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'تعذر تغيير كلمة المرور';
+      toast.error(msg);
+    } finally {
+      setPwdSaving(false);
+    }
+  };
+
   const roleLabel = currentUser?.role ? getRoleLabel(currentUser.role, t) : '—';
 
   return (
@@ -114,7 +149,16 @@ export default function SettingsPage() {
               })
             }
           />
-          <SettingTab icon={Shield} label={t('settingsProfile.tabSecurity')} />
+          <SettingTab
+            icon={Shield}
+            label={t('settingsProfile.tabSecurity')}
+            onClick={() =>
+              document.getElementById('settings-security')?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start',
+              })
+            }
+          />
           <SettingTab icon={Palette} label={t('settingsProfile.tabAppearance')} />
           <SettingTab icon={Database} label={t('settingsProfile.tabDataBackup')} />
           <SettingTab icon={HelpCircle} label={t('settingsProfile.tabHelp')} />
@@ -259,6 +303,54 @@ export default function SettingsPage() {
                 )}
               </div>
             )}
+          </div>
+
+          <div
+            id="settings-security"
+            className="bg-[#18181B] border border-zinc-800 rounded-2xl p-8 shadow-xl scroll-mt-8"
+          >
+            <div className="flex items-start gap-3 mb-6">
+              <Lock className="h-6 w-6 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <h3 className="text-lg font-bold text-white">تغيير كلمة المرور</h3>
+                <p className="text-sm text-zinc-500 mt-1">
+                  غيّر كلمة المرور الخاصة بحسابك. يجب إدخال كلمة المرور الحالية أولاً.
+                </p>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <input
+                  type="password"
+                  placeholder="كلمة المرور الحالية"
+                  value={currentPwd}
+                  onChange={(e) => setCurrentPwd(e.target.value)}
+                  className="w-full bg-[#09090B] border border-zinc-800 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
+                />
+                <input
+                  type="password"
+                  placeholder="كلمة المرور الجديدة (8 أحرف+)"
+                  value={newPwd}
+                  onChange={(e) => setNewPwd(e.target.value)}
+                  className="w-full bg-[#09090B] border border-zinc-800 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
+                />
+                <input
+                  type="password"
+                  placeholder="تأكيد كلمة المرور الجديدة"
+                  value={confirmPwd}
+                  onChange={(e) => setConfirmPwd(e.target.value)}
+                  className="w-full bg-[#09090B] border border-zinc-800 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleChangePassword}
+                disabled={pwdSaving}
+                className="bg-amber-500 text-black px-6 py-2 rounded-xl font-bold hover:bg-amber-400 transition-all disabled:opacity-50"
+              >
+                {pwdSaving ? 'جاري الحفظ…' : 'تغيير كلمة المرور'}
+              </button>
+            </div>
           </div>
 
           <div className="bg-[#18181B] border border-zinc-800 rounded-2xl p-8 shadow-xl">
