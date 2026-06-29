@@ -1,4 +1,4 @@
-import { Calculator, DollarSign, TrendingDown, TrendingUp } from 'lucide-react';
+import { Calculator, Calendar, DollarSign, TrendingDown, TrendingUp } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { getProjectsDataAsync, getEstimatedAssets } from '@/lib/projects/projectStore';
 import type { ProjectsData } from '@/lib/projects/projectTypes';
