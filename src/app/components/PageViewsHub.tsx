@@ -69,9 +69,15 @@ export default function PageViewsHub() {
   const { t } = useTranslation();
   const { dir } = useAppDirection();
   const { currentUser } = useData();
+  const isTeamLeader = currentUser?.role === 'مندوب' && Boolean(currentUser?.isTeamLeader);
   const tabs = useMemo(
-    () => (currentUser ? ALL_TABS.filter((tab) => tab.roles.includes(currentUser.role)) : []),
-    [currentUser],
+    () =>
+      currentUser
+        ? ALL_TABS.filter(
+            (tab) => tab.roles.includes(currentUser.role) || (tab.id === 'team' && isTeamLeader),
+          )
+        : [],
+    [currentUser, isTeamLeader],
   );
   const [view, setView] = useState<LinkedViewId>(() => tabs[0]?.id ?? 'team');
 

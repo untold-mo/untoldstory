@@ -13,6 +13,15 @@ export function getAllowedTabsForRole(role: User['role']): string[] {
   return ROLE_TAB_ACCESS[role] || ['home'];
 }
 
+/** مثل getAllowedTabsForRole لكن يضيف تبويبات تيم ليدر (مندوب له صلاحيات موسّعة) */
+export function getAllowedTabsForUser(user: Pick<User, 'role' | 'isTeamLeader'> | null | undefined): string[] {
+  const base = getAllowedTabsForRole(user?.role || 'مندوب');
+  if (user?.role === 'مندوب' && user?.isTeamLeader && !base.includes('team-performance')) {
+    return [...base, 'team-performance'];
+  }
+  return base;
+}
+
 /**
  * هل يرى هذا المستخدم التنبيه؟
  * - إن وُجد targetUserId → للمعني فقط (مع احترام targetRoles إن وُجدت).

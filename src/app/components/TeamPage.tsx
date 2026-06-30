@@ -56,29 +56,35 @@ export default function TeamPage() {
     }
   };
 
+  const isTeamLeaderViewer = currentUser?.role === 'مندوب' && Boolean(currentUser?.isTeamLeader);
+  const scopedUsers = useMemo(() => {
+    if (!isTeamLeaderViewer || !currentUser) return users;
+    return users.filter((u) => u.id === currentUser.id || u.teamLeaderId === currentUser.id);
+  }, [users, isTeamLeaderViewer, currentUser]);
+
   const filtered = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
-    if (!q) return users;
-    return users.filter(
+    if (!q) return scopedUsers;
+    return scopedUsers.filter(
       (u) =>
         u.name.toLowerCase().includes(q) ||
         (u.email || '').toLowerCase().includes(q) ||
         u.role.includes(q),
     );
-  }, [users, searchTerm]);
+  }, [scopedUsers, searchTerm]);
 
   const roleCards = useMemo(() => {
-    const all = users.length;
-    const admin = users.filter((u) => u.role === 'مالك' || u.role === 'مدير مبيعات').length;
-    const sales = users.filter((u) => u.role === 'مندوب').length;
-    const acct = users.filter((u) => u.role === 'محاسب' || u.role === 'مدير إنتاج').length;
+    const all = scopedUsers.length;
+    const admin = scopedUsers.filter((u) => u.role === 'مالك' || u.role === 'مدير مبيعات').length;
+    const sales = scopedUsers.filter((u) => u.role === 'مندوب').length;
+    const acct = scopedUsers.filter((u) => u.role === 'محاسب' || u.role === 'مدير إنتاج').length;
     return [
       { label: 'الكل', count: all },
       { label: 'إدارة', count: admin },
       { label: 'مبيعات', count: sales },
       { label: 'حسابات وإنتاج', count: acct },
     ];
-  }, [users]);
+  }, [scopedUsers]);
 
   if (selectedEmployeeId) {
     return <EmployeeProfilePage employeeId={selectedEmployeeId} onClose={() => setSelectedEmployeeId(null)} />;

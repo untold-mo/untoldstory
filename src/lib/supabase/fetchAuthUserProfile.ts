@@ -3,7 +3,7 @@ import type { User } from '@/app/context/DataContext';
 import { mapUserFromRow } from '@/lib/supabase/postgrestMappers';
 
 const PROFILE_SELECT =
-  'id,email,name,role,avatar,base_salary,skills_json,stats_json,created_at,updated_at';
+  'id,email,name,role,avatar,base_salary,skills_json,stats_json,created_at,updated_at,is_team_leader,team_leader_id';
 
 export type AuthProfileResult =
   | { ok: true; user: User }

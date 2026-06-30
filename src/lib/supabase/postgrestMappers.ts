@@ -204,6 +204,8 @@ export function mapUserFromRow(r: Record<string, unknown>): User {
         ? r.avatar
         : 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop',
     skills: Array.isArray(skills) ? skills : [],
+    isTeamLeader: Boolean(r.is_team_leader),
+    teamLeaderId: typeof r.team_leader_id === 'string' ? r.team_leader_id : null,
     baseSalary: (() => {
       const v = r.base_salary;
       if (v == null || v === '') return undefined;

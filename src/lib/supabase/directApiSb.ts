@@ -77,7 +77,9 @@ export async function fetchUsersSb(): Promise<User[]> {
     actor.role === 'مدير إنتاج';
   const { data, error } = await sb
     .from('users')
-    .select('id,email,name,role,avatar,base_salary,skills_json,stats_json,created_at,updated_at')
+    .select(
+      'id,email,name,role,avatar,base_salary,skills_json,stats_json,created_at,updated_at,is_team_leader,team_leader_id',
+    )
     .order('name', { ascending: true });
   if (error) throw new Error(error.message);
   if (!Array.isArray(data)) return [];
