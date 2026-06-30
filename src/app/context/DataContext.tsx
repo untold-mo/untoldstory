@@ -198,6 +198,10 @@ export interface User {
   /** عند تسجيل الدخول عبر الباك اند */
   email?: string;
   authSource?: 'database' | 'demo';
+  /** مندوب له صلاحيات موسّعة (توزيع ليدز/متابعة فريقه) دون أن يكون مدير مبيعات */
+  isTeamLeader?: boolean;
+  /** لمندوب تابع لتيم ليدر: معرّف التيم ليدر الخاص به */
+  teamLeaderId?: string | null;
   stats: {
     dealsWon: number;
     points: number;
@@ -6041,9 +6045,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const assignLead = (leadId: string, userId?: string) => {
-    if (!(currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات')) return;
+    const isTeamLeaderActor = currentUser?.role === 'مندوب' && Boolean(currentUser?.isTeamLeader);
+    if (!(currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات' || isTeamLeaderActor)) return;
     const user = users.find(u => u.id === userId);
     if (userId && (!user || (user.role !== 'مندوب' && user.role !== 'مدير مبيعات'))) return;
+    if (isTeamLeaderActor && userId) {
+      const isSelf = userId === currentUser?.id;
+      const isOwnTeammate = user?.role === 'مندوب' && user?.teamLeaderId === currentUser?.id;
+      if (!isSelf && !isOwnTeammate) return;
+    }
     const assigneeName = user?.name || '';
     const assigneeLabel = user?.role === 'مدير مبيعات' ? `تعيين المدير: ${assigneeName}` : `تعيين المندوب: ${assigneeName}`;
     if (isServerDataMode()) {
@@ -6091,9 +6101,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const assignLeadsBulk = async (leadIds: string[], userId?: string): Promise<number> => {
-    if (!(currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات')) return 0;
+    const isTeamLeaderActor = currentUser?.role === 'مندوب' && Boolean(currentUser?.isTeamLeader);
+    if (!(currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات' || isTeamLeaderActor)) return 0;
     const user = users.find((u) => u.id === userId);
     if (userId && (!user || (user.role !== 'مندوب' && user.role !== 'مدير مبيعات'))) return 0;
+    if (isTeamLeaderActor && userId) {
+      const isSelf = userId === currentUser?.id;
+      const isOwnTeammate = user?.role === 'مندوب' && user?.teamLeaderId === currentUser?.id;
+      if (!isSelf && !isOwnTeammate) return 0;
+    }
     const uniqueIds = [...new Set(leadIds.map((id) => String(id).trim()).filter(Boolean))];
     if (uniqueIds.length === 0) return 0;
 

@@ -49,6 +49,7 @@ import {
 } from './context/DataContext';
 import {
   ROLE_TAB_ACCESS,
+  getAllowedTabsForUser,
   filterNotificationsForViewer,
   resolveNotificationTabForRole,
 } from './context/notificationPermissions';
@@ -9774,15 +9775,24 @@ const TeamPerformanceHub = ({ onGoToTab }: { onGoToTab?: (tab: string) => void }
   const { t } = useTranslation();
   const { dateLocale } = useAppDirection();
   const currency = t('common.currency');
-  const { currentUser, leads, getRepSnapshots, reviewLeadActivity, updateMonthlyTarget } = useData();
+  const { currentUser, leads, users, getRepSnapshots, reviewLeadActivity, updateMonthlyTarget } = useData();
   const payrollMonthKey = useMemo(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   }, []);
-  const snapshots = useMemo(
-    () => getRepSnapshots().sort((a, b) => b.revenue - a.revenue),
-    [getRepSnapshots]
-  );
+  const isTeamLeaderViewer = currentUser?.role === 'مندوب' && Boolean(currentUser?.isTeamLeader);
+  const teamMemberIds = useMemo(() => {
+    if (!isTeamLeaderViewer || !currentUser) return null;
+    const ids = new Set<string>([currentUser.id]);
+    users.forEach((u) => {
+      if (u.teamLeaderId === currentUser.id) ids.add(u.id);
+    });
+    return ids;
+  }, [isTeamLeaderViewer, currentUser, users]);
+  const snapshots = useMemo(() => {
+    const all = getRepSnapshots().sort((a, b) => b.revenue - a.revenue);
+    return teamMemberIds ? all.filter((s) => teamMemberIds.has(s.repId)) : all;
+  }, [getRepSnapshots, teamMemberIds]);
   const canEditTargets = currentUser?.role === 'مالك' || currentUser?.role === 'مدير مبيعات';
   const exportPerformanceCsv = () => {
     const rows = [
@@ -12615,6 +12625,7 @@ const NavItems = ({ role, active, onChange, allowedTabs }: any) => {
     { id: 'dashboard', icon: Clock },
     { id: 'bookings', icon: Calendar },
     { id: 'leads', icon: Users },
+    { id: 'team-performance', icon: BarChart3 },
     { id: 'performance', icon: Trophy },
     { id: 'linked-views', icon: Layers },
   ];
@@ -13052,7 +13063,7 @@ const Root = () => {
 
   useEffect(() => {
     if (!currentUser) return;
-    const allowedTabs = ROLE_TAB_ACCESS[currentUser.role] || [];
+    const allowedTabs = getAllowedTabsForUser(currentUser);
     if (!allowedTabs.includes(activeTab)) {
       setActiveTab(allowedTabs[0] || 'dashboard');
     }
@@ -13095,7 +13106,7 @@ const Root = () => {
 
   const currentRole: User['role'] = currentUser?.role || 'مندوب';
   const currentUserId = currentUser?.id || '';
-  const allowedTabs = ROLE_TAB_ACCESS[currentRole] || [];
+  const allowedTabs = getAllowedTabsForUser(currentUser);
   const handleTabChange = (tabId: string) => {
     if (!allowedTabs.includes(tabId)) {
       toast.error('ليس لديك صلاحية الوصول لهذه الصفحة');

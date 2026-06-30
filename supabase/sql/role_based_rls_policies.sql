@@ -50,6 +50,33 @@ AS $$
   SELECT public.app_user_role() = ANY (roles);
 $$;
 
+-- تيم ليدر: مندوب له صلاحيات موسّعة على فريقه فقط (يتطلب add_team_leader.sql)
+CREATE OR REPLACE FUNCTION public.app_is_team_leader()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT COALESCE(u.is_team_leader, false)
+  FROM public.users u
+  WHERE lower(trim(u.email)) = public.app_auth_email()
+  LIMIT 1;
+$$;
+
+-- معرفات فريق التيم ليدر الحالي (نفسه + المندوبين التابعين له)
+CREATE OR REPLACE FUNCTION public.app_team_member_ids()
+RETURNS TABLE(id text)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT public.app_user_id()
+  UNION
+  SELECT u.id FROM public.users u WHERE u.team_leader_id = public.app_user_id();
+$$;
+
 -- إزالة السياسات المفتوحة
 DROP POLICY IF EXISTS app_authenticated_all_users ON public.users;
 DROP POLICY IF EXISTS app_authenticated_all_leads ON public.leads;
@@ -70,12 +97,40 @@ DROP POLICY IF EXISTS app_authenticated_all_meeting_bookings ON public.meeting_b
 DROP POLICY IF EXISTS app_authenticated_all_workspace_state ON public.workspace_state;
 DROP POLICY IF EXISTS app_authenticated_all_attendance_records ON public.attendance_records;
 
+-- إعادة تشغيل آمنة — احذف السياسات الجديدة إن وُجدت
+DROP POLICY IF EXISTS users_select_role ON public.users;
+DROP POLICY IF EXISTS users_write_owner ON public.users;
+DROP POLICY IF EXISTS leads_select_role ON public.leads;
+DROP POLICY IF EXISTS leads_insert_role ON public.leads;
+DROP POLICY IF EXISTS leads_update_role ON public.leads;
+DROP POLICY IF EXISTS leads_delete_role ON public.leads;
+DROP POLICY IF EXISTS price_quotes_select_role ON public.price_quotes;
+DROP POLICY IF EXISTS price_quotes_insert_role ON public.price_quotes;
+DROP POLICY IF EXISTS price_quotes_update_role ON public.price_quotes;
+DROP POLICY IF EXISTS invoices_accounting ON public.invoices;
+DROP POLICY IF EXISTS expenses_role ON public.expenses;
+DROP POLICY IF EXISTS accounting_policy_role ON public.accounting_policy;
+DROP POLICY IF EXISTS manual_journals_role ON public.manual_journal_entries;
+DROP POLICY IF EXISTS closed_months_role ON public.closed_months;
+DROP POLICY IF EXISTS monthly_targets_role ON public.monthly_targets;
+DROP POLICY IF EXISTS audit_events_read ON public.audit_events;
+DROP POLICY IF EXISTS audit_events_insert ON public.audit_events;
+DROP POLICY IF EXISTS workspace_state_role ON public.workspace_state;
+DROP POLICY IF EXISTS manual_customers_role ON public.manual_customers;
+DROP POLICY IF EXISTS custody_settings_role ON public.custody_settings;
+DROP POLICY IF EXISTS custody_funds_role ON public.custody_funds;
+DROP POLICY IF EXISTS shoot_bookings_role ON public.shoot_bookings;
+DROP POLICY IF EXISTS equipment_bookings_role ON public.equipment_bookings;
+DROP POLICY IF EXISTS meeting_bookings_role ON public.meeting_bookings;
+DROP POLICY IF EXISTS attendance_records_role ON public.attendance_records;
+
 -- ---------- users ----------
 CREATE POLICY users_select_role ON public.users
   FOR SELECT TO authenticated
   USING (
     public.app_is_role(ARRAY['مالك', 'مدير مبيعات', 'محاسب', 'مدير إنتاج'])
     OR id = public.app_user_id()
+    OR (public.app_is_team_leader() AND id IN (SELECT id FROM public.app_team_member_ids()))
   );
 
 CREATE POLICY users_write_owner ON public.users
@@ -88,7 +143,13 @@ CREATE POLICY leads_select_role ON public.leads
   FOR SELECT TO authenticated
   USING (
     public.app_is_role(ARRAY['مالك', 'مدير مبيعات'])
-    OR (public.app_user_role() = 'مندوب' AND assigned_to_id = public.app_user_id())
+    OR (
+      public.app_user_role() = 'مندوب'
+      AND (
+        assigned_to_id = public.app_user_id()
+        OR (public.app_is_team_leader() AND assigned_to_id IN (SELECT id FROM public.app_team_member_ids()))
+      )
+    )
     OR (
       public.app_user_role() = 'مدير إنتاج'
       AND id IN (
@@ -121,10 +182,20 @@ CREATE POLICY leads_update_role ON public.leads
   USING (
     public.app_is_role(ARRAY['مالك', 'مدير مبيعات'])
     OR (public.app_user_role() = 'مندوب' AND assigned_to_id = public.app_user_id())
+    OR (
+      public.app_user_role() = 'مندوب'
+      AND public.app_is_team_leader()
+      AND (assigned_to_id IS NULL OR assigned_to_id IN (SELECT id FROM public.app_team_member_ids()))
+    )
   )
   WITH CHECK (
     public.app_is_role(ARRAY['مالك', 'مدير مبيعات'])
     OR (public.app_user_role() = 'مندوب' AND assigned_to_id = public.app_user_id())
+    OR (
+      public.app_user_role() = 'مندوب'
+      AND public.app_is_team_leader()
+      AND (assigned_to_id IS NULL OR assigned_to_id IN (SELECT id FROM public.app_team_member_ids()))
+    )
   );
 
 CREATE POLICY leads_delete_role ON public.leads
