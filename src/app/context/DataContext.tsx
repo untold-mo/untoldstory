@@ -4165,7 +4165,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!isSupabaseDirectMode()) return;
     if (!currentUser?.id) return;
 
-    let configTablesTimer: ReturnType<typeof setTimeout> | null = null;
+    let configTablesTimer: number | null = null;
     const scheduleConfigTablesRefresh = () => {
       if (configTablesTimer) window.clearTimeout(configTablesTimer);
       configTablesTimer = window.setTimeout(() => {
