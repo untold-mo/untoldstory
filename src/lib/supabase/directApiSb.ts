@@ -1380,8 +1380,13 @@ async function insertDocBookingSb(
   if (!canCreate(actor.role)) throw new Error('غير مصرح');
   const id = String(doc.id || newId('BK')).trim();
   const merged = { ...doc, id };
+  const nowIso = new Date().toISOString();
   const sb = getSupabase();
-  const { data, error } = await sb.from(table).insert({ id, doc_json: merged }).select('doc_json').single();
+  const { data, error } = await sb
+    .from(table)
+    .insert({ id, doc_json: merged, updated_at: nowIso })
+    .select('doc_json')
+    .single();
   if (error || !data) throw new Error(error?.message || 'فشل الإنشاء');
   return (data as { doc_json: unknown }).doc_json;
 }
@@ -1413,7 +1418,12 @@ async function patchDocBookingSb(
       ? ({ ...((row as { doc_json: Record<string, unknown> }).doc_json || {}) } as Record<string, unknown>)
       : {};
   const merged = { ...cur, ...patch, id };
-  const { data, error } = await sb.from(table).update({ doc_json: merged }).eq('id', id).select('doc_json').single();
+  const { data, error } = await sb
+    .from(table)
+    .update({ doc_json: merged, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('doc_json')
+    .single();
   if (error || !data) throw new Error(error?.message || 'فشل التحديث');
   return (data as { doc_json: unknown }).doc_json;
 }
