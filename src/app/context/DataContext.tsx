@@ -2177,6 +2177,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             ? '/avatars/khaled-bandary.png'
             : (raw?.avatar || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop'),
       skills: Array.isArray(raw?.skills) ? raw.skills : [],
+      isTeamLeader: Boolean(raw?.isTeamLeader ?? raw?.is_team_leader),
+      teamLeaderId: (() => {
+        const v = raw?.teamLeaderId ?? raw?.team_leader_id;
+        return typeof v === 'string' && v ? v : null;
+      })(),
       baseSalary: (() => {
         const v = raw?.baseSalary ?? raw?.base_salary;
         if (v != null && v !== '') {
@@ -3511,13 +3516,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             Boolean(currentUser) &&
             (currentUser!.role === 'مالك' || currentUser!.role === 'مدير مبيعات');
           snapRawForDefer = await fetchSupabaseWorkspaceSnapshot(
-            currentUser ? { id: currentUser.id, role: currentUser.role } : undefined,
+            currentUser
+              ? { id: currentUser.id, role: currentUser.role, isTeamLeader: currentUser.isTeamLeader }
+              : undefined,
             { skipLeads: deferOwnerLeads },
           );
           const snap = currentUser
             ? filterWorkspaceSnapshotForViewer(snapRawForDefer, {
                 id: currentUser.id,
                 role: currentUser.role,
+                isTeamLeader: currentUser.isTeamLeader,
               })
             : snapRawForDefer;
           leadsList = deferOwnerLeads ? [] : snap.leadsList;
@@ -3915,7 +3923,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return true;
     }
     const viewer = currentUser
-      ? { id: currentUser.id, role: currentUser.role }
+      ? { id: currentUser.id, role: currentUser.role, isTeamLeader: currentUser.isTeamLeader }
       : undefined;
     if (!viewer) return false;
     try {
@@ -3943,7 +3951,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const [subset, unassignedCount] = await Promise.all([
           fetchLeadsNotificationSubset(
             sb,
-            viewer.role === 'مندوب' ? { assignedToId: viewer.id } : undefined,
+            viewer.role === 'مندوب' && !viewer.isTeamLeader ? { assignedToId: viewer.id } : undefined,
           ),
           isOwnerOrSales ? fetchUnassignedOpenLeadsCount(sb) : Promise.resolve(0),
         ]);

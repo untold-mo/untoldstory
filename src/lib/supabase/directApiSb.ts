@@ -6,6 +6,7 @@ import { getSupabaseActor } from '@/lib/supabase/getActor';
 import { normalizeInvoiceFromRow } from '@/lib/supabase/invoiceNormalize';
 import { validateManualJournalLines } from '@/lib/accounting/validateManualJournalLines';
 import { fetchAllLeadsFromSupabase } from '@/lib/supabase/fetchAllLeads';
+import { fetchTeamMemberIds } from '@/lib/supabase/teamLeaderLeads';
 import {
   mapLeadFromRow,
   mapUserFromRow,
@@ -48,6 +49,10 @@ function newId(prefix: string): string {
 export async function fetchLeadsSb(): Promise<Lead[]> {
   const actor = await getSupabaseActor();
   const sb = getSupabase();
+  if (actor.role === 'مندوب' && actor.isTeamLeader) {
+    const teamIds = await fetchTeamMemberIds(sb, actor.id);
+    return fetchAllLeadsFromSupabase(sb, { assignedToIds: [...teamIds] });
+  }
   return fetchAllLeadsFromSupabase(
     sb,
     actor.role === 'مندوب' ? { assignedToId: actor.id } : undefined,

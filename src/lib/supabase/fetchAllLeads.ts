@@ -12,19 +12,33 @@ const LEADS_PAGE_SIZE = 1000;
 export const LEADS_LIST_SELECT =
   'id,customer_code,name,company,phone,email,status,assigned_to_id,budget,source,category,score,follow_up_at,sla_status,created_at,updated_at';
 
+type AssigneeScopeOptions = { assignedToId?: string; assignedToIds?: string[] };
+
+/** يقيّد الاستعلام لمالك الليد أو لأعضاء فريق (+ الليدز غير المعيّنة) لقائد الفريق */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyAssigneeScope(q: any, options?: AssigneeScopeOptions): any {
+  if (options?.assignedToIds && options.assignedToIds.length > 0) {
+    return q.or(`assigned_to_id.in.(${options.assignedToIds.join(',')}),assigned_to_id.is.null`);
+  }
+  if (options?.assignedToId) {
+    return q.eq('assigned_to_id', options.assignedToId);
+  }
+  return q;
+}
+
 async function fetchLeadPage(
   sb: SupabaseClient,
   from: number,
-  options?: { assignedToId?: string },
+  options?: AssigneeScopeOptions,
 ): Promise<Lead[]> {
-  let q = sb
-    .from('leads')
-    .select(LEADS_LIST_SELECT)
-    .order('created_at', { ascending: false })
-    .range(from, from + LEADS_PAGE_SIZE - 1);
-  if (options?.assignedToId) {
-    q = q.eq('assigned_to_id', options.assignedToId);
-  }
+  const q = applyAssigneeScope(
+    sb
+      .from('leads')
+      .select(LEADS_LIST_SELECT)
+      .order('created_at', { ascending: false })
+      .range(from, from + LEADS_PAGE_SIZE - 1),
+    options,
+  );
   const { data, error } = await q;
   if (error) {
     if (isSupabaseQuotaError(0, error.message)) throw error;
@@ -37,13 +51,13 @@ async function fetchLeadPage(
 /** جلب كل الليدز — صفحات متوازية للمالك (بدل ~24ث تسلسلي → ~6ث) */
 export async function fetchAllLeadsFromSupabase(
   sb: SupabaseClient,
-  options?: { assignedToId?: string },
+  options?: AssigneeScopeOptions,
 ): Promise<Lead[]> {
   assertSupabaseFetchAllowed();
-  let countQ = sb.from('leads').select('id', { count: 'exact', head: true });
-  if (options?.assignedToId) {
-    countQ = countQ.eq('assigned_to_id', options.assignedToId);
-  }
+  const countQ = applyAssigneeScope(
+    sb.from('leads').select('id', { count: 'exact', head: true }),
+    options,
+  );
   const { count, error: countErr } = await countQ;
   if (countErr) throw new Error(countErr.message);
   const total = count ?? 0;
@@ -80,9 +94,9 @@ export async function fetchAllLeadsFromSupabase(
 /** ليدز مهمة للتنبيهات فقط — بدون جلب آلاف الصفوف للمالك */
 export async function fetchLeadsNotificationSubset(
   sb: SupabaseClient,
-  options?: { assignedToId?: string },
+  options?: AssigneeScopeOptions,
 ): Promise<Lead[]> {
-  if (options?.assignedToId) {
+  if (options?.assignedToId || (options?.assignedToIds && options.assignedToIds.length > 0)) {
     return fetchAllLeadsFromSupabase(sb, options);
   }
   const now = new Date().toISOString();

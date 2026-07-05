@@ -96,7 +96,7 @@ async function singleDocRows<T>(
   }
 }
 
-export type WorkspaceViewer = { id: string; role: User['role'] };
+export type WorkspaceViewer = { id: string; role: User['role']; isTeamLeader?: boolean };
 
 export type WorkspaceFetchOptions = {
   /** للمالك/مدير المبيعات — يُحمَّل باقي الـ Workspace أولاً ثم الليدز في الخلفية */
@@ -107,7 +107,7 @@ const INVOICES_LIST_SELECT =
   'id,customer_code,lead_id,customer_name,amount,vat_rate,vat_amount,total_amount,cost_center,status,date,record_origin,price_quote_id,paid_amount,remaining_amount,next_due_date,collections_json';
 
 const USERS_LIST_SELECT =
-  'id,email,name,role,base_salary,skills_json,stats_json,created_at,updated_at';
+  'id,email,name,role,base_salary,skills_json,stats_json,created_at,updated_at,is_team_leader,team_leader_id';
 
 const EXPENSES_LIST_SELECT =
   'id,title,category,amount,vat_rate,vat_amount,total_amount,cost_center,status,approval_status,approved_by,vendor,note,date,submitted_by_id,submitted_by_name,payment_method';
@@ -188,9 +188,10 @@ export async function fetchSupabaseWorkspaceSnapshot(
     needLeads && !skipLeads
       ? (async (): Promise<{ list: Lead[]; ok: boolean }> => {
           try {
+            const scopeToOwn = isRepRole(role) && uid && !viewer?.isTeamLeader;
             const list = await fetchAllLeadsFromSupabase(
               sb,
-              isRepRole(role) && uid ? { assignedToId: uid } : undefined,
+              scopeToOwn ? { assignedToId: uid } : undefined,
             );
             return { list, ok: true };
           } catch (e) {
@@ -363,16 +364,26 @@ export async function fetchSupabaseWorkspaceSnapshot(
 /** تصفية البيانات المحمّلة حسب الدور — يقلّل تسريب CRM في وضع Supabase المباشر */
 export function filterWorkspaceSnapshotForViewer(
   snap: SupabaseWorkspaceSnapshot,
-  viewer: { id: string; role: User['role'] },
+  viewer: WorkspaceViewer,
 ): SupabaseWorkspaceSnapshot {
   const uid = String(viewer.id).trim();
   if (viewer.role === 'مندوب') {
+    const teamIds = viewer.isTeamLeader
+      ? new Set<string>(
+          [uid, ...snap.rawUsers.filter((u) => u.teamLeaderId === uid).map((u) => u.id)],
+        )
+      : null;
+    const inScope = (assignedTo?: string): boolean => {
+      const a = String(assignedTo || '').trim();
+      if (!teamIds) return a === uid;
+      return !a || teamIds.has(a);
+    };
     const myLeadIds = new Set(
-      snap.leadsList.filter((l) => String(l.assignedTo || '').trim() === uid).map((l) => l.id),
+      snap.leadsList.filter((l) => inScope(l.assignedTo)).map((l) => l.id),
     );
     return {
       ...snap,
-      leadsList: snap.leadsList.filter((l) => String(l.assignedTo || '').trim() === uid),
+      leadsList: snap.leadsList.filter((l) => inScope(l.assignedTo)),
       quotes: snap.quotes.filter((q) => String(q.createdById || '').trim() === uid),
       invsRaw: snap.invsRaw.filter((raw) => myLeadIds.has(String((raw as { lead_id?: string }).lead_id || ''))),
       rawUsers: snap.rawUsers.map((u) =>

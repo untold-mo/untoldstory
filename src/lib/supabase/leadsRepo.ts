@@ -1,11 +1,11 @@
 import { getSupabase } from '@/lib/supabase/client';
 import type { Lead, Activity } from '@/app/context/DataContext';
 import { mapLeadFromRow } from '@/lib/supabase/postgrestMappers';
-import { getSupabaseActor } from '@/lib/supabase/getActor';
+import { getSupabaseActor, type SupabaseActor } from '@/lib/supabase/getActor';
 import { canTeamLeaderPatchLead, fetchTeamMemberIds } from '@/lib/supabase/teamLeaderLeads';
 import { normalizeLeadPhone, leadPhoneDigitsKey } from '@/lib/leadPhone';
 
-async function getActor(): Promise<{ id: string; name: string; role: string }> {
+async function getActor(): Promise<SupabaseActor> {
   return getSupabaseActor();
 }
 
