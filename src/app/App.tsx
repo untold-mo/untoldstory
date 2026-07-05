@@ -12642,6 +12642,7 @@ const NavItems = ({ role, active, onChange, allowedTabs }: any) => {
     { id: 'production', icon: Briefcase },
     { id: 'bookings', icon: Calendar },
     { id: 'leads', icon: Users },
+    { id: 'linked-views', icon: Layers },
   ];
 
   const rep = [
