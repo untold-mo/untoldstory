@@ -7,15 +7,34 @@ import {
   addProject,
 } from '@/lib/projects/projectStore';
 import type { Project, ProjectStatus, ProjectsData } from '@/lib/projects/projectTypes';
+import { useData } from '../context/DataContext';
 import ProjectDetailPage from './ProjectDetailPage';
 
 const STATUS_COLORS: Record<ProjectStatus, string> = {
   'مفتوحة': 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  'تحت التنفيذ': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
   'منتهية': 'bg-zinc-800 text-zinc-400 border-zinc-700',
   'تحت التحصيل': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
 };
 
+const PROJECT_STATUSES: ProjectStatus[] = ['مفتوحة', 'تحت التنفيذ', 'منتهية', 'تحت التحصيل'];
+type ProjectSort = 'date_desc' | 'date_asc' | 'client' | 'code' | 'status';
+
 export default function ProjectsListPage() {
+  const { users, currentUser } = useData();
+  const role = currentUser?.role;
+  const isSalesRep = role === 'مندوب';
+  const isTeamLeader = isSalesRep && Boolean(currentUser?.isTeamLeader);
+  const canCreateProject = role === 'مالك' || role === 'محاسب';
+  // معرّفات فريق التيم ليدر (نفسه + المندوبون التابعون له)
+  const teamMemberIds = useMemo(() => {
+    if (!isTeamLeader || !currentUser) return null;
+    const ids = new Set<string>([currentUser.id]);
+    users.forEach((u) => { if (u.teamLeaderId === currentUser.id) ids.add(u.id); });
+    return ids;
+  }, [isTeamLeader, currentUser, users]);
+  const salesReps = useMemo(() => users.filter((u) => u.role === 'مندوب'), [users]);
+
   const emptyData: ProjectsData = { projects: [], revenues: [], expenses: [], custodies: [] };
   const [data, setData] = useState<ProjectsData>(emptyData);
   const [loading, setLoading] = useState(true);
@@ -23,9 +42,15 @@ export default function ProjectsListPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
-  const [form, setForm] = useState({ name: '', code: '', clientName: '', startDate: '', notes: '' });
+  const [form, setForm] = useState({
+    name: '', code: '', clientName: '', projectDate: '', startDate: '', expectedEndDate: '',
+    status: 'مفتوحة' as ProjectStatus, managerName: '', productionManagerName: '', salesName: '', salesId: '', accountantName: '', notes: '',
+  });
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'all' | ProjectStatus>('all');
+  const [sort, setSort] = useState<ProjectSort>('date_desc');
+  const [monthFilter, setMonthFilter] = useState('');
 
   const refresh = useCallback(() => {
     setLoadError(null);
@@ -73,13 +98,36 @@ export default function ProjectsListPage() {
     return items;
   }, [data]);
 
+  const projectDateOf = (p: Project) => p.projectDate || p.startDate || p.createdAt;
+
+  // نطاق الرؤية حسب الدور: السيلز يرى شغلاناته، التيم ليدر يرى شغلانات فريقه، الباقي الكل
+  const scopedProjects = useMemo(() => {
+    if (!isSalesRep || !currentUser) return data.projects;
+    if (teamMemberIds) return data.projects.filter((p) => p.salesId && teamMemberIds.has(p.salesId));
+    return data.projects.filter((p) => p.salesId === currentUser.id);
+  }, [data.projects, isSalesRep, teamMemberIds, currentUser]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return data.projects;
-    return data.projects.filter(
-      (p) => p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q) || p.clientName.toLowerCase().includes(q),
-    );
-  }, [data.projects, search]);
+    let list = scopedProjects.filter((p) => {
+      const matchesSearch =
+        !q || p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q) || p.clientName.toLowerCase().includes(q);
+      const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
+      const matchesMonth = !monthFilter || projectDateOf(p).slice(0, 7) === monthFilter;
+      return matchesSearch && matchesStatus && matchesMonth;
+    });
+    list = [...list].sort((a, b) => {
+      switch (sort) {
+        case 'date_asc': return projectDateOf(a).localeCompare(projectDateOf(b));
+        case 'client': return a.clientName.localeCompare(b.clientName, 'ar');
+        case 'code': return a.code.localeCompare(b.code);
+        case 'status': return a.status.localeCompare(b.status, 'ar');
+        case 'date_desc':
+        default: return projectDateOf(b).localeCompare(projectDateOf(a));
+      }
+    });
+    return list;
+  }, [data.projects, search, statusFilter, monthFilter, sort]);
 
   const handleAdd = async () => {
     if (saving) return;
@@ -89,12 +137,20 @@ export default function ProjectsListPage() {
     }
     setSaving(true);
     try {
+      const today = new Date().toISOString().slice(0, 10);
       const created = await addProject({
         name: form.name.trim(),
         code: form.code.trim().toUpperCase(),
         clientName: form.clientName.trim(),
-        startDate: form.startDate || new Date().toISOString().slice(0, 10),
-        status: 'مفتوحة',
+        projectDate: form.projectDate || today,
+        startDate: form.startDate || today,
+        expectedEndDate: form.expectedEndDate || undefined,
+        status: form.status,
+        managerName: form.managerName.trim() || undefined,
+        productionManagerName: form.productionManagerName.trim() || undefined,
+        salesName: form.salesName.trim() || undefined,
+        salesId: form.salesId || undefined,
+        accountantName: form.accountantName.trim() || undefined,
         notes: form.notes.trim(),
       });
       setData((prev) => ({
@@ -103,7 +159,10 @@ export default function ProjectsListPage() {
       }));
       void refresh();
       setShowAdd(false);
-      setForm({ name: '', code: '', clientName: '', startDate: '', notes: '' });
+      setForm({
+        name: '', code: '', clientName: '', projectDate: '', startDate: '', expectedEndDate: '',
+        status: 'مفتوحة', managerName: '', productionManagerName: '', salesName: '', salesId: '', accountantName: '', notes: '',
+      });
       toast.success('تم إنشاء الشغلانة بنجاح');
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'خطأ');
@@ -123,15 +182,17 @@ export default function ProjectsListPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold text-white mb-2">الشغلانات / المشاريع</h2>
-          <p className="text-zinc-400">إدارة المشاريع والحركات المالية المرتبطة</p>
+          <p className="text-zinc-400">{isSalesRep ? 'الشغلانات المرتبطة بك — يمكنك إضافة تحديثات' : 'إدارة المشاريع والحركات المالية المرتبطة'}</p>
         </div>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="flex items-center gap-2 bg-[#6366F1] text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-[#5254E2] transition-all shadow-lg shadow-[#6366F1]/20"
-        >
-          <Plus className="h-5 w-5" />
-          شغلانة جديدة
-        </button>
+        {canCreateProject && (
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-2 bg-[#6366F1] text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-[#5254E2] transition-all shadow-lg shadow-[#6366F1]/20"
+          >
+            <Plus className="h-5 w-5" />
+            شغلانة جديدة
+          </button>
+        )}
       </div>
 
       {/* Alerts */}
@@ -146,27 +207,66 @@ export default function ProjectsListPage() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {(['مفتوحة', 'تحت التحصيل', 'منتهية'] as ProjectStatus[]).map((s) => (
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {PROJECT_STATUSES.map((s) => (
           <div key={s} className="bg-[#18181B] border border-zinc-800 p-4 rounded-xl flex items-center justify-between">
             <span className="text-zinc-400 font-medium">{s}</span>
             <span className="bg-zinc-800 text-white px-2.5 py-0.5 rounded-lg text-sm font-bold">
-              {data.projects.filter((p) => p.status === s).length}
+              {scopedProjects.filter((p) => p.status === s).length}
             </span>
           </div>
         ))}
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+      {/* Search + filters + sort */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[220px] max-w-md">
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+          <input
+            type="text"
+            placeholder="بحث بالاسم أو الكود أو العميل..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-[#09090B] border border-zinc-800 rounded-xl py-2 pr-10 pl-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50"
+          />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as 'all' | ProjectStatus)}
+          className="bg-[#09090B] border border-zinc-800 rounded-xl py-2 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50"
+          aria-label="فلتر الحالة"
+        >
+          <option value="all">كل الحالات</option>
+          {PROJECT_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
         <input
-          type="text"
-          placeholder="بحث بالاسم أو الكود أو العميل..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full bg-[#09090B] border border-zinc-800 rounded-xl py-2 pr-10 pl-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50"
+          type="month"
+          value={monthFilter}
+          onChange={(e) => setMonthFilter(e.target.value)}
+          className="bg-[#09090B] border border-zinc-800 rounded-xl py-2 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50"
+          aria-label="فلتر الشهر"
         />
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as ProjectSort)}
+          className="bg-[#09090B] border border-zinc-800 rounded-xl py-2 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50"
+          aria-label="ترتيب"
+        >
+          <option value="date_desc">الأحدث تاريخاً</option>
+          <option value="date_asc">الأقدم تاريخاً</option>
+          <option value="client">اسم العميل</option>
+          <option value="code">كود الشغلانة</option>
+          <option value="status">الحالة</option>
+        </select>
+        {(statusFilter !== 'all' || monthFilter) && (
+          <button
+            type="button"
+            onClick={() => { setStatusFilter('all'); setMonthFilter(''); }}
+            className="text-xs font-bold text-zinc-400 hover:text-white px-3 py-2 rounded-lg border border-zinc-700"
+          >
+            مسح الفلاتر
+          </button>
+        )}
       </div>
 
       {loadError && (
@@ -214,6 +314,11 @@ export default function ProjectsListPage() {
                     <div>
                       <p className="text-base font-bold text-white group-hover:text-[#6366F1] transition-colors">{p.name}</p>
                       <p className="text-xs text-zinc-500">كود: {p.code} • عميل: {p.clientName}</p>
+                      <p className="text-[11px] text-zinc-600 mt-0.5">
+                        📅 {projectDateOf(p).slice(0, 10)}
+                        {p.expectedEndDate ? ` → ${p.expectedEndDate.slice(0, 10)}` : ''}
+                        {p.managerName ? ` • مسؤول: ${p.managerName}` : ''}
+                      </p>
                     </div>
                   </div>
                   <span className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border ${STATUS_COLORS[p.status]}`}>{p.status}</span>
@@ -238,12 +343,36 @@ export default function ProjectsListPage() {
               <button type="button" onClick={() => !saving && setShowAdd(false)} className="p-1 hover:bg-zinc-700 rounded-lg"><X className="h-5 w-5 text-zinc-400" /></button>
             </div>
             <p className="text-xs text-zinc-500 -mt-2">الحقول المطلوبة: اسم الشغلانة، الكود (فريد)، اسم العميل</p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 max-h-[55vh] overflow-y-auto pr-1">
               <input placeholder="اسم الشغلانة *" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="col-span-2 w-full bg-[#09090B] border border-zinc-700 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50" />
               <input placeholder="كود الشغلانة * (مثال: HK001)" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} className="w-full bg-[#09090B] border border-zinc-700 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50" />
               <input placeholder="اسم العميل *" value={form.clientName} onChange={(e) => setForm({ ...form, clientName: e.target.value })} className="w-full bg-[#09090B] border border-zinc-700 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50" />
-              <input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} className="w-full bg-[#09090B] border border-zinc-700 rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50" />
-              <input placeholder="ملاحظات (اختياري)" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="w-full bg-[#09090B] border border-zinc-700 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50" />
+              <label className="text-[10px] text-zinc-500 font-bold col-span-2 -mb-2">تاريخ الشغلانة</label>
+              <input type="date" value={form.projectDate} onChange={(e) => setForm({ ...form, projectDate: e.target.value })} className="w-full bg-[#09090B] border border-zinc-700 rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50" aria-label="تاريخ الشغلانة" />
+              <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as ProjectStatus })} className="w-full bg-[#09090B] border border-zinc-700 rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50" aria-label="الحالة">
+                {PROJECT_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <label className="text-[10px] text-zinc-500 font-bold -mb-2">تاريخ البداية</label>
+              <label className="text-[10px] text-zinc-500 font-bold -mb-2">الانتهاء المتوقع</label>
+              <input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} className="w-full bg-[#09090B] border border-zinc-700 rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50" aria-label="تاريخ البداية" />
+              <input type="date" value={form.expectedEndDate} onChange={(e) => setForm({ ...form, expectedEndDate: e.target.value })} className="w-full bg-[#09090B] border border-zinc-700 rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50" aria-label="تاريخ الانتهاء المتوقع" />
+              <input placeholder="المسؤول عن الشغلانة" value={form.managerName} onChange={(e) => setForm({ ...form, managerName: e.target.value })} className="w-full bg-[#09090B] border border-zinc-700 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50" />
+              <input placeholder="مدير الإنتاج المسؤول" value={form.productionManagerName} onChange={(e) => setForm({ ...form, productionManagerName: e.target.value })} className="w-full bg-[#09090B] border border-zinc-700 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50" />
+              <select
+                value={form.salesId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  const rep = salesReps.find((u) => u.id === id);
+                  setForm({ ...form, salesId: id, salesName: rep?.name || '' });
+                }}
+                className="w-full bg-[#09090B] border border-zinc-700 rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50"
+                aria-label="السيلز المسؤول"
+              >
+                <option value="">السيلز المسؤول (لربط الرؤية)</option>
+                {salesReps.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+              <input placeholder="المحاسب المسؤول" value={form.accountantName} onChange={(e) => setForm({ ...form, accountantName: e.target.value })} className="w-full bg-[#09090B] border border-zinc-700 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50" />
+              <input placeholder="ملاحظات عامة (اختياري)" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="col-span-2 w-full bg-[#09090B] border border-zinc-700 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50" />
             </div>
             <div className="flex justify-end gap-3">
               <button type="button" disabled={saving} onClick={() => setShowAdd(false)} className="px-4 py-2 text-zinc-400 font-bold text-sm disabled:opacity-50">إلغاء</button>

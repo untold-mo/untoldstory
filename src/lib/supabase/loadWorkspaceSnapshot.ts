@@ -1,4 +1,11 @@
 import { getSupabase } from '@/lib/supabase/client';
+import { ensureSupabaseSession } from '@/lib/supabase/session';
+import {
+  isFullCrmRole as isFullCrmRoleShared,
+  isRep as isRepShared,
+  isProductionManager as isProductionRoleShared,
+  isAccountant as isAccountantRoleShared,
+} from '@/lib/auth/roles';
 import type {
   Lead,
   User,
@@ -130,26 +137,29 @@ const CLOSED_MONTHS_LIST_SELECT = 'month_key';
 
 const CUSTODY_SETTINGS_LIST_SELECT = 'custody_account_map_json';
 
+// تفويض للمصدر الموحّد في @/lib/auth/roles — نفس المنطق تماماً، مصدر واحد للحقيقة.
 function isFullCrmRole(role?: User['role']): boolean {
-  return !role || role === 'مالك' || role === 'مدير مبيعات';
+  return isFullCrmRoleShared(role);
 }
 
 function isRepRole(role?: User['role']): boolean {
-  return role === 'مندوب';
+  return isRepShared(role);
 }
 
 function isProductionRole(role?: User['role']): boolean {
-  return role === 'مدير إنتاج';
+  return isProductionRoleShared(role);
 }
 
 function isAccountantRole(role?: User['role']): boolean {
-  return role === 'محاسب';
+  return isAccountantRoleShared(role);
 }
 
 export async function fetchSupabaseWorkspaceSnapshot(
   viewer?: WorkspaceViewer,
   options?: WorkspaceFetchOptions,
 ): Promise<SupabaseWorkspaceSnapshot> {
+  // انتظر جاهزية الجلسة قبل إطلاق ~17 استعلاماً — يمنع «permission denied» عند أول تحميل.
+  await ensureSupabaseSession();
   const sb = getSupabase();
   const role = viewer?.role;
   const uid = viewer?.id?.trim() || '';

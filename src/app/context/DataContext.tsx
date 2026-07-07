@@ -182,6 +182,8 @@ export interface Lead {
   score: number;
   createdAt: string;
   updatedAt: string;
+  /** آخر مكالمة تمّت على الليد (مشتقّة من الـ timeline، محفوظة كعمود لعرضها في القائمة) */
+  lastCallAt?: string;
   followUpAt?: string;
   lossReasonCode?: 'price' | 'timing' | 'budget' | 'competition' | 'no_response' | 'scope' | 'other';
   slaStatus: 'مستقر' | 'متأخر' | 'حرج';
@@ -5878,10 +5880,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!currentUser) return;
     const targetLead = leads.find((l) => l.id === leadId);
     if (!targetLead) return;
+    const isTeamLeadInScope =
+      currentUser.role === 'مندوب' &&
+      Boolean(currentUser.isTeamLeader) &&
+      (!targetLead.assignedTo ||
+        targetLead.assignedTo === currentUser.id ||
+        users.some((u) => u.id === targetLead.assignedTo && u.teamLeaderId === currentUser.id));
     const canLog =
       currentUser.role === 'مالك' ||
       currentUser.role === 'مدير مبيعات' ||
-      (currentUser.role === 'مندوب' && targetLead.assignedTo === currentUser.id);
+      (currentUser.role === 'مندوب' && targetLead.assignedTo === currentUser.id) ||
+      isTeamLeadInScope;
     if (!canLog) return;
     if (isServerDataMode()) {
       void (async () => {
@@ -5927,7 +5936,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           userName: currentUser?.name || 'النظام',
           createdAt: new Date().toISOString(),
         };
-        return { ...lead, updatedAt: new Date().toISOString(), timeline: [newActivity, ...lead.timeline] };
+        const isCall = meta?.channelType === 'call' || /(مكالمة|اتصال)/.test(action);
+        return {
+          ...lead,
+          updatedAt: new Date().toISOString(),
+          ...(isCall ? { lastCallAt: newActivity.createdAt } : {}),
+          timeline: [newActivity, ...lead.timeline],
+        };
       }
       return lead;
     }));

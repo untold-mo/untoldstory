@@ -1,4 +1,5 @@
 import { getSupabase } from '@/lib/supabase/client';
+import { ensureSupabaseSession } from '@/lib/supabase/session';
 
 export type SupabaseActor = {
   id: string;
@@ -9,6 +10,7 @@ export type SupabaseActor = {
 
 /** مستخدم التطبيق الحالي من جدول `users` حسب بريد جلسة Supabase Auth */
 export async function getSupabaseActor(): Promise<SupabaseActor> {
+  await ensureSupabaseSession();
   const sb = getSupabase();
   const { data: { user } } = await sb.auth.getUser();
   if (!user?.email) throw new Error('غير مسجل');

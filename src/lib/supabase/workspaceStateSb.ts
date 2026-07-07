@@ -1,6 +1,7 @@
 import { coerceAccountingWorkspaceArray } from '@/lib/accounting/accountingWorkspacePersistence';
 import { getSupabase } from '@/lib/supabase/client';
 import { getSupabaseActor } from '@/lib/supabase/getActor';
+import { ensureSupabaseSession } from '@/lib/supabase/session';
 
 const SINGLE_ID = 'default';
 
@@ -106,6 +107,7 @@ function deepMergeDoc(base: Record<string, unknown>, patch: Record<string, unkno
 }
 
 export async function fetchWorkspaceStateSb(): Promise<Record<string, unknown>> {
+  await ensureSupabaseSession();
   const sb = getSupabase();
   const { data, error } = await sb.from('workspace_state').select('doc_json').eq('id', SINGLE_ID).maybeSingle();
   if (error) throw new Error(error.message);

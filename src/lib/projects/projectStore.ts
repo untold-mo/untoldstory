@@ -1,6 +1,7 @@
 import { isSupabaseDirectMode } from '@/config/supabaseMode';
 import { getSupabase } from '@/lib/supabase/client';
-import type { Project, ProjectRevenue, ProjectExpense, ProjectCustody, ProjectsData } from './projectTypes';
+import { ensureSupabaseSession } from '@/lib/supabase/session';
+import type { Project, ProjectRevenue, ProjectExpense, ProjectCustody, ProjectsData, ProjectUpdate } from './projectTypes';
 
 const STORAGE_KEY = 'crm_projects_data';
 
@@ -48,8 +49,17 @@ function sb() { return getSupabase(); }
 function mapProject(r: Record<string, unknown>): Project {
   return {
     id: String(r.id), name: String(r.name), code: String(r.code),
-    clientName: String(r.client_name), startDate: String(r.start_date),
-    status: String(r.status) as Project['status'], notes: String(r.notes || ''),
+    clientName: String(r.client_name),
+    projectDate: r.project_date ? String(r.project_date) : undefined,
+    startDate: String(r.start_date),
+    expectedEndDate: r.expected_end_date ? String(r.expected_end_date) : undefined,
+    status: String(r.status) as Project['status'],
+    managerName: r.manager_name ? String(r.manager_name) : undefined,
+    productionManagerName: r.production_manager_name ? String(r.production_manager_name) : undefined,
+    salesName: r.sales_name ? String(r.sales_name) : undefined,
+    accountantName: r.accountant_name ? String(r.accountant_name) : undefined,
+    salesId: r.sales_id ? String(r.sales_id) : undefined,
+    notes: String(r.notes || ''),
     createdAt: String(r.created_at),
   };
 }
@@ -82,17 +92,6 @@ function mapCustody(r: Record<string, unknown>): ProjectCustody {
 
 // ============== Public API ==============
 
-async function waitForSupabaseSession(maxMs = 2500): Promise<boolean> {
-  const s = sb();
-  const started = Date.now();
-  while (Date.now() - started < maxMs) {
-    const { data } = await s.auth.getSession();
-    if (data.session?.access_token) return true;
-    await new Promise((r) => setTimeout(r, 120));
-  }
-  return false;
-}
-
 function mapProjectsFetchError(message: string): string {
   const m = String(message || '').toLowerCase();
   if (m.includes('jwt') || m.includes('not authenticated') || m.includes('permission denied')) {
@@ -107,7 +106,7 @@ export async function getProjectsDataAsync(): Promise<ProjectsData> {
   if (cached) return cached;
 
   const localFallback = loadLocal();
-  const hasSession = await waitForSupabaseSession();
+  const hasSession = await ensureSupabaseSession();
   if (!hasSession) {
     if (localFallback.projects.length > 0) return localFallback;
     throw new Error('يجب تسجيل الدخول لعرض الشغلانات');
@@ -151,7 +150,16 @@ export async function addProject(p: Omit<Project, 'id' | 'createdAt'>): Promise<
     const nowIso = new Date().toISOString();
     const { data, error } = await sb().from('projects').insert({
       id, name: p.name, code: p.code, client_name: p.clientName,
-      start_date: p.startDate, status: p.status, notes: p.notes,
+      project_date: p.projectDate || null,
+      start_date: p.startDate,
+      expected_end_date: p.expectedEndDate || null,
+      status: p.status,
+      manager_name: p.managerName || null,
+      production_manager_name: p.productionManagerName || null,
+      sales_name: p.salesName || null,
+      accountant_name: p.accountantName || null,
+      sales_id: p.salesId || null,
+      notes: p.notes,
       updated_at: nowIso,
     }).select('*').single();
     if (error) {
@@ -179,6 +187,14 @@ export async function updateProject(id: string, patch: Partial<Project>): Promis
     if (patch.name != null) dbPatch.name = patch.name;
     if (patch.status != null) dbPatch.status = patch.status;
     if (patch.clientName != null) dbPatch.client_name = patch.clientName;
+    if (patch.projectDate !== undefined) dbPatch.project_date = patch.projectDate || null;
+    if (patch.startDate != null) dbPatch.start_date = patch.startDate;
+    if (patch.expectedEndDate !== undefined) dbPatch.expected_end_date = patch.expectedEndDate || null;
+    if (patch.managerName !== undefined) dbPatch.manager_name = patch.managerName || null;
+    if (patch.productionManagerName !== undefined) dbPatch.production_manager_name = patch.productionManagerName || null;
+    if (patch.salesName !== undefined) dbPatch.sales_name = patch.salesName || null;
+    if (patch.accountantName !== undefined) dbPatch.accountant_name = patch.accountantName || null;
+    if (patch.salesId !== undefined) dbPatch.sales_id = patch.salesId || null;
     if (patch.notes != null) dbPatch.notes = patch.notes;
     dbPatch.updated_at = new Date().toISOString();
     const { data, error } = await sb().from('projects').update(dbPatch).eq('id', id).select('*').single();
@@ -386,33 +402,92 @@ export async function removeEstimatedAsset(id: string): Promise<void> {
 // ============== Employee Deductions ==============
 export interface EmployeeDeduction {
   id: string; userId: string; monthKey: string; type: string; amount: number; reason: string; date: string;
+  /** القسم/الوظيفة/ملاحظات — لتوثيق الخصم لكل الأدوار */
+  department?: string; jobTitle?: string; notes?: string;
+  /** اعتماد الإدارة — الخصم غير المعتمد لا يُحسب في صافي المرتب */
+  approved?: boolean;
+}
+
+function mapDeductionRow(r: Record<string, unknown>): EmployeeDeduction {
+  return {
+    id: String(r.id), userId: String(r.user_id), monthKey: String(r.month_key),
+    type: String(r.type), amount: Number(r.amount), reason: String(r.reason), date: String(r.date),
+    department: r.department != null ? String(r.department) : undefined,
+    jobTitle: r.job_title != null ? String(r.job_title) : undefined,
+    notes: r.notes != null ? String(r.notes) : undefined,
+    approved: r.approved == null ? true : Boolean(r.approved),
+  };
 }
 
 export async function getEmployeeDeductions(userId: string, monthKey: string): Promise<EmployeeDeduction[]> {
   if (useSb()) {
     const { data } = await sb().from('employee_deductions').select('*').eq('user_id', userId).eq('month_key', monthKey);
-    return (data || []).map((r: Record<string, unknown>) => ({
-      id: String(r.id), userId: String(r.user_id), monthKey: String(r.month_key),
-      type: String(r.type), amount: Number(r.amount), reason: String(r.reason), date: String(r.date),
-    }));
+    return (data || []).map((r: Record<string, unknown>) => mapDeductionRow(r));
   }
   try { const raw = localStorage.getItem(`emp_deductions_${userId}_${monthKey}`); return raw ? JSON.parse(raw) : []; } catch { return []; }
 }
 
 export async function addEmployeeDeduction(d: Omit<EmployeeDeduction, 'id'>): Promise<EmployeeDeduction> {
   const id = newId('ded');
+  const approved = d.approved !== false;
   if (useSb()) {
     const { data, error } = await sb().from('employee_deductions').insert({
       id, user_id: d.userId, month_key: d.monthKey, type: d.type, amount: d.amount, reason: d.reason, date: d.date,
+      department: d.department || null, job_title: d.jobTitle || null, notes: d.notes || null, approved,
     }).select('*').single();
     if (error) throw new Error(error.message);
-    return { id: String(data.id), userId: String(data.user_id), monthKey: String(data.month_key), type: String(data.type), amount: Number(data.amount), reason: String(data.reason), date: String(data.date) };
+    return mapDeductionRow(data as Record<string, unknown>);
   }
-  const entry: EmployeeDeduction = { ...d, id };
+  const entry: EmployeeDeduction = { ...d, id, approved };
   const all = await getEmployeeDeductions(d.userId, d.monthKey);
   all.push(entry);
   localStorage.setItem(`emp_deductions_${d.userId}_${d.monthKey}`, JSON.stringify(all));
   return entry;
+}
+
+// ============== تحديثات الشغلانة (Project Updates) ==============
+function mapProjectUpdate(r: Record<string, unknown>): ProjectUpdate {
+  return {
+    id: String(r.id), projectCode: String(r.project_code),
+    authorId: String(r.author_id || ''), authorName: String(r.author_name || ''),
+    authorRole: String(r.author_role || ''), note: String(r.note || ''),
+    createdAt: String(r.created_at),
+  };
+}
+
+export async function getProjectUpdates(projectCode: string): Promise<ProjectUpdate[]> {
+  if (useSb()) {
+    const { data } = await sb().from('project_updates').select('*').eq('project_code', projectCode).order('created_at', { ascending: false });
+    return (data || []).map((r: Record<string, unknown>) => mapProjectUpdate(r));
+  }
+  try { const raw = localStorage.getItem(`proj_updates_${projectCode}`); return raw ? JSON.parse(raw) : []; } catch { return []; }
+}
+
+export async function addProjectUpdate(u: Omit<ProjectUpdate, 'id' | 'createdAt'>): Promise<ProjectUpdate> {
+  const id = newId('pupd');
+  const createdAt = new Date().toISOString();
+  if (useSb()) {
+    const { data, error } = await sb().from('project_updates').insert({
+      id, project_code: u.projectCode, author_id: u.authorId, author_name: u.authorName,
+      author_role: u.authorRole, note: u.note, created_at: createdAt,
+    }).select('*').single();
+    if (error) throw new Error(error.message);
+    return mapProjectUpdate(data as Record<string, unknown>);
+  }
+  const entry: ProjectUpdate = { ...u, id, createdAt };
+  const all = await getProjectUpdates(u.projectCode);
+  all.unshift(entry);
+  localStorage.setItem(`proj_updates_${u.projectCode}`, JSON.stringify(all));
+  return entry;
+}
+
+export async function setEmployeeDeductionApproval(id: string, approved: boolean): Promise<void> {
+  if (useSb()) {
+    const { error } = await sb().from('employee_deductions').update({ approved }).eq('id', id);
+    if (error) throw new Error(error.message);
+    return;
+  }
+  // محلي: ابحث في كل المفاتيح المخزّنة (نادر) — تُحدَّث عند إعادة التحميل من الواجهة
 }
 
 export async function removeEmployeeDeduction(id: string, userId: string, monthKey: string): Promise<void> {

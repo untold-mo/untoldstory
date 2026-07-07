@@ -295,6 +295,14 @@
     "مغلق - خسارة": "Closed — lost"
   },
   "leads": {
+    "lastCall": "Last call",
+    "lastUpdate": "Last update",
+    "noContactYet": "No contact",
+    "sortBy": "Sort by",
+    "sortDefault": "Newest",
+    "sortLastCall": "Last call",
+    "sortLastUpdate": "Last update",
+    "notContactedFilter": "Not contacted",
     "titleAll": "All leads",
     "titleManage": "Lead management",
     "titleCustomers": "External customers",

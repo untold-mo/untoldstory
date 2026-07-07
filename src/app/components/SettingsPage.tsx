@@ -18,6 +18,8 @@ import { useData } from '../context/DataContext';
 import { getRoleLabel } from '@/lib/i18nLabels';
 import { useAppDirection } from '../hooks/useAppDirection';
 import { patchMyPasswordApi } from '@/lib/api/authPasswordApi';
+import { uploadEmployeeAvatarSb } from '@/lib/supabase/avatarStorage';
+import { isSupabaseDirectMode } from '@/config/supabaseMode';
 
 function browserNotificationsSupported(): boolean {
   return typeof window !== 'undefined' && 'Notification' in window && typeof Notification.requestPermission === 'function';
@@ -45,6 +47,28 @@ export default function SettingsPage() {
   const [emailDisplay, setEmailDisplay] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [avatarPreviewBroken, setAvatarPreviewBroken] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+
+  const handleAvatarFile = async (file: File | null) => {
+    if (!file || !currentUser) return;
+    if (!isSupabaseDirectMode()) {
+      toast.error('رفع الصور متاح فقط في وضع الخادم (Supabase)');
+      return;
+    }
+    setAvatarUploading(true);
+    try {
+      const url = await uploadEmployeeAvatarSb(file, currentUser.id);
+      setAvatarUrl(url);
+      setAvatarPreviewBroken(false);
+      const ok = await updateEmployeeProfile(currentUser.id, { avatar: url });
+      if (ok) toast.success('تم رفع الصورة بنجاح');
+      else toast.error('تم الرفع لكن تعذّر حفظ الصورة');
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'تعذّر رفع الصورة');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
 
   useEffect(() => {
     setName(currentUser?.name || '');
@@ -238,6 +262,19 @@ export default function SettingsPage() {
                     <p className="text-xs text-zinc-500">
                       {t('settingsProfile.avatarUrlHint')}
                     </p>
+                    <div className="flex items-center gap-3 pt-1">
+                      <label className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition-all border ${avatarUploading ? 'bg-zinc-800 text-zinc-500 border-zinc-700 cursor-wait' : 'bg-[#6366F1]/15 text-[#a5a0ff] border-[#6366F1]/30 hover:bg-[#6366F1]/25'}`}>
+                        {avatarUploading ? 'جاري الرفع…' : '⬆ رفع صورة من الجهاز'}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          className="hidden"
+                          disabled={avatarUploading}
+                          onChange={(e) => { void handleAvatarFile(e.target.files?.[0] || null); e.target.value = ''; }}
+                        />
+                      </label>
+                      <span className="text-[10px] text-zinc-600">PNG/JPG/WebP — حتى 2 ميجابايت</span>
+                    </div>
                   </div>
                 </div>
               </div>

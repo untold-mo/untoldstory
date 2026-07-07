@@ -19,6 +19,7 @@
     "check:accounting": "node scripts/accounting-invariants.mjs",
     "check:system": "npm run check:wiring && npm run check:scenarios && npm run check:accounting",
     "verify": "npm run build && node scripts/verify-workspace.mjs && npm run check:system",
+    "db:apply-all": "node scripts/apply-all-sql.mjs",
     "db:apply-rls": "node scripts/apply-supabase-rls.mjs",
     "db:apply-pending": "node scripts/apply-db-pending.mjs",
     "n8n:setup-notify": "node scripts/setup-n8n-client-notify.mjs",

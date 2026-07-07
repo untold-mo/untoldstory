@@ -14,6 +14,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
+import { useData } from '../context/DataContext';
 import type {
   Project,
   ProjectRevenue,
@@ -33,7 +34,10 @@ import {
   settleCustody,
   updateCustodyStatus,
   updateProject,
+  getProjectUpdates,
+  addProjectUpdate,
 } from '@/lib/projects/projectStore';
+import type { ProjectUpdate } from '@/lib/projects/projectTypes';
 
 type Modal = null | 'revenue' | 'expense' | 'custody' | 'settle';
 
@@ -53,14 +57,51 @@ export default function ProjectDetailPage({
   project: Project;
   onBack: () => void;
 }) {
+  const { currentUser } = useData();
+  const role = currentUser?.role;
+  // صلاحيات دقيقة حسب الدور
+  const canEditRevenues = role === 'مالك' || role === 'محاسب';           // الإيرادات: مالك/محاسب فقط
+  const canEditOperations = role === 'مالك' || role === 'محاسب' || role === 'مدير إنتاج'; // مصروفات/عهد: + مدير الإنتاج
+  const canChangeStatus = canEditOperations;
+  const isSalesView = role === 'مندوب'; // السيلز/التيم ليدر: تحديثات فقط، بدون بيانات مالية
+
   const [data, setData] = useState<import('@/lib/projects/projectTypes').ProjectsData>({ projects: [], revenues: [], expenses: [], custodies: [] });
   const [modal, setModal] = useState<Modal>(null);
   const [settleCustodyId, setSettleCustodyId] = useState<string | null>(null);
+  const [updates, setUpdates] = useState<ProjectUpdate[]>([]);
+  const [newUpdate, setNewUpdate] = useState('');
+  const [savingUpdate, setSavingUpdate] = useState(false);
 
   const refresh = useCallback(() => { getProjectsDataAsync().then(setData).catch(() => {}); }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
   const project = data.projects.find((p) => p.id === initialProject.id) || initialProject;
+
+  const loadUpdates = useCallback(() => {
+    getProjectUpdates(initialProject.code).then(setUpdates).catch(() => {});
+  }, [initialProject.code]);
+  useEffect(() => { loadUpdates(); }, [loadUpdates]);
+
+  const handleAddUpdate = async () => {
+    if (!newUpdate.trim() || !currentUser || savingUpdate) return;
+    setSavingUpdate(true);
+    try {
+      await addProjectUpdate({
+        projectCode: project.code,
+        authorId: currentUser.id,
+        authorName: currentUser.name,
+        authorRole: currentUser.role,
+        note: newUpdate.trim(),
+      });
+      setNewUpdate('');
+      loadUpdates();
+      toast.success('تم إضافة التحديث');
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'تعذّر إضافة التحديث');
+    } finally {
+      setSavingUpdate(false);
+    }
+  };
 
   const revenues = useMemo(() => data.revenues.filter((r) => r.projectCode === project.code), [data.revenues, project.code]);
   const expenses = useMemo(() => data.expenses.filter((e) => e.projectCode === project.code), [data.expenses, project.code]);
@@ -92,22 +133,33 @@ export default function ProjectDetailPage({
           </button>
           <div>
             <h2 className="text-2xl font-bold text-white">{project.name}</h2>
-            <div className="flex items-center gap-3 text-sm text-zinc-400">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-400">
               <span>كود: {project.code}</span>
               <span className="h-1 w-1 rounded-full bg-zinc-600" />
               <span>عميل: {project.clientName}</span>
               <span className="h-1 w-1 rounded-full bg-zinc-600" />
-              <span>{project.startDate}</span>
+              <span>📅 {(project.projectDate || project.startDate || '').slice(0, 10)}</span>
+              {project.expectedEndDate && <span>← {project.expectedEndDate.slice(0, 10)}</span>}
             </div>
+            {(project.managerName || project.productionManagerName || project.salesName || project.accountantName) && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-zinc-500 mt-1">
+                {project.managerName && <span>مسؤول: {project.managerName}</span>}
+                {project.productionManagerName && <span>• إنتاج: {project.productionManagerName}</span>}
+                {project.salesName && <span>• سيلز: {project.salesName}</span>}
+                {project.accountantName && <span>• محاسب: {project.accountantName}</span>}
+              </div>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
           <select
             value={project.status}
+            disabled={!canChangeStatus}
             onChange={(e) => { updateProject(project.id, { status: e.target.value as Project['status'] }).then(() => refresh()); }}
-            className="bg-[#09090B] border border-zinc-700 rounded-xl py-2 px-3 text-sm text-white focus:outline-none"
+            className="bg-[#09090B] border border-zinc-700 rounded-xl py-2 px-3 text-sm text-white focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <option value="مفتوحة">مفتوحة</option>
+            <option value="تحت التنفيذ">تحت التنفيذ</option>
             <option value="منتهية">منتهية</option>
             <option value="تحت التحصيل">تحت التحصيل</option>
           </select>
@@ -115,7 +167,8 @@ export default function ProjectDetailPage({
       </div>
 
       {/* === الإيرادات === */}
-      <Section title="الإيرادات" icon={TrendingUp} iconColor="text-emerald-400" onAdd={() => setModal('revenue')} count={revenues.length}>
+      {!isSalesView && (<>
+      <Section title="الإيرادات" icon={TrendingUp} iconColor="text-emerald-400" onAdd={canEditRevenues ? () => setModal('revenue') : undefined} count={revenues.length}>
         {revenues.length === 0 ? (
           <EmptyState text="لا توجد إيرادات مسجلة" />
         ) : (
@@ -149,7 +202,7 @@ export default function ProjectDetailPage({
       </Section>
 
       {/* === المصروفات === */}
-      <Section title="المصروفات" icon={TrendingDown} iconColor="text-rose-400" onAdd={() => setModal('expense')} count={expenses.length}>
+      <Section title="المصروفات" icon={TrendingDown} iconColor="text-rose-400" onAdd={canEditOperations ? () => setModal('expense') : undefined} count={expenses.length}>
         {expenses.length === 0 ? (
           <EmptyState text="لا توجد مصروفات مسجلة" />
         ) : (
@@ -180,7 +233,7 @@ export default function ProjectDetailPage({
       </Section>
 
       {/* === العُهد === */}
-      <Section title="العُهد" icon={Shield} iconColor="text-blue-400" onAdd={() => setModal('custody')} count={custodies.length}>
+      <Section title="العُهد" icon={Shield} iconColor="text-blue-400" onAdd={canEditOperations ? () => setModal('custody') : undefined} count={custodies.length}>
         {custodies.length === 0 ? (
           <EmptyState text="لا توجد عهد مسجلة" />
         ) : (
@@ -235,6 +288,48 @@ export default function ProjectDetailPage({
           <SumCard label="صافي الربح المتوقع" value={summary.expectedProfit} color={summary.expectedProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'} />
         </div>
       </div>
+      </>)}
+
+      {/* === التحديثات التنفيذية === */}
+      <div className="bg-[#18181B] border border-zinc-800 rounded-2xl p-6 shadow-xl">
+        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+          <FileText className="h-5 w-5 text-[#6366F1]" /> التحديثات التنفيذية
+          <span className="text-xs text-zinc-500 font-normal">({updates.length})</span>
+        </h3>
+        {currentUser && (
+          <div className="flex items-start gap-2 mb-4">
+            <textarea
+              value={newUpdate}
+              onChange={(e) => setNewUpdate(e.target.value)}
+              placeholder="اكتب تحديثاً على الشغلانة…"
+              rows={2}
+              className="flex-1 bg-[#09090B] border border-zinc-700 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50 resize-none"
+            />
+            <button
+              onClick={handleAddUpdate}
+              disabled={savingUpdate || !newUpdate.trim()}
+              className="bg-[#6366F1] text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-[#5254E2] transition-all disabled:opacity-40 shrink-0"
+            >
+              {savingUpdate ? '…' : 'إضافة'}
+            </button>
+          </div>
+        )}
+        {updates.length === 0 ? (
+          <p className="text-sm text-zinc-500 text-center py-4">لا توجد تحديثات بعد</p>
+        ) : (
+          <div className="space-y-3">
+            {updates.map((u) => (
+              <div key={u.id} className="bg-[#09090B] border border-zinc-800 rounded-xl p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-white">{u.authorName} <span className="text-zinc-500 font-normal">• {u.authorRole}</span></span>
+                  <span className="text-[10px] text-zinc-600">{new Date(u.createdAt).toLocaleString('ar-EG')}</span>
+                </div>
+                <p className="text-sm text-zinc-300 whitespace-pre-wrap">{u.note}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Modals */}
       {modal === 'revenue' && <AddRevenueModal projectCode={project.code} onClose={() => setModal(null)} onDone={() => { refresh(); setModal(null); }} />}
@@ -247,7 +342,7 @@ export default function ProjectDetailPage({
 
 /* ==================== Sub-components ==================== */
 
-function Section({ title, icon: Icon, iconColor, onAdd, count, children }: { title: string; icon: typeof TrendingUp; iconColor: string; onAdd: () => void; count: number; children: React.ReactNode }) {
+function Section({ title, icon: Icon, iconColor, onAdd, count, children }: { title: string; icon: typeof TrendingUp; iconColor: string; onAdd?: () => void; count: number; children: React.ReactNode }) {
   return (
     <div className="bg-[#18181B] border border-zinc-800 rounded-2xl p-6 shadow-xl">
       <div className="flex items-center justify-between mb-4">
@@ -255,9 +350,11 @@ function Section({ title, icon: Icon, iconColor, onAdd, count, children }: { tit
           <Icon className={`h-5 w-5 ${iconColor}`} /> {title}
           <span className="text-xs text-zinc-500 font-normal">({count})</span>
         </h3>
-        <button onClick={onAdd} className="flex items-center gap-1 bg-[#6366F1] text-white px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-[#5254E2] transition-all">
-          <Plus className="h-3 w-3" /> إضافة
-        </button>
+        {onAdd && (
+          <button onClick={onAdd} className="flex items-center gap-1 bg-[#6366F1] text-white px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-[#5254E2] transition-all">
+            <Plus className="h-3 w-3" /> إضافة
+          </button>
+        )}
       </div>
       {children}
     </div>

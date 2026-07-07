@@ -218,18 +218,36 @@ function LeadRepUpdateModalPortal() {
 }
 
 export function LeadRepUpdateProvider({ children }: { children: React.ReactNode }) {
-  const { currentUser } = useData();
+  const { currentUser, users } = useData();
   const { t } = useTranslation();
   const [modal, setModal] = useState<ModalState>(emptyModal);
   const leadHydrateSeqRef = useRef(0);
 
+  // معرّفات فريق قائد الفريق الحالي (نفسه + المندوبون التابعون له)
+  const teamMemberIds = useMemo(() => {
+    if (!currentUser || currentUser.role !== 'مندوب' || !currentUser.isTeamLeader) return null;
+    const ids = new Set<string>([currentUser.id]);
+    users.forEach((u) => {
+      if (u.teamLeaderId === currentUser.id) ids.add(u.id);
+    });
+    return ids;
+  }, [currentUser, users]);
+
   const canUpdateLead = useCallback(
-    (lead: Lead) =>
-      !!currentUser &&
-      (currentUser.role === 'مالك' ||
-        currentUser.role === 'مدير مبيعات' ||
-        (currentUser.role === 'مندوب' && lead.assignedTo === currentUser.id)),
-    [currentUser],
+    (lead: Lead) => {
+      if (!currentUser) return false;
+      if (currentUser.role === 'مالك' || currentUser.role === 'مدير مبيعات') return true;
+      if (currentUser.role === 'مندوب') {
+        if (lead.assignedTo === currentUser.id) return true;
+        // قائد الفريق: يكتب Update/Comment على ليدز فريقه + الليدز غير المعيّنة
+        if (teamMemberIds) {
+          if (!lead.assignedTo) return true;
+          return teamMemberIds.has(lead.assignedTo);
+        }
+      }
+      return false;
+    },
+    [currentUser, teamMemberIds],
   );
 
   const openInteraction = useCallback(

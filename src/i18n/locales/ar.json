@@ -295,6 +295,14 @@
     "مغلق - خسارة": "مغلق - خسارة"
   },
   "leads": {
+    "lastCall": "آخر مكالمة",
+    "lastUpdate": "آخر تحديث",
+    "noContactYet": "لا يوجد تواصل",
+    "sortBy": "ترتيب حسب",
+    "sortDefault": "الأحدث",
+    "sortLastCall": "آخر مكالمة",
+    "sortLastUpdate": "آخر تحديث",
+    "notContactedFilter": "لم يتم التواصل",
     "titleAll": "كافة الليدز",
     "titleManage": "إدارة الليدز",
     "titleCustomers": "إدارة العملاء الخارجيين",

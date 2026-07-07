@@ -17,7 +17,11 @@ export function isLeadInTeamScope(lead: Pick<Lead, 'assignedTo'>, teamMemberIds:
   return teamMemberIds.has(lead.assignedTo);
 }
 
-/** هل يستطيع التيم ليدر تعديل/توزيع هذا الليد؟ */
+/**
+ * هل يستطيع التيم ليدر تعديل/توزيع هذا الليد؟
+ * يطابق سياسة RLS (add_team_leader_rls.sql): يسمح بالتعديل على ليدز فريقه
+ * أو غير المعيّنة — سواء كتابة Update/Comment أو إعادة توزيع.
+ */
 export function canTeamLeaderPatchLead(
   actor: SupabaseActor,
   existing: Lead,
@@ -25,10 +29,12 @@ export function canTeamLeaderPatchLead(
   teamMemberIds: Set<string>,
 ): boolean {
   if (actor.role !== 'مندوب' || !actor.isTeamLeader) return false;
-  if (existing.assignedTo === actor.id) return true;
-  if (patch.assignedTo === undefined) return false;
+  // الليد لازم يكون ضمن نطاق الفريق (نفسه / عضو فريقه / غير معيّن)
   if (!isLeadInTeamScope(existing, teamMemberIds)) return false;
-  const nextAssignee = patch.assignedTo || null;
-  if (nextAssignee && !teamMemberIds.has(nextAssignee)) return false;
+  // لو في إعادة توزيع — المسؤول الجديد لازم يكون ضمن الفريق
+  if (patch.assignedTo !== undefined) {
+    const nextAssignee = patch.assignedTo || null;
+    if (nextAssignee && !teamMemberIds.has(nextAssignee)) return false;
+  }
   return true;
 }

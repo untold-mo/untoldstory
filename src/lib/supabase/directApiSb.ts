@@ -3,6 +3,7 @@
  */
 import { getSupabase } from '@/lib/supabase/client';
 import { getSupabaseActor } from '@/lib/supabase/getActor';
+import { ensureSupabaseSession } from '@/lib/supabase/session';
 import { normalizeInvoiceFromRow } from '@/lib/supabase/invoiceNormalize';
 import { validateManualJournalLines } from '@/lib/accounting/validateManualJournalLines';
 import { fetchAllLeadsFromSupabase } from '@/lib/supabase/fetchAllLeads';
@@ -720,6 +721,7 @@ export async function createExpenseSb(payload: Partial<Expense> & { title: strin
 }
 
 export async function deleteExpenseSb(id: string): Promise<void> {
+  await ensureSupabaseSession();
   const sb = getSupabase();
   const { error } = await sb.from('expenses').delete().eq('id', id);
   if (error) throw new Error(error.message || 'فشل حذف المصروف');
@@ -1300,6 +1302,7 @@ export async function createCustodyFundSb(doc: unknown): Promise<unknown> {
 }
 
 export async function deleteCustodyFundSb(id: string): Promise<void> {
+  await ensureSupabaseSession();
   const sb = getSupabase();
   const { error } = await sb.from('custody_funds').delete().eq('id', id);
   if (error) throw new Error(error.message || 'فشل حذف العهدة');

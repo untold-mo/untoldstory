@@ -186,6 +186,10 @@ export async function supabasePatchLead(
     if (entry.evidenceRef || app.qaStatus === 'pending') entry.qaStatus = 'pending';
     timeline = [entry, ...timeline];
     data.timeline_json = timeline;
+    // تحديث «آخر مكالمة» لعرضه في القائمة بدون تحميل الـ timeline كاملاً
+    if (app.channelType === 'call' || /(مكالمة|اتصال)/.test(entry.action)) {
+      data.last_call_at = entry.createdAt;
+    }
   }
 
   if (Object.keys(data).length === 0) {

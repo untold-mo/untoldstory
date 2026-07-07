@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Lead } from '@/app/context/DataContext';
 import { mapLeadListFromRow } from '@/lib/supabase/postgrestMappers';
 import { assertSupabaseFetchAllowed, isSupabaseQuotaError } from '@/lib/supabase/supabaseGuard';
+import { ensureSupabaseSession } from '@/lib/supabase/session';
 
 const LEADS_PAGE_SIZE = 1000;
 
@@ -10,7 +11,7 @@ const LEADS_PAGE_SIZE = 1000;
  * التفاصيل الكاملة + السجل تُجلب عند فتح Client 360 عبر fetchLeadByIdSb.
  */
 export const LEADS_LIST_SELECT =
-  'id,customer_code,name,company,phone,email,status,assigned_to_id,budget,source,category,score,follow_up_at,sla_status,created_at,updated_at';
+  'id,customer_code,name,company,phone,email,status,assigned_to_id,budget,source,category,score,follow_up_at,sla_status,created_at,updated_at,last_call_at';
 
 type AssigneeScopeOptions = { assignedToId?: string; assignedToIds?: string[] };
 
@@ -53,6 +54,7 @@ export async function fetchAllLeadsFromSupabase(
   sb: SupabaseClient,
   options?: AssigneeScopeOptions,
 ): Promise<Lead[]> {
+  await ensureSupabaseSession();
   assertSupabaseFetchAllowed();
   const countQ = applyAssigneeScope(
     sb.from('leads').select('id', { count: 'exact', head: true }),

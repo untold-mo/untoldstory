@@ -50,7 +50,7 @@ type LinkedViewId =
 
 const ALL_TABS: { id: LinkedViewId; labelKey: string; icon: typeof Users; roles: User['role'][] }[] = [
   { id: 'team', labelKey: 'pageViewsHub.team', icon: Users, roles: ['مالك', 'مدير مبيعات'] },
-  { id: 'projects', labelKey: 'الشغلانات', icon: Briefcase, roles: ['مالك', 'محاسب', 'مدير إنتاج'] },
+  { id: 'projects', labelKey: 'الشغلانات', icon: Briefcase, roles: ['مالك', 'محاسب', 'مدير إنتاج', 'مندوب'] },
   { id: 'proj_revenues', labelKey: 'الإيرادات', icon: TrendingUp, roles: ['مالك', 'محاسب'] },
   { id: 'proj_expenses', labelKey: 'المصروفات العامة', icon: TrendingDown, roles: ['مالك', 'محاسب', 'مدير إنتاج'] },
   { id: 'financial_position', labelKey: 'المركز المالي', icon: Calculator, roles: ['مالك', 'محاسب'] },

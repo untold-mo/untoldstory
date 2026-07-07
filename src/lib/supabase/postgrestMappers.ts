@@ -128,6 +128,7 @@ export function mapLeadListFromRow(r: Record<string, unknown>): Lead {
     score: Number(r.score) || 0,
     createdAt: iso(r.created_at),
     updatedAt: iso(r.updated_at),
+    lastCallAt: r.last_call_at ? iso(r.last_call_at) : undefined,
     followUpAt: r.follow_up_at ? iso(r.follow_up_at) : undefined,
     lossReasonCode: (() => {
       const lr = r.loss_reason_code != null ? String(r.loss_reason_code) : '';
@@ -168,6 +169,17 @@ export function mapLeadFromRow(r: Record<string, unknown>): Lead {
     score: Number(r.score) || 0,
     createdAt: iso(r.created_at),
     updatedAt: iso(r.updated_at),
+    lastCallAt: (() => {
+      if (r.last_call_at) return iso(r.last_call_at);
+      // اشتقاق من الـ timeline لو العمود غير موجود: أحدث نشاط مكالمة
+      const calls = (Array.isArray(timeline) ? timeline : []).filter(
+        (a) => a && (a.channelType === 'call' || /(مكالمة|اتصال)/.test(String(a.action || ''))),
+      );
+      if (calls.length === 0) return undefined;
+      return calls.reduce((latest, a) =>
+        new Date(a.createdAt).getTime() > new Date(latest.createdAt).getTime() ? a : latest,
+      ).createdAt;
+    })(),
     followUpAt: r.follow_up_at ? iso(r.follow_up_at) : undefined,
     lossReasonCode: (() => {
       const lr = r.loss_reason_code != null ? String(r.loss_reason_code) : '';

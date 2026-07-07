@@ -17,8 +17,11 @@ import {
   getEmployeeDeductions,
   addEmployeeDeduction,
   removeEmployeeDeduction,
+  setEmployeeDeductionApproval,
   type EmployeeDeduction,
 } from '@/lib/projects/projectStore';
+import { uploadEmployeeAvatarSb } from '@/lib/supabase/avatarStorage';
+import { isSupabaseDirectMode } from '@/config/supabaseMode';
 
 function getMonthKey(d: Date = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -31,8 +34,28 @@ export default function EmployeeProfilePage({
   employeeId: string;
   onClose: () => void;
 }) {
-  const { users, attendanceRecords, currentUser, ownerSetEmployeePassword } = useData();
+  const { users, attendanceRecords, currentUser, ownerSetEmployeePassword, updateEmployeeProfile } = useData();
   const employee = users.find((u) => u.id === employeeId);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+
+  const canEditPhoto =
+    !!currentUser && (currentUser.role === 'مالك' || currentUser.role === 'مدير مبيعات');
+
+  const handleAvatarFile = async (file: File | null) => {
+    if (!file || !employee) return;
+    if (!isSupabaseDirectMode()) { toast.error('رفع الصور متاح فقط في وضع الخادم (Supabase)'); return; }
+    setAvatarUploading(true);
+    try {
+      const url = await uploadEmployeeAvatarSb(file, employee.id);
+      const ok = await updateEmployeeProfile(employee.id, { avatar: url });
+      if (ok) toast.success('تم تحديث صورة الموظف');
+      else toast.error('تعذّر حفظ الصورة');
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'تعذّر رفع الصورة');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
 
   const handleRefreshData = () => {
     window.location.reload();
@@ -44,9 +67,12 @@ export default function EmployeeProfilePage({
   const [showPwdModal, setShowPwdModal] = useState(false);
   const [newPwd, setNewPwd] = useState('');
   const [pwdSaving, setPwdSaving] = useState(false);
-  const [addType, setAddType] = useState<'خصم' | 'إذن'>('خصم');
+  const [addType, setAddType] = useState<'خصم' | 'إذن' | 'إجازة' | 'مكافأة'>('خصم');
   const [addAmount, setAddAmount] = useState('');
   const [addReason, setAddReason] = useState('');
+  const [addDepartment, setAddDepartment] = useState('');
+  const [addJobTitle, setAddJobTitle] = useState('');
+  const [addNotes, setAddNotes] = useState('');
 
   const refreshDeductions = (uid: string, mk: string) => {
     getEmployeeDeductions(uid, mk).then(setDeductions).catch(() => {});
@@ -65,7 +91,7 @@ export default function EmployeeProfilePage({
   });
 
   const attendance = useMemo(() => {
-    if (!employee) return { present: 0, late: 0, absent: 0, records: [] as typeof attendanceRecords };
+    if (!employee) return { present: 0, late: 0, earlyLeave: 0, absent: 0, records: [] as typeof attendanceRecords };
     const monthRecords = attendanceRecords.filter((r) => {
       if (r.repId !== employee.id) return false;
       const d = new Date(r.createdAt);
@@ -73,38 +99,57 @@ export default function EmployeeProfilePage({
     });
     const presentDays = new Set<string>();
     const lateDays = new Set<string>();
+    const earlyLeaveDays = new Set<string>();
     for (const r of monthRecords) {
-      if (r.type !== 'in') continue;
       const d = new Date(r.createdAt);
       const dayKey = d.toISOString().slice(0, 10);
-      presentDays.add(dayKey);
       const mins = d.getHours() * 60 + d.getMinutes();
-      if (mins > 9 * 60 + 30) lateDays.add(dayKey);
+      if (r.type === 'in') {
+        presentDays.add(dayKey);
+        if (mins > 9 * 60 + 30) lateDays.add(dayKey); // تأخير بعد 9:30
+      } else if (r.type === 'out') {
+        if (mins < 17 * 60) earlyLeaveDays.add(dayKey); // انصراف مبكر قبل 5:00 م
+      }
     }
     const workingDays = 26;
     const absent = Math.max(0, workingDays - presentDays.size);
     return {
       present: presentDays.size,
       late: lateDays.size,
+      earlyLeave: earlyLeaveDays.size,
       absent,
       records: monthRecords,
     };
   }, [employee, attendanceRecords, monthYear, monthNum]);
 
   const financials = useMemo(() => {
-    if (!employee) return { baseSalary: 0, totalDeductions: 0, totalPermissions: 0, latePenalty: 0, absentPenalty: 0, netSalary: 0 };
+    if (!employee) return { baseSalary: 0, totalDeductions: 0, totalPermissions: 0, totalBonuses: 0, totalLeaves: 0, latePenalty: 0, earlyLeavePenalty: 0, absentPenalty: 0, netSalary: 0 };
     const baseSalary = Number(employee.baseSalary) || 0;
     const latePenalty = attendance.late * 75;
+    const earlyLeavePenalty = attendance.earlyLeave * 75;
     const absentPenalty = attendance.absent * (baseSalary / 26);
-    const manualDeductions = deductions
-      .filter((d: EmployeeDeduction) => d.type === 'خصم')
-      .reduce((sum: number, d: EmployeeDeduction) => sum + d.amount, 0);
-    const permissions = deductions
-      .filter((d: EmployeeDeduction) => d.type === 'إذن')
-      .reduce((sum: number, d: EmployeeDeduction) => sum + d.amount, 0);
-    const totalDeductions = latePenalty + absentPenalty + manualDeductions + permissions;
-    const netSalary = Math.max(0, baseSalary - totalDeductions);
-    return { baseSalary, totalDeductions, totalPermissions: permissions, latePenalty: Math.round(latePenalty), absentPenalty: Math.round(absentPenalty), netSalary: Math.round(netSalary) };
+    // يُحسب المعتمد فقط في صافي المرتب
+    const sumByType = (type: string) =>
+      deductions
+        .filter((d: EmployeeDeduction) => d.type === type && d.approved !== false)
+        .reduce((sum: number, d: EmployeeDeduction) => sum + d.amount, 0);
+    const manualDeductions = sumByType('خصم');
+    const permissions = sumByType('إذن');
+    const leaves = sumByType('إجازة');
+    const bonuses = sumByType('مكافأة');
+    const totalDeductions = latePenalty + earlyLeavePenalty + absentPenalty + manualDeductions + permissions + leaves;
+    const netSalary = Math.max(0, baseSalary + bonuses - totalDeductions);
+    return {
+      baseSalary,
+      totalDeductions,
+      totalPermissions: permissions,
+      totalBonuses: bonuses,
+      totalLeaves: leaves,
+      latePenalty: Math.round(latePenalty),
+      earlyLeavePenalty: Math.round(earlyLeavePenalty),
+      absentPenalty: Math.round(absentPenalty),
+      netSalary: Math.round(netSalary),
+    };
   }, [employee, attendance, deductions]);
 
   const handleMonthChange = (delta: number) => {
@@ -122,11 +167,18 @@ export default function EmployeeProfilePage({
       await addEmployeeDeduction({
         userId: employee.id, monthKey, type: addType,
         amount, reason: addReason.trim(), date: new Date().toISOString().slice(0, 10),
+        department: addDepartment.trim() || employee.role,
+        jobTitle: addJobTitle.trim() || employee.role,
+        notes: addNotes.trim() || undefined,
+        approved: true,
       });
       refreshDeductions(employee.id, monthKey);
       setShowAddModal(false);
       setAddAmount('');
       setAddReason('');
+      setAddDepartment('');
+      setAddJobTitle('');
+      setAddNotes('');
       toast.success(`تم إضافة ${addType} بنجاح`);
     } catch (e: unknown) { toast.error(e instanceof Error ? e.message : 'خطأ'); }
   };
@@ -156,6 +208,17 @@ export default function EmployeeProfilePage({
     } catch { toast.error('تعذر الحذف'); }
   };
 
+  const canApprove = currentUser?.role === 'مالك' || currentUser?.role === 'محاسب';
+
+  const handleToggleApproval = async (d: EmployeeDeduction) => {
+    if (!employee) return;
+    try {
+      await setEmployeeDeductionApproval(d.id, d.approved === false);
+      refreshDeductions(employee.id, monthKey);
+      toast.success(d.approved === false ? 'تم اعتماد الخصم' : 'تم إلغاء الاعتماد');
+    } catch { toast.error('تعذر تحديث الاعتماد'); }
+  };
+
   if (!employee) {
     return (
       <div className="p-8 text-center text-zinc-500">
@@ -170,8 +233,34 @@ export default function EmployeeProfilePage({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-[#6366F1] to-[#8B5CF6] flex items-center justify-center text-xl font-bold text-white">
-            {employee.name[0]}
+          <div className="relative h-14 w-14 shrink-0 group/avatar">
+            {employee.avatar ? (
+              <img
+                src={employee.avatar}
+                alt={employee.name}
+                className="h-14 w-14 rounded-2xl object-cover border border-zinc-700"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+              />
+            ) : (
+              <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-[#6366F1] to-[#8B5CF6] flex items-center justify-center text-xl font-bold text-white">
+                {employee.name[0]}
+              </div>
+            )}
+            {canEditPhoto && (
+              <label
+                title="تغيير صورة الموظف"
+                className={`absolute inset-0 rounded-2xl flex items-center justify-center text-[9px] font-bold text-white bg-black/60 opacity-0 group-hover/avatar:opacity-100 transition-opacity cursor-pointer ${avatarUploading ? 'opacity-100 cursor-wait' : ''}`}
+              >
+                {avatarUploading ? '…' : '📷 تغيير'}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  disabled={avatarUploading}
+                  onChange={(e) => { void handleAvatarFile(e.target.files?.[0] || null); e.target.value = ''; }}
+                />
+              </label>
+            )}
           </div>
           <div>
             <h2 className="text-2xl font-bold text-white">{employee.name}</h2>
@@ -220,8 +309,9 @@ export default function EmployeeProfilePage({
           <DollarSign className="h-5 w-5 text-emerald-400" />
           بيانات المرتب
         </h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <StatCard label="المرتب الأساسي" value={financials.baseSalary.toLocaleString('ar-EG')} unit="ج.م" color="text-white" />
+          <StatCard label="المكافآت" value={financials.totalBonuses.toLocaleString('ar-EG')} unit="ج.م" color="text-emerald-400" />
           <StatCard label="إجمالي الخصومات" value={financials.totalDeductions.toLocaleString('ar-EG')} unit="ج.م" color="text-rose-400" />
           <StatCard label="الأذونات" value={financials.totalPermissions.toLocaleString('ar-EG')} unit="ج.م" color="text-amber-400" />
           <StatCard label="صافي المرتب" value={financials.netSalary.toLocaleString('ar-EG')} unit="ج.م" color="text-emerald-400" highlight />
@@ -234,11 +324,12 @@ export default function EmployeeProfilePage({
           <Clock className="h-5 w-5 text-[#6366F1]" />
           الحضور والانصراف
         </h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <StatCard label="أيام الحضور" value={String(attendance.present)} color="text-emerald-400" />
           <StatCard label="التأخير" value={String(attendance.late)} suffix={` (خصم ${financials.latePenalty.toLocaleString('ar-EG')} ج.م)`} color="text-amber-400" />
+          <StatCard label="انصراف مبكر" value={String(attendance.earlyLeave)} suffix={` (خصم ${financials.earlyLeavePenalty.toLocaleString('ar-EG')} ج.م)`} color="text-orange-400" />
           <StatCard label="الغياب" value={String(attendance.absent)} suffix={` (خصم ${Math.round(financials.absentPenalty).toLocaleString('ar-EG')} ج.م)`} color="text-rose-400" />
-          <StatCard label="إجمالي السجلات" value={String(attendance.records.length)} color="text-zinc-400" />
+          <StatCard label="الإجازات" value={String(deductions.filter((d) => d.type === 'إجازة').length)} color="text-sky-400" />
         </div>
       </div>
 
@@ -262,18 +353,45 @@ export default function EmployeeProfilePage({
         ) : (
           <div className="divide-y divide-zinc-800">
             {deductions.map((d) => (
-              <div key={d.id} className="flex items-center justify-between py-3">
-                <div className="flex items-center gap-3">
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg ${d.type === 'خصم' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
+              <div key={d.id} className="flex items-center justify-between py-3 gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg shrink-0 border ${
+                    d.type === 'خصم' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                    : d.type === 'مكافأة' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                    : d.type === 'إجازة' ? 'bg-sky-500/10 text-sky-400 border-sky-500/20'
+                    : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                  }`}>
                     {d.type}
                   </span>
-                  <div>
-                    <p className="text-sm text-white font-bold">{d.reason}</p>
-                    <p className="text-[10px] text-zinc-500">{d.date}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm text-white font-bold truncate">{d.reason}</p>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-zinc-500">
+                      <span>{d.date}</span>
+                      {d.department && <span>• {d.department}</span>}
+                      {d.jobTitle && d.jobTitle !== d.department && <span>• {d.jobTitle}</span>}
+                    </div>
+                    {d.notes && <p className="text-[10px] text-zinc-600 mt-0.5 truncate">📝 {d.notes}</p>}
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 shrink-0">
+                  <span
+                    className={`text-[9px] font-bold px-2 py-0.5 rounded-lg border ${
+                      d.approved === false
+                        ? 'bg-zinc-700/30 text-zinc-400 border-zinc-600'
+                        : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                    }`}
+                  >
+                    {d.approved === false ? 'غير معتمد' : 'معتمد'}
+                  </span>
                   <span className="text-sm font-bold text-white">{d.amount.toLocaleString('ar-EG')} ج.م</span>
+                  {canApprove && (
+                    <button
+                      onClick={() => handleToggleApproval(d)}
+                      className="text-[9px] font-bold px-2 py-1 rounded-lg border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-all"
+                    >
+                      {d.approved === false ? 'اعتماد' : 'إلغاء'}
+                    </button>
+                  )}
                   <button onClick={() => handleRemoveDeduction(d.id)} className="p-1 text-zinc-600 hover:text-rose-400 transition-all">
                     <Minus className="h-4 w-4" />
                   </button>
@@ -289,13 +407,21 @@ export default function EmployeeProfilePage({
         <h3 className="text-lg font-bold text-white mb-3">ملخص المرتب — {monthLabel}</h3>
         <div className="space-y-2 text-sm">
           <SummaryRow label="المرتب الأساسي" value={financials.baseSalary} />
+          {financials.totalBonuses > 0 && <SummaryRow label="المكافآت" value={financials.totalBonuses} />}
           <SummaryRow label="خصم التأخير" value={-financials.latePenalty} negative />
+          {financials.earlyLeavePenalty > 0 && <SummaryRow label="خصم الانصراف المبكر" value={-financials.earlyLeavePenalty} negative />}
           <SummaryRow label="خصم الغياب" value={-Math.round(financials.absentPenalty)} negative />
-          {deductions.filter(d => d.type === 'خصم').map(d => (
+          {deductions.filter(d => d.type === 'خصم' && d.approved !== false).map(d => (
             <SummaryRow key={d.id} label={`خصم: ${d.reason}`} value={-d.amount} negative />
           ))}
-          {deductions.filter(d => d.type === 'إذن').map(d => (
+          {deductions.filter(d => d.type === 'إذن' && d.approved !== false).map(d => (
             <SummaryRow key={d.id} label={`إذن: ${d.reason}`} value={-d.amount} negative />
+          ))}
+          {deductions.filter(d => d.type === 'إجازة' && d.approved !== false).map(d => (
+            <SummaryRow key={d.id} label={`إجازة: ${d.reason}`} value={-d.amount} negative />
+          ))}
+          {deductions.filter(d => d.type === 'مكافأة' && d.approved !== false).map(d => (
+            <SummaryRow key={d.id} label={`مكافأة: ${d.reason}`} value={d.amount} />
           ))}
           <div className="border-t border-white/10 pt-2 mt-2 flex items-center justify-between font-bold text-base">
             <span className="text-white">صافي المرتب المستحق</span>
@@ -314,23 +440,28 @@ export default function EmployeeProfilePage({
         >
           <div className="w-full max-w-md rounded-2xl border border-zinc-700 bg-[#18181B] text-white shadow-2xl p-6 space-y-5" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold">إضافة خصم / إذن</h3>
+              <h3 className="text-lg font-bold">إضافة بند مالي</h3>
               <button onClick={() => setShowAddModal(false)} className="p-1 hover:bg-zinc-700 rounded-lg"><X className="h-5 w-5 text-zinc-400" /></button>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setAddType('خصم')}
-                className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${addType === 'خصم' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'}`}
-              >
-                خصم
-              </button>
-              <button
-                onClick={() => setAddType('إذن')}
-                className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${addType === 'إذن' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'}`}
-              >
-                إذن
-              </button>
+            <div className="grid grid-cols-4 gap-2">
+              {([
+                { key: 'خصم', cls: 'bg-rose-500/20 text-rose-300 border-rose-500/40' },
+                { key: 'إذن', cls: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
+                { key: 'إجازة', cls: 'bg-sky-500/20 text-sky-300 border-sky-500/40' },
+                { key: 'مكافأة', cls: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => setAddType(opt.key)}
+                  className={`py-2 rounded-xl text-xs font-bold transition-all border ${addType === opt.key ? opt.cls : 'bg-zinc-800 text-zinc-400 border-zinc-700'}`}
+                >
+                  {opt.key}
+                </button>
+              ))}
             </div>
+            <p className="text-[10px] text-zinc-500 -mt-2">
+              {addType === 'مكافأة' ? 'المكافأة تُضاف إلى صافي المرتب.' : 'يُخصم من صافي المرتب.'}
+            </p>
             <input
               type="number"
               placeholder="المبلغ"
@@ -344,6 +475,29 @@ export default function EmployeeProfilePage({
               value={addReason}
               onChange={(e) => setAddReason(e.target.value)}
               className="w-full bg-[#09090B] border border-zinc-700 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50"
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                type="text"
+                placeholder={`القسم (${employee.role})`}
+                value={addDepartment}
+                onChange={(e) => setAddDepartment(e.target.value)}
+                className="w-full bg-[#09090B] border border-zinc-700 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50"
+              />
+              <input
+                type="text"
+                placeholder={`الوظيفة (${employee.role})`}
+                value={addJobTitle}
+                onChange={(e) => setAddJobTitle(e.target.value)}
+                className="w-full bg-[#09090B] border border-zinc-700 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50"
+              />
+            </div>
+            <textarea
+              placeholder="ملاحظات (اختياري)"
+              value={addNotes}
+              onChange={(e) => setAddNotes(e.target.value)}
+              rows={2}
+              className="w-full bg-[#09090B] border border-zinc-700 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50 resize-none"
             />
             <div className="flex justify-end gap-3">
               <button onClick={() => setShowAddModal(false)} className="px-4 py-2 text-zinc-400 font-bold text-sm">إلغاء</button>

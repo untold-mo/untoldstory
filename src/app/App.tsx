@@ -4802,6 +4802,8 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
   const [sourceFilter, setSourceFilter] = useState<LeadSourceFilter>('all');
   const [assignedFilter, setAssignedFilter] = useState<'all' | 'mine' | 'unassigned'>('all');
   const [overdueOnly, setOverdueOnly] = useState(false);
+  const [notContactedOnly, setNotContactedOnly] = useState(false);
+  const [leadSort, setLeadSort] = useState<'default' | 'lastCall' | 'lastUpdate'>('default');
   const [focusLeadIds, setFocusLeadIds] = useState<string[]>([]);
   const [repUserFilterId, setRepUserFilterId] = useState('');
   const [isAddLeadOpen, setIsAddLeadOpen] = useState(false);
@@ -5069,8 +5071,24 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
       );
     }
 
+    // الليدز التي لم يتم التواصل معها (لا توجد مكالمة مسجّلة)
+    if (notContactedOnly) {
+      result = result.filter((l) => !l.lastCallAt);
+    }
+
+    // ترتيب حسب آخر مكالمة / آخر تحديث
+    if (leadSort === 'lastCall') {
+      result = [...result].sort(
+        (a, b) => (b.lastCallAt ? new Date(b.lastCallAt).getTime() : 0) - (a.lastCallAt ? new Date(a.lastCallAt).getTime() : 0),
+      );
+    } else if (leadSort === 'lastUpdate') {
+      result = [...result].sort(
+        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      );
+    }
+
     return result;
-  }, [leads, invoices, priceQuotes, currentUser, assignedFilter, statusFilter, sourceFilter, overdueOnly, focusLeadIds, repUserFilterId, search, isTeamLeaderActor, teamMemberIds]);
+  }, [leads, invoices, priceQuotes, currentUser, assignedFilter, statusFilter, sourceFilter, overdueOnly, notContactedOnly, leadSort, focusLeadIds, repUserFilterId, search, isTeamLeaderActor, teamMemberIds]);
 
   const leadsPageCount = Math.max(1, Math.ceil(visibleLeads.length / leadsPageSize));
   const paginatedLeads = useMemo(() => {
@@ -5780,6 +5798,33 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
               ))}
             </select>
           )}
+
+          {entityMode === 'leads' && currentUser?.role !== 'محاسب' && (
+            <select
+              value={leadSort}
+              onChange={(e) => setLeadSort(e.target.value as 'default' | 'lastCall' | 'lastUpdate')}
+              className="bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-sm"
+              aria-label={t('leads.sortBy')}
+            >
+              <option value="default">{t('leads.sortDefault')}</option>
+              <option value="lastCall">{t('leads.sortLastCall')}</option>
+              <option value="lastUpdate">{t('leads.sortLastUpdate')}</option>
+            </select>
+          )}
+
+          {entityMode === 'leads' && currentUser?.role !== 'محاسب' && (
+            <button
+              type="button"
+              onClick={() => setNotContactedOnly((v) => !v)}
+              className={`rounded-2xl px-4 py-3 text-sm font-bold border transition-colors ${
+                notContactedOnly
+                  ? 'bg-amber-500/20 text-amber-200 border-amber-500/40'
+                  : 'bg-slate-800 text-zinc-300 border-slate-700 hover:text-white'
+              }`}
+            >
+              {t('leads.notContactedFilter')}
+            </button>
+          )}
         </div>
 
         {entityMode === 'leads' && focusLeadIds.length > 0 && (
@@ -6037,6 +6082,16 @@ const LeadsWorkspace = ({ onOpenBulkUpload }: { onOpenBulkUpload?: () => void })
                         ) : (
                           <span className="text-xs px-3 py-1 rounded-full bg-white/10 text-zinc-200 font-bold">{getLeadStatusLabel(lead.status, t)}</span>
                         )}
+                        <div className="mt-2 space-y-0.5 text-[10px] text-zinc-400 leading-tight">
+                          <div className="flex items-center gap-1" title={lead.lastCallAt ? new Date(lead.lastCallAt).toLocaleString(dateLocale) : ''}>
+                            <Phone className="w-3 h-3 text-cyan-400/70 shrink-0" />
+                            <span>{t('leads.lastCall')}: {lead.lastCallAt ? new Date(lead.lastCallAt).toLocaleDateString(dateLocale) : t('leads.noContactYet')}</span>
+                          </div>
+                          <div className="flex items-center gap-1" title={new Date(lead.updatedAt).toLocaleString(dateLocale)}>
+                            <Clock className="w-3 h-3 text-violet-400/70 shrink-0" />
+                            <span>{t('leads.lastUpdate')}: {new Date(lead.updatedAt).toLocaleDateString(dateLocale)}</span>
+                          </div>
+                        </div>
                       </td>
                     )}
                     {!isSalesManagerLeadDistribution && (

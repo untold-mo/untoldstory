@@ -1,13 +1,35 @@
-export type ProjectStatus = 'مفتوحة' | 'منتهية' | 'تحت التحصيل';
+export type ProjectStatus = 'مفتوحة' | 'تحت التنفيذ' | 'منتهية' | 'تحت التحصيل';
 
 export interface Project {
   id: string;
   name: string;
   code: string;
   clientName: string;
+  /** تاريخ الشغلانة — للترتيب في الصفحة والتقارير */
+  projectDate?: string;
   startDate: string;
+  /** تاريخ الانتهاء المتوقع */
+  expectedEndDate?: string;
   status: ProjectStatus;
+  /** المسؤولون عن الشغلانة (أسماء) */
+  managerName?: string;
+  productionManagerName?: string;
+  salesName?: string;
+  accountantName?: string;
+  /** معرّف السيلز المسؤول — لربط الرؤية بالسيلز/التيم ليدر */
+  salesId?: string;
   notes: string;
+  createdAt: string;
+}
+
+/** تحديث تنفيذي على الشغلانة (يكتبه السيلز/التيم ليدر/الإنتاج) */
+export interface ProjectUpdate {
+  id: string;
+  projectCode: string;
+  authorId: string;
+  authorName: string;
+  authorRole: string;
+  note: string;
   createdAt: string;
 }
 
